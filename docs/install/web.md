@@ -16,13 +16,13 @@ Set up a [lab host](lab-host.md) first, or read [Run labs on the web app's host]
 
 </figure>
 
-Your browser only talks to the web app. The web app talks to the API server, so the API server does not have to be reachable from your browser.
+Your browser only talks to the web app. The web app talks to the API Server, so the API Server does not have to be reachable from your browser.
 
 ## Run it
 
 === "On the lab host"
 
-    The simplest setup: the web app next to the API server, on the host network.
+    The simplest setup: the web app next to the API Server, on the host network.
 
     ```bash
     docker run -d --name containerlab-app \
@@ -33,7 +33,7 @@ Your browser only talks to the web app. The web app talks to the API server, so 
 
 === "On another machine"
 
-    Point the web app at the lab host's API server:
+    Point the web app at the lab host's API Server:
 
     ```bash
     docker run -d --name containerlab-app \
@@ -45,7 +45,7 @@ Your browser only talks to the web app. The web app talks to the API server, so 
 
 === "Bridge network, same host"
 
-    Keep the container off the host network and reach the API server through Docker's host gateway:
+    Keep the container off the host network and reach the API Server through Docker's host gateway:
 
     ```bash
     docker run -d --name containerlab-app \
@@ -62,7 +62,7 @@ The image runs on amd64 and arm64.
 
 ## Run labs on the web app's host
 
-On a Linux machine that only you, or people you trust, can reach, the web app can run labs itself, with the host's containerlab and Docker, like the [desktop app](desktop.md#run-labs-on-this-computer). There is no API server and no sign-in: every browser that opens the app starts on the host's labs.
+On a Linux machine that only you, or people you trust, can reach, the web app can run labs itself, with the host's containerlab and Docker, like the [desktop app](desktop.md#run-labs-on-this-computer). There is no API Server and no sign-in: every browser that opens the app starts on the host's labs.
 
 !!! warning "Anyone who can open the app runs labs as root on the host"
     Without sign-in, the app cannot tell users apart. Keep it on `localhost` or a trusted network, or put an authenticating proxy in front of it. For several users, use a [lab host](lab-host.md) instead.
@@ -98,7 +98,7 @@ By default the web app creates a self-signed certificate. To use yours, mount it
 -e WEB_TLS_KEY_FILE=/certs/web.key
 ```
 
-If the API server has a trusted certificate too, set `CLAB_API_TLS_VERIFY=true`. All variables are in [web and desktop settings](../reference/app-settings.md#web-app).
+If the API Server has a trusted certificate too, set `CLAB_API_TLS_VERIFY=true`. All variables are in [web and desktop settings](../reference/app-settings.md#web-app).
 
 ## Behind a reverse proxy
 
@@ -110,7 +110,7 @@ Forward WebSocket upgrades to the web app. Live events, terminals, logs and Wire
 docker logs containerlab-app
 ```
 
-If the sign-in screen loads but sign-in fails, test the API server from inside the container, since that is where the connection starts:
+If the sign-in screen loads but sign-in fails, test the API Server from inside the container, since that is where the connection starts:
 
 ```bash
 docker exec containerlab-app wget -qO- --no-check-certificate https://lab1.example.com:8090/health

@@ -99,7 +99,7 @@ for (const mode of ["production", "development"] as const) {
         await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
         await expect(page.locator("base")).toHaveAttribute("href", `${basePath}/`);
         await page.getByTestId("standalone-settings-button").click();
-        await page.getByTestId("standalone-settings-nav-endpoints").click();
+        await page.getByTestId(`standalone-settings-nav-host:${savedEndpoint.id}`).click();
         await page.getByRole("button", { name: "Sign in to Saved endpoint again", exact: true }).click();
         const dialog = page.getByRole("dialog", { name: "Sign in to Saved endpoint" });
         await dialog.getByLabel("Password", { exact: true }).fill("test-password");
@@ -153,7 +153,9 @@ for (const mode of ["production", "development"] as const) {
         await expect(page.frameLocator("iframe").getByText("Mock Wireshark viewer")).toBeVisible();
         const closePromise = page.waitForRequest((request) => request.url().includes("/close?"));
         await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
-        expect(new URL((await closePromise).url()).pathname).toBe(`${capturePath}/close`);
+        const closeUrl = new URL((await closePromise).url());
+        expect(closeUrl.pathname).toBe(`${basePath}/api/runtime/capture/wireshark-vnc-sessions/close`);
+        expect(closeUrl.searchParams.getAll("sessionId")).toEqual(["capture-1"]);
       });
     });
   }

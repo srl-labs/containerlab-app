@@ -1,4 +1,4 @@
-import { watch as watchFiles, type Dirent } from "node:fs";
+import { watch as watchFiles, type Dirent, type FSWatcher } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -103,6 +103,91 @@ async function hasChildren(directory: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Watches `root` and every folder below it, one watcher per folder, and skips
+ * folders it cannot read, as clab-api-server does. Node's recursive watcher on
+ * Linux throws an uncaught EACCES for such folders, which ends the process;
+ * containerlab creates them inside lab folders (root-owned node configs).
+ * Reports paths relative to `root`, including the entries of new folders.
+ */
+async function watchFolders(
+  root: string,
+  signal: AbortSignal,
+  onChange: (eventType: string, relativePath: string) => void,
+  onError: (error: unknown) => void
+): Promise<{ close(): void }> {
+  const watchers = new Map<string, FSWatcher>();
+  let closed = false;
+
+  const forget = (folder: string) => {
+    const prefix = folder + path.sep;
+    for (const [watched, watcher] of watchers) {
+      if (watched === folder || watched.startsWith(prefix)) {
+        watcher.close();
+        watchers.delete(watched);
+      }
+    }
+  };
+
+  const add = async (folder: string, initial: boolean): Promise<void> => {
+    if (closed || watchers.has(folder)) return;
+    let watcher: FSWatcher;
+    try {
+      watcher = watchFiles(folder, (eventType, fileName) => {
+        if (fileName === null) return;
+        const file = path.join(folder, String(fileName));
+        onChange(eventType, path.relative(root, file));
+        if (eventType === "rename") void update(file);
+      });
+    } catch (error) {
+      if (folder === root) throw error;
+      return;
+    }
+    watcher.on("error", (error) => {
+      if (folder === root) onError(error);
+      else forget(folder);
+    });
+    watchers.set(folder, watcher);
+    let entries: Dirent[];
+    try {
+      entries = await fs.readdir(folder, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const file = path.join(folder, entry.name);
+      if (!initial) onChange("rename", path.relative(root, file));
+      if (entry.isDirectory()) await add(file, initial);
+    }
+  };
+
+  const update = async (file: string): Promise<void> => {
+    let stat;
+    try {
+      stat = await fs.lstat(file);
+    } catch {
+      forget(file);
+      return;
+    }
+    if (stat.isDirectory()) await add(file, false);
+  };
+
+  const close = () => {
+    closed = true;
+    for (const watcher of watchers.values()) watcher.close();
+    watchers.clear();
+  };
+  signal.addEventListener("abort", close, { once: true });
+  try {
+    await add(root, true);
+  } catch (error) {
+    close();
+    throw error;
+  }
+  if (signal.aborted) close();
+  return { close };
 }
 
 /** The workspace on the local disk, with clab-api-server's semantics. */
@@ -241,11 +326,10 @@ export class LocalWorkspace implements LabFileSystem {
   async watch(signal: AbortSignal): Promise<AsyncIterable<WorkspaceFileEvent>> {
     await fs.mkdir(this.root, { recursive: true, mode: DIRECTORY_MODE });
     const recent = new Map<string, number>();
-    let watcher: ReturnType<typeof watchFiles> | undefined;
+    let watcher: { close(): void } | undefined;
     const queue = createAsyncQueue<WorkspaceFileEvent>(signal, () => watcher?.close());
-    watcher = watchFiles(this.root, { recursive: true, signal }, (eventType, fileName) => {
-      if (!fileName) return;
-      const relativePath = String(fileName).split(path.sep).join("/");
+    const onChange = (eventType: string, fileName: string) => {
+      const relativePath = fileName.split(path.sep).join("/");
       void this.describeChange(eventType, relativePath).then((event) => {
         if (!event) return;
         const key = `${event.action}:${event.path}`;
@@ -255,8 +339,17 @@ export class LocalWorkspace implements LabFileSystem {
         if (recent.size > 1000) recent.clear();
         queue.push(event);
       });
-    });
-    watcher.on("error", (error) => queue.fail(error));
+    };
+    const onError = (error: unknown) => queue.fail(error);
+    if (process.platform === "linux") {
+      watcher = await watchFolders(this.root, signal, onChange, onError);
+    } else {
+      const native = watchFiles(this.root, { recursive: true, signal }, (eventType, fileName) => {
+        if (fileName) onChange(eventType, String(fileName));
+      });
+      native.on("error", onError);
+      watcher = native;
+    }
     return queue.iterable;
   }
 

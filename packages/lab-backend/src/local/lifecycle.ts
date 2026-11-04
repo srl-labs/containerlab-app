@@ -1,7 +1,13 @@
 import path from "node:path";
 
-import { labLifecycleCliFlags, topologyFileStem } from "@containerlab/clab-ui/host";
+import {
+  labLifecycleCliFlags,
+  labSettingsOptions,
+  topologyFileStem,
+  type LabLifecycleOptions
+} from "@containerlab/clab-ui/host";
 
+import { c9sPlanFields } from "../c9sPlan.ts";
 import type {
   LabLifecycleAction,
   LabTarget,
@@ -19,6 +25,7 @@ import {
   stripAnsi,
   type StreamingCommand
 } from "./process.ts";
+import { isClusterTopologyPath, isRunningTopologyHere } from "./runningTopology.ts";
 
 const LOG_LINE_PATTERN =
   /^(?:\d{2}:\d{2}:\d{2}|\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (INFO|WARN|ERRO|ERROR|FATAL|PANIC)\b/;
@@ -48,6 +55,9 @@ export function lifecycleLineStream(line: string): "stdout" | "stderr" {
     : "stdout";
 }
 
+/** The last output lines of a lifecycle command searched for its error. */
+const ERROR_TAIL_LINES = 40;
+
 const ACTION_VERBS: Record<LabLifecycleAction, string> = {
   deploy: "deploy",
   destroy: "destroy",
@@ -76,6 +86,20 @@ interface ApplyPlanJson {
   "deleted-endpoints"?: string[] | null;
   "restarted-nodes"?: string[] | null;
   "node-change-reasons"?: Record<string, string> | null;
+}
+
+interface C9sDeployPlanJson {
+  "lab-name"?: string;
+  namespace?: string;
+  changes?: unknown;
+}
+
+/** A c9s deploy plan in the `ApplyLabResponse` shape, with its resource changes. */
+function toC9sApplyLabResponse(plan: C9sDeployPlanJson, labName: string, dryRun: boolean) {
+  return {
+    ...toApplyLabResponse({ "lab-name": plan["lab-name"] ?? labName }, labName, dryRun),
+    ...c9sPlanFields(plan)
+  };
 }
 
 /** containerlab's apply plan in clab-api-server's `ApplyLabResponse` shape. */
@@ -114,6 +138,8 @@ function labDisplayName(lab: LabTarget): string {
 
 export interface LifecycleContext {
   options: ResolvedLocalOptions;
+  /** The environment of a command on a lab, e.g. with its c9s namespace. */
+  labEnv?(labName: string): Promise<NodeJS.ProcessEnv>;
   /** Absolute path of a workspace topology, or of an absolute/URL path given as is. */
   resolveTopology(labName: string, rawPath: string): Promise<string>;
   /** Absolute path of the topology a running lab was deployed from. */
@@ -125,7 +151,11 @@ interface PreparedCommand {
   args: string[];
   cwd: string;
   labName: string;
+  env: NodeJS.ProcessEnv;
 }
+
+/** Actions on a running lab, which may go by its name when its topology file is not here. */
+const RUNNING_LAB_ACTIONS: ReadonlySet<LabLifecycleAction> = new Set(["destroy", "start", "stop", "restart"]);
 
 /** Runs containerlab lifecycle actions the way clab-api-server reports them. */
 export class LocalLifecycle {
@@ -145,18 +175,20 @@ export class LocalLifecycle {
   ): Promise<PreparedCommand> {
     const { runtime, deployExtraArgs, destroyExtraArgs, workspaceRoot } = this.context.options;
     const topology = await this.topologyFor(action, lab);
-    const args = [ACTION_VERBS[action], "-r", runtime];
+    // c9s deploys again to apply a changed topology: the plan is deploy's dry run.
+    const verb = runtime === "c9s" && action === "apply" ? "deploy" : ACTION_VERBS[action];
+    const args = [verb, "-r", runtime];
     switch (action) {
       case "deploy":
         args.push(...deployExtraArgs);
         if (options.cleanup) args.push("--reconfigure");
         if (lab.labName) args.push("--name", lab.labName);
-        args.push(...labLifecycleCliFlags(options.lifecycleOptions));
+        args.push(...labLifecycleCliFlags(this.withHostDefaults(options.lifecycleOptions)));
         break;
       case "redeploy":
         args.push(...deployExtraArgs);
         if (options.cleanup) args.push("--cleanup");
-        args.push(...labLifecycleCliFlags(options.lifecycleOptions));
+        args.push(...labLifecycleCliFlags(this.withHostDefaults(options.lifecycleOptions)));
         break;
       case "destroy":
         args.push(...destroyExtraArgs);
@@ -165,6 +197,12 @@ export class LocalLifecycle {
         break;
       case "apply":
         if (options.dryRun) args.push("--dry-run");
+        // A lab's settings (timeout, workers, c9s options) hold for apply as for deploy.
+        args.push(
+          ...labLifecycleCliFlags(
+            this.withHostDefaults(labSettingsOptions("apply", options.lifecycleOptions, runtime))
+          )
+        );
         break;
       case "start":
       case "stop":
@@ -172,13 +210,41 @@ export class LocalLifecycle {
         break;
     }
     args.push(...extraArgs);
-    if (topology) {
+    const byFile =
+      topology !== undefined &&
+      (RUNNING_LAB_ACTIONS.has(action)
+        ? await isRunningTopologyHere(runtime, topology)
+        : !isClusterTopologyPath(topology));
+    if (byFile) {
       args.push("-t", topology);
     } else {
       args.push("--name", lab.labName);
     }
-    const cwd = topology && !/^[a-z]+:\/\//i.test(topology) ? path.dirname(topology) : workspaceRoot;
-    return { args, cwd, labName: lab.labName };
+    const cwd = byFile && !/^[a-z][a-z0-9+.-]*:\/\//i.test(topology) ? path.dirname(topology) : workspaceRoot;
+    const env =
+      lab.labName && this.context.labEnv ? await this.context.labEnv(lab.labName) : this.context.options.env;
+    return { args, cwd, labName: lab.labName, env };
+  }
+
+  /**
+   * The host's deploy defaults where the options leave them open: its
+   * timeout, and a c9s host's exposure, persistence, pull secret and
+   * Topology resource.
+   */
+  private withHostDefaults(options: LabLifecycleOptions | undefined): LabLifecycleOptions | undefined {
+    const { c9s, deployTimeout } = this.context.options;
+    const timeout = options?.timeout === undefined && deployTimeout ? { timeout: deployTimeout } : {};
+    if (this.context.options.runtime !== "c9s" || !c9s) {
+      return Object.keys(timeout).length > 0 ? { ...options, ...timeout } : options;
+    }
+    return {
+      ...options,
+      ...timeout,
+      ...(options?.exposeType === undefined && c9s.exposeType ? { exposeType: c9s.exposeType } : {}),
+      ...(options?.noPersistence === undefined && c9s.persistence === false ? { noPersistence: true } : {}),
+      ...(options?.imagePullSecret === undefined && c9s.imagePullSecret ? { imagePullSecret: c9s.imagePullSecret } : {}),
+      ...(options?.noTopologyCR === undefined && c9s.noTopologyCR === true ? { noTopologyCR: true } : {})
+    };
   }
 
   private async topologyFor(action: LabLifecycleAction, lab: LabTarget): Promise<string | undefined> {
@@ -236,16 +302,16 @@ export class LocalLifecycle {
     options: LifecycleRunOptions = {}
   ): Promise<LifecycleActionResult> {
     if (action === "apply" && options.dryRun) {
-      return { result: await this.plan(lab), logs: [] };
+      return { result: await this.plan(lab, options.lifecycleOptions), logs: [] };
     }
     const release = this.acquire(lab, action);
     try {
-      const plan = action === "apply" ? await this.plan(lab) : undefined;
+      const plan = action === "apply" ? await this.plan(lab, options.lifecycleOptions) : undefined;
       const prepared = await this.prepare(action, lab, options);
       const [file, args] = containerlabCommand(this.context.options, prepared.args);
       const result = await runCommand(file, args, {
         cwd: prepared.cwd,
-        env: this.context.options.env,
+        env: prepared.env,
         signal: options.signal
       });
       const logs = `${result.stderr}\n${result.stdout}`
@@ -253,7 +319,7 @@ export class LocalLifecycle {
         .map(filterLifecycleLine)
         .filter((line): line is string => line !== undefined);
       if (result.code !== 0) {
-        const detail = lastContainerlabError(stripAnsi(result.stderr)) ?? `exit status ${result.code}`;
+        const detail = lastContainerlabError(result.stderr) ?? `exit status ${result.code}`;
         throw Object.assign(new LabBackendError(this.failure(action, labDisplayName(lab), detail), 500), { logs });
       }
       return {
@@ -278,7 +344,7 @@ export class LocalLifecycle {
       const [file, args] = containerlabCommand(this.context.options, prepared.args);
       command = await spawnLines(file, args, {
         cwd: prepared.cwd,
-        env: this.context.options.env,
+        env: prepared.env,
         signal: options.signal
       });
     } catch (error) {
@@ -291,8 +357,12 @@ export class LocalLifecycle {
 
     async function* events(): AsyncGenerator<LifecycleStreamEvent> {
       let lastError: string | undefined;
+      // containerlab's boxed error spans lines the log filter drops.
+      const tail: string[] = [];
       try {
         for await (const output of command.lines) {
+          tail.push(output.line);
+          if (tail.length > ERROR_TAIL_LINES) tail.shift();
           const line = filterLifecycleLine(output.line);
           if (!line) continue;
           lastError = lastContainerlabError(line) ?? lastError;
@@ -302,9 +372,10 @@ export class LocalLifecycle {
         if (exit.code === 0) {
           yield startStop && message ? { type: "done", message } : { type: "done" };
         } else if (!options.signal?.aborted) {
+          const detail = lastContainerlabError(tail.join("\n")) ?? lastError;
           yield {
             type: "error",
-            error: failure(lastError ?? (exit.signal ? `terminated by ${exit.signal}` : `exit status ${exit.code}`))
+            error: failure(detail ?? (exit.signal ? `terminated by ${exit.signal}` : `exit status ${exit.code}`))
           };
         }
       } finally {
@@ -316,13 +387,21 @@ export class LocalLifecycle {
   }
 
   /** `containerlab apply --dry-run`: what applying the topology would change. */
-  async plan(lab: LabTarget) {
-    const prepared = await this.prepare("apply", lab, { dryRun: true }, ["--format", "json"]);
+  async plan(lab: LabTarget, lifecycleOptions?: LabLifecycleOptions) {
+    const prepared = await this.prepare(
+      "apply",
+      lab,
+      { dryRun: true, ...(lifecycleOptions ? { lifecycleOptions } : {}) },
+      ["--format", "json"]
+    );
     const [file, args] = containerlabCommand(this.context.options, prepared.args);
-    const result = await runCommand(file, args, { cwd: prepared.cwd, env: this.context.options.env });
+    const result = await runCommand(file, args, { cwd: prepared.cwd, env: prepared.env });
     if (result.code !== 0) {
       const detail = lastContainerlabError(stripAnsi(result.stderr)) ?? `exit status ${result.code}`;
       throw new LabBackendError(this.failure("apply", labDisplayName(lab), detail), 500);
+    }
+    if (this.context.options.runtime === "c9s") {
+      return toC9sApplyLabResponse(parseJsonOutput(result.stdout) as C9sDeployPlanJson, labDisplayName(lab), true);
     }
     return toApplyLabResponse(parseJsonOutput(result.stdout) as ApplyPlanJson, labDisplayName(lab), true);
   }

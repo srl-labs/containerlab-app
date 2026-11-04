@@ -52,3 +52,24 @@ test("a topology's files open in workspace tabs, missing ones created empty", as
   await expect(page.getByRole("tab", { name: /motd\.txt/ })).toHaveAttribute("aria-selected", "true");
   await expect.poll(async () => (await storedFiles(page))["motd.txt"]).toBe("");
 });
+
+test("Generate Clos Topology writes the fabric to browser storage and opens it", async ({ page }) => {
+  await page.goto("/");
+  await waitForWorkspace(page);
+  await page.getByTestId("workspace-rail").getByRole("button", { name: "Labs", exact: true }).click();
+  await page.getByTestId("workspace-sidebar").getByRole("button", { name: "Generate Clos Topology" }).first().click();
+  await page.getByTestId("clos-generator-submit").click();
+
+  await expect(page.locator(".react-flow__node")).toHaveCount(6);
+  await expect.poll(async () => (await storedFiles(page))["clos.clab.yml"] ?? "").toMatch(/- node1-1:e1-1/);
+});
+
+test("a new, empty lab opens unlocked", async ({ page }) => {
+  await page.goto("/");
+  await waitForWorkspace(page);
+  await page.getByRole("button", { name: "Create a lab", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Create", exact: true }).click();
+
+  await expect(page.getByTestId("navbar-lock")).toHaveAttribute("aria-label", "Lock Lab");
+  await expect(page.getByText("Read-only — unlock lab to edit")).toHaveCount(0);
+});

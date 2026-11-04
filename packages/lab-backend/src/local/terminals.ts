@@ -57,13 +57,37 @@ export interface TerminalTarget {
   kind: string;
   /** Management IPv4 address, for SSH. */
   ipv4Address: string;
+  /** c9s: where the node runs, from `containerlab inspect`. */
+  namespace?: string;
+  pod?: string;
+  container?: string;
+  /** c9s: the node's load balancer, when clabernetes exposes it through one. */
+  loadBalancerAddress?: string;
+  exposedPorts?: Array<{ exposePort: number; destinationPort: number; protocol: "TCP" | "UDP" }>;
 }
 
 /** A running terminal process: output in, input and size out. */
-interface TerminalProcess {
+export interface TerminalProcess {
   write(data: string): void;
   resize(cols: number, rows: number): void;
   kill(): void;
+}
+
+/** Where an SSH terminal connects: an address, or a socket opened for it (a port-forward). */
+export type SshEndpoint = { host: string; port: number } | { host: string; sock: Duplex };
+
+/**
+ * How terminals reach a node: an interactive exec with a TTY, and the SSH
+ * endpoint of its management interface.
+ */
+export interface TerminalAccess {
+  exec(
+    target: TerminalTarget,
+    command: string[],
+    size: { cols: number; rows: number },
+    events: TerminalProcessEvents
+  ): Promise<TerminalProcess>;
+  sshEndpoint(target: TerminalTarget): Promise<SshEndpoint>;
 }
 
 /** One client's view of a session. */
@@ -117,26 +141,28 @@ export class Scrollback {
   }
 }
 
-type ProcessEvents = {
+/** What a terminal process reports: its output, and how it ended. */
+type TerminalProcessEvents = {
   output(data: Buffer): void;
   exit(exitCode: number | null, error?: string): void;
 };
+type ProcessEvents = TerminalProcessEvents;
 
 /**
- * Node terminals on this machine: docker exec for shell and telnet, SSH for
- * ssh. A resumable session keeps running when its client disconnects, and
+ * Node terminals: an exec in the node for shell and telnet (docker exec, or
+ * a Kubernetes exec on a c9s host), SSH for ssh. A resumable session keeps running when its client disconnects, and
  * replays its recent output to the next one; any other session ends with its
  * client, as on clab-api-server.
  */
 export class LocalTerminals {
   private readonly sessions = new Map<string, Session>();
 
-  private readonly docker: () => Docker;
+  private readonly access: TerminalAccess;
   private readonly username: string;
   private cleanupTimer: ReturnType<typeof setInterval> | undefined;
 
-  constructor(docker: () => Docker, username: string) {
-    this.docker = docker;
+  constructor(access: TerminalAccess, username: string) {
+    this.access = access;
     this.username = username;
   }
 
@@ -338,68 +364,82 @@ export class LocalTerminals {
     const { target } = session;
     switch (session.info.protocol as TerminalProtocol) {
       case "shell":
-        return this.dockerExec(target.containerId, terminalShellCommand(target.kind), session, events);
+        return this.access.exec(target, terminalShellCommand(target.kind), session.size, events);
       case "telnet":
-        return this.dockerExec(
-          target.containerId,
+        return this.access.exec(
+          target,
           ["telnet", "127.0.0.1", String(session.telnetPort)],
-          session,
+          session.size,
           events
         );
       case "ssh":
-        return startSsh(session, events);
+        return this.access.sshEndpoint(target).then((endpoint) => startSsh(session, endpoint, events));
     }
   }
+}
 
-  private async dockerExec(
-    containerId: string,
-    command: string[],
-    session: Session,
-    events: ProcessEvents
-  ): Promise<TerminalProcess> {
-    const docker = this.docker();
-    const exec = await docker.getContainer(containerId).exec({
-      Cmd: command,
-      AttachStdin: true,
-      AttachStdout: true,
-      AttachStderr: true,
-      Tty: true,
-      Env: ["TERM=xterm-256color", "LANG=C.UTF-8"]
-    });
-    const stream = (await exec.start({ hijack: true, stdin: true, Tty: true })) as Duplex;
-    let exited = false;
-    const resize = (cols: number, rows: number) => {
-      exec.resize({ w: cols, h: rows }).catch(() => {});
-    };
-    resize(session.size.cols, session.size.rows);
-    stream.on("data", (chunk: Buffer) => events.output(chunk));
-    const onEnd = () => {
-      if (exited) return;
-      exited = true;
-      exec
-        .inspect()
-        .then((state) => events.exit(state.ExitCode ?? null))
-        .catch(() => events.exit(null));
-    };
-    stream.on("end", onEnd);
-    stream.on("close", onEnd);
-    stream.on("error", (error: Error) => {
-      if (exited) return;
-      exited = true;
-      events.exit(null, error.message);
-    });
-    return {
-      write: (data) => {
-        if (!stream.destroyed) stream.write(data);
-      },
-      resize,
-      kill: () => {
-        // A detached exec ends with its shell; ending input makes most shells exit.
-        stream.end("\x04");
-        stream.destroy();
+/** Terminals in Docker or Podman containers: docker exec, and SSH to the management address. */
+export function dockerTerminalAccess(docker: () => Docker): TerminalAccess {
+  return {
+    exec: (target, command, size, events) => dockerExec(docker(), target.containerId, command, size, events),
+    async sshEndpoint(target) {
+      const host = target.ipv4Address.split("/")[0]?.trim();
+      if (!host || host === "N/A") {
+        throw new LabBackendError("container management IP is required for SSH", 400);
       }
-    };
-  }
+      return { host, port: 22 };
+    }
+  };
+}
+
+async function dockerExec(
+  docker: Docker,
+  containerId: string,
+  command: string[],
+  size: { cols: number; rows: number },
+  events: ProcessEvents
+): Promise<TerminalProcess> {
+  const exec = await docker.getContainer(containerId).exec({
+    Cmd: command,
+    AttachStdin: true,
+    AttachStdout: true,
+    AttachStderr: true,
+    Tty: true,
+    Env: ["TERM=xterm-256color", "LANG=C.UTF-8"]
+  });
+  const stream = (await exec.start({ hijack: true, stdin: true, Tty: true })) as Duplex;
+  let exited = false;
+  const resize = (cols: number, rows: number) => {
+    exec.resize({ w: cols, h: rows }).catch(() => {});
+  };
+  resize(size.cols, size.rows);
+  stream.on("data", (chunk: Buffer) => events.output(chunk));
+  const onEnd = () => {
+    if (exited) return;
+    exited = true;
+    exec
+      .inspect()
+      .then((state) => events.exit(state.ExitCode ?? null))
+      .catch(() => events.exit(null));
+  };
+  stream.on("end", onEnd);
+  stream.on("close", onEnd);
+  stream.on("error", (error: Error) => {
+    if (exited) return;
+    exited = true;
+    events.exit(null, error.message);
+  });
+  return {
+    write: (data) => {
+      if (!stream.destroyed) stream.write(data);
+    },
+    resize,
+    kill: () => {
+      // A detached exec ends with its shell; ending input makes most shells exit.
+      stream.end("\x04");
+      stream.destroy();
+    }
+  };
 }
 
 async function readPrivateKeys(): Promise<Buffer[]> {
@@ -418,12 +458,9 @@ async function readPrivateKeys(): Promise<Buffer[]> {
  * An SSH login to the node's management address. Keys from the SSH agent and
  * `~/.ssh` are tried first; a password is then asked for in the terminal.
  */
-async function startSsh(session: Session, events: ProcessEvents): Promise<TerminalProcess> {
+async function startSsh(session: Session, endpoint: SshEndpoint, events: ProcessEvents): Promise<TerminalProcess> {
   const { Client } = await import("ssh2");
-  const host = session.target.ipv4Address.split("/")[0]?.trim();
-  if (!host || host === "N/A") {
-    throw new LabBackendError("container management IP is required for SSH", 400);
-  }
+  const host = endpoint.host;
   const client = new Client();
   const keys = await readPrivateKeys();
   const username = session.sshUsername;
@@ -475,8 +512,7 @@ async function startSsh(session: Session, events: ProcessEvents): Promise<Termin
   let passwordAttempts = 0;
 
   const config: ConnectConfig = {
-    host,
-    port: 22,
+    ...("sock" in endpoint ? { sock: endpoint.sock } : { host, port: endpoint.port }),
     username,
     readyTimeout: 60_000,
     keepaliveInterval: 30_000,

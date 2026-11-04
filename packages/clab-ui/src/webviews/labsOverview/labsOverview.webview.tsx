@@ -9,6 +9,7 @@ import { createRoot } from "react-dom/client";
 
 import { ClabUiRuntimeProvider, useClabUiHost, type ClabUiRuntime } from "../../host";
 import type { ClabUiHost, HostNodeStatsSample } from "../../host/contracts";
+import type { EndpointHealthMetrics } from "../../workspace/types";
 import { MuiThemeProvider } from "../../theme/index";
 import { LabsOverview } from "../../workspace/components/LabsOverview";
 import type { LabOverviewCard, LabThumbnailSources } from "../../workspace/state/labsOverview";
@@ -24,9 +25,11 @@ import type {
 } from "./types";
 
 type UsageMessage = Extract<LabsOverviewIncomingMessage, { type: "labs-overview:usage" }>;
+type MetricsMessage = Extract<LabsOverviewIncomingMessage, { type: "labs-overview:host-metrics" }>;
 
 interface LabsOverviewBridge {
   loadSources(card: LabOverviewCard): Promise<LabThumbnailSources | undefined>;
+  fetchHostMetrics(endpointId: string, signal: AbortSignal): Promise<EndpointHealthMetrics>;
   streamLabStats: LabUsageFeedDeps["streamLabStats"];
   dispose(): void;
 }
@@ -40,6 +43,7 @@ function createLabsOverviewBridge(host: ClabUiHost): LabsOverviewBridge {
   const post = (message: LabsOverviewOutgoingMessage) => host.postMessage(message);
   let nextId = 1;
   const sourceRequests = new Map<number, (sources: LabThumbnailSources | undefined) => void>();
+  const metricsRequests = new Map<number, (message: MetricsMessage) => void>();
   const streams = new Map<number, (message: UsageMessage) => void>();
 
   const unsubscribe = host.subscribe((event) => {
@@ -47,6 +51,9 @@ function createLabsOverviewBridge(host: ClabUiHost): LabsOverviewBridge {
     if (message?.type === "labs-overview:sources") {
       sourceRequests.get(message.requestId)?.(message.sources);
       sourceRequests.delete(message.requestId);
+    } else if (message?.type === "labs-overview:host-metrics") {
+      metricsRequests.get(message.requestId)?.(message);
+      metricsRequests.delete(message.requestId);
     } else if (message?.type === "labs-overview:usage") {
       streams.get(message.streamId)?.(message);
     }
@@ -105,11 +112,30 @@ function createLabsOverviewBridge(host: ClabUiHost): LabsOverviewBridge {
         post({ type: "labs-overview:load-sources", requestId, cardId: card.id });
       });
     },
+    fetchHostMetrics(endpointId, signal) {
+      const requestId = nextId++;
+      return new Promise((resolve, reject) => {
+        const settle = (message: MetricsMessage) => {
+          signal.removeEventListener("abort", onAbort);
+          if (message.metrics) resolve(message.metrics);
+          else reject(new Error(message.error ?? "The lab host's resources are unavailable"));
+        };
+        const onAbort = () => {
+          metricsRequests.delete(requestId);
+          reject(new Error("Aborted"));
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+        metricsRequests.set(requestId, settle);
+        post({ type: "labs-overview:host-metrics", requestId, endpointId });
+      });
+    },
     streamLabStats,
     dispose() {
       unsubscribe();
       for (const resolve of sourceRequests.values()) resolve(undefined);
       sourceRequests.clear();
+      for (const settle of metricsRequests.values()) settle({ type: "labs-overview:host-metrics", requestId: 0 });
+      metricsRequests.clear();
       for (const [streamId, push] of streams) push({ type: "labs-overview:usage", streamId, end: true });
       streams.clear();
     }
@@ -122,6 +148,7 @@ function initialState(): LabsOverviewWebviewState {
     cards: initial.cards ?? [],
     loading: initial.loading ?? true,
     showEndpoints: initial.showEndpoints ?? false,
+    labHosts: initial.labHosts ?? [],
     sourcesRevision: initial.sourcesRevision ?? 0
   };
 }
@@ -155,6 +182,7 @@ export function LabsOverviewApp(): React.JSX.Element {
       cards: message.cards,
       loading: message.loading,
       showEndpoints: message.showEndpoints,
+      labHosts: message.labHosts,
       sourcesRevision: message.sourcesRevision
     });
   });
@@ -167,6 +195,11 @@ export function LabsOverviewApp(): React.JSX.Element {
     (kind: LabsOverviewAction) => (card: LabOverviewCard) =>
       postMessage({ type: "labs-overview:action", action: kind, cardId: card.id }),
     [postMessage]
+  );
+  const fetchHostMetrics = useCallback(
+    (endpointId: string, signal: AbortSignal) =>
+      wiring?.bridge.fetchHostMetrics(endpointId, signal) ?? Promise.reject(new Error("Not ready")),
+    [wiring]
   );
   const loadSources = useCallback(
     (card: LabOverviewCard) => wiring?.bridge.loadSources(card) ?? Promise.resolve(undefined),
@@ -181,6 +214,8 @@ export function LabsOverviewApp(): React.JSX.Element {
           loading={state.loading}
           lifecycleAvailable
           showEndpoints={state.showEndpoints}
+          labHosts={state.labHosts}
+          fetchHostMetrics={wiring ? fetchHostMetrics : undefined}
           loadSources={loadSources}
           sourcesRevision={state.sourcesRevision}
           watchUsage={wiring?.feed.watch}

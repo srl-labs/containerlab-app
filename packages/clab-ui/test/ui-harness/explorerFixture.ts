@@ -248,7 +248,7 @@ export function buildExplorerFixture(mode: ExplorerFixtureMode): ExplorerSnapsho
           "runningLabs",
           "Running Labs",
           [
-            host("local", "Local", "this machine", "local", "running", [runningLab()]),
+            host("local", "This computer", "Docker", "local", "running", [runningLab()]),
             host("lab1", "lab1", "lab1.example.com:8090", "api", "running", [stoppedLab()])
           ],
           { toolbarActions: toolbar }
@@ -257,7 +257,7 @@ export function buildExplorerFixture(mode: ExplorerFixtureMode): ExplorerSnapsho
           "localLabs",
           "Undeployed Labs",
           [
-            host("local", "Local", "this machine", "local", "undeployed", undeployedLabs()),
+            host("local", "This computer", "Docker", "local", "undeployed", undeployedLabs()),
             host("lab1", "lab1", "lab1.example.com:8090", "api", "undeployed", hostLabs)
           ],
           { toolbarActions: toolbar }

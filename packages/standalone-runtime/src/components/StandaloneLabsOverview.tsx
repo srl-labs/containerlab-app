@@ -3,10 +3,12 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   createLabUsageFeed,
   type LabOverviewCard,
+  type LabOverviewHost,
   type LabThumbnailSources,
   type LabUsageFeed
 } from "@containerlab/clab-ui/workspace/state";
 import { getStandaloneBackend } from "../backend";
+import { fetchEndpointHealthMetrics } from "../endpointHealth";
 import { labDeepLinkUrl } from "../labDeepLink";
 import { fetchBackendFeatures, streamLabStats } from "../runtimeApi";
 import { labsEqualForExplorer, type TopologyFileEntry } from "../standaloneHostShared";
@@ -85,6 +87,14 @@ export function StandaloneLabsOverview({ actions }: { actions: StandaloneLabsOve
   }, [endpoints, filesRevision, listTopologyFiles]);
 
   const lifecycle = getStandaloneBackend().capabilities.lifecycle;
+  const labHosts = useMemo(
+    () => [...endpoints.values()].map((endpoint): LabOverviewHost => ({
+      id: endpoint.id,
+      label: endpoint.label,
+      status: endpoint.status
+    })),
+    [endpoints]
+  );
   const usageFeed = useLabUsageFeed(lifecycle);
   const cards = useMemo(
     () => buildLabOverviewCards({
@@ -106,6 +116,8 @@ export function StandaloneLabsOverview({ actions }: { actions: StandaloneLabsOve
         loading={files === null}
         lifecycleAvailable={lifecycle}
         showEndpoints={endpoints.size > 1}
+        labHosts={labHosts}
+        fetchHostMetrics={fetchEndpointHealthMetrics}
         loadSources={actions.loadSources}
         sourcesRevision={filesRevision}
         watchUsage={usageFeed?.watch}

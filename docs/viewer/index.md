@@ -52,7 +52,7 @@ Add the annotations file saved by the app to keep your layout. Without it, the v
 
 ## Just the drawing
 
-`borderless="true"` drops the frame, tabs, grid, inspector, and toolbar, and makes the background transparent. Readers can still pan and zoom. The architecture diagrams in these docs are drawn this way.
+`borderless="true"` drops the frame, tabs, grid, and toolbar, and makes the background transparent. Readers can still pan and zoom. The architecture diagrams in these docs are drawn this way.
 
 ````markdown
 ```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="Leaf–spine fabric" height="360" borderless="true"
@@ -67,9 +67,9 @@ The title still names the diagram for assistive technology. Bring back individua
 ## What readers can do
 
 - **Topology, YAML, or both.** Keyboard accessible tabs with arrow-key navigation.
-- **Inspect a node.** Click a device or choose it from the node menu. Reveal its source lines with **Show in YAML**.
+- **Find a node in the YAML.** Click a device to highlight its source lines. Add `inspector="true"` for a node menu with details and **Show in YAML**.
 - **Take the lab with you.** Copy or download the original YAML, including comments.
-- **Give the diagram room.** Drag to pan, scroll or pinch to zoom, fit the network, or expand the example to full screen.
+- **Give the diagram room.** Drag to pan, scroll or pinch to zoom, fit the network, or expand the example to full screen. Add `controls="true"` for floating zoom buttons.
 - **Follow the page theme.** Light and dark modes update the mounted graph.
 - **Load when needed.** Offscreen diagrams and examples starting in YAML view do not load the viewer until needed.
 

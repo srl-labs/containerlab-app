@@ -13,6 +13,7 @@ import {
   toRuntimeCaptureInterfaces
 } from "../../../core/utilities/runtimeInterfaces";
 import { mapSrosInterfaceName } from "../../../core/parsing/DistributedSrosMapper";
+import { linkCaptureKey, type LabCaptureInterface } from "../../../host/captureStream";
 
 export type CaptureInterfaceState = "up" | "down" | "unknown";
 
@@ -216,7 +217,8 @@ function toLinkedOption(
 export function buildCaptureNodeTarget(
   nodeId: string,
   nodes: Node[],
-  edges: Edge[]
+  edges: Edge[],
+  scope: { linksOnly?: boolean } = {}
 ): CaptureNodeTarget | undefined {
   const node = nodes.find((candidate) => candidate.id === nodeId);
   if (node?.type !== "topology-node") return undefined;
@@ -231,6 +233,13 @@ export function buildCaptureNodeTarget(
   const options = new Map(runtimeOptions.map((option) => [option.name, option]));
 
   for (const linked of linkedEndpoints(nodeId, nodes, edges)) {
+    // A host that captures lab links only (c9s) names them as the topology does;
+    // its runtime interfaces are the pod's, with their own aliases.
+    if (scope.linksOnly === true) {
+      const option = toLinkedOption(linked, undefined, containerName);
+      options.set(option.name, option);
+      continue;
+    }
     // Topology endpoints may use the vendor alias of the live interface.
     const candidates = endpointCandidates(linked.endpoint);
     const existing = runtimeOptions.find(
@@ -242,11 +251,15 @@ export function buildCaptureNodeTarget(
     options.set(option.name, option);
   }
 
+  // A host that captures lab links only (c9s) reports pod interfaces as the node's own.
+  const offered = [...options.values()].filter(
+    (option) => scope.linksOnly !== true || option.peer !== undefined
+  );
   return {
     nodeId,
     label: nodeLabel(node, nodeId),
     containerName,
-    options: [...options.values()].sort(compareOptions)
+    options: offered.sort(compareOptions)
   };
 }
 
@@ -306,4 +319,36 @@ export function matchesCaptureFilter(option: CaptureInterfaceOption, filter: str
     option.peer?.node,
     option.peer?.endpoint
   ].some((value) => value !== undefined && value.toLowerCase().includes(needle));
+}
+
+
+/**
+ * Options for a capture stream (c9s): the lab-link interfaces of `nodes`,
+ * each with its link peer and vendor alias. Names are `<node>:<interface>`,
+ * so the picker can mix nodes; `containerName` is the node, which the lab
+ * host maps to its pod.
+ */
+export function buildLinkCaptureOptions(
+  interfaces: readonly LabCaptureInterface[],
+  nodes: readonly string[]
+): CaptureInterfaceOption[] {
+  const severalNodes = new Set(nodes).size > 1;
+  return interfaces
+    .filter((entry) => nodes.includes(entry.node))
+    .map((entry): CaptureInterfaceOption => ({
+      name: linkCaptureKey(entry.node, entry.interface),
+      label: entry.interface,
+      ...(entry.alias !== undefined ? { alias: entry.alias, detail: entry.alias } : {}),
+      ...(severalNodes ? { nodeLabel: entry.node } : {}),
+      nodeNamespace: true,
+      hostNetns: false,
+      state: "unknown",
+      containerName: entry.node,
+      peer: { node: entry.peerNode, ...(entry.peerInterface ? { endpoint: entry.peerInterface } : {}) },
+      isManagement: false
+    }))
+    .sort(
+      (left, right) =>
+        nodes.indexOf(left.containerName) - nodes.indexOf(right.containerName) || compareOptions(left, right)
+    );
 }

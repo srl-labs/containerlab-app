@@ -21,6 +21,8 @@ import * as c from "../treeView/common";
 import {
   buildOverviewCards,
   overviewCardId,
+  overviewHostMetrics,
+  overviewLabHosts,
   type OverviewContainer,
   type OverviewRunningLab,
   type OverviewTopologyFile
@@ -141,6 +143,9 @@ class LabsOverviewPanel {
       }),
       this.panel.onDidDispose(() => this.dispose()),
       providers.runningProvider.onDidChangeTreeData(() => this.scheduleRefresh()),
+      // Signing in or out of a lab host changes what its tile shows.
+      getConnections()?.onDidChange(() => this.postState()) ??
+        new vscode.Disposable(() => undefined),
       providers.localProvider.onDidChangeTreeData(() => {
         this.sourcesRevision += 1;
         this.fileNodes = undefined;
@@ -215,6 +220,7 @@ class LabsOverviewPanel {
       cards: this.cards,
       loading: !this.loaded,
       showEndpoints: getConnections()?.grouped === true,
+      labHosts: overviewLabHosts(getConnections(), LOCAL_CONNECTION),
       sourcesRevision: this.sourcesRevision
     };
     // Uptimes move with the clock; compare without them so a quiet refresh sends nothing.
@@ -242,6 +248,13 @@ class LabsOverviewPanel {
       case "labs-overview:load-sources":
         void this.loadSources(message.cardId).then((sources) =>
           this.post({ type: "labs-overview:sources", requestId: message.requestId, sources })
+        );
+        break;
+      case "labs-overview:host-metrics":
+        void overviewHostMetrics(() =>
+          backendFor(connectionById(message.endpointId) ?? LOCAL_CONNECTION)
+        ).then((result) =>
+          this.post({ type: "labs-overview:host-metrics", requestId: message.requestId, ...result })
         );
         break;
       case "labs-overview:usage-start":

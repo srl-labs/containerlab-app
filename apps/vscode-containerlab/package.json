@@ -551,7 +551,7 @@
       },
       {
         "command": "containerlab.connection.checkLocal",
-        "title": "Check Labs on This Machine",
+        "title": "Check This Computer",
         "category": "Containerlab"
       }
     ],
@@ -934,7 +934,7 @@
           "containerlab.binaryPath": {
             "type": "string",
             "default": "",
-            "markdownDescription": "The absolute file path to the Containerlab binary."
+            "markdownDescription": "**This computer**: the containerlab binary; looked up on `PATH` when empty. Kubernetes lab hosts use it too: containerlab on this computer deploys their labs."
           },
           "containerlab.skipCleanupWarning": {
             "type": "boolean",
@@ -944,12 +944,18 @@
           "containerlab.deploy.extraArgs": {
             "type": "string",
             "default": "",
-            "description": "Additional command-line options appended to all 'containerlab deploy' and 'containerlab redeploy' commands."
+            "markdownDescription": "**This computer**: arguments added to every `containerlab deploy` and `redeploy`. A Kubernetes lab host has its own, in Settings → its lab host page."
+          },
+          "containerlab.deploy.timeout": {
+            "type": "string",
+            "default": "",
+            "pattern": "^$|^([0-9]+(\\.[0-9]+)?(ms|s|m|h))+$",
+            "markdownDescription": "**This computer**: containerlab's timeout for deploys, redeploys and applies that set none, for example `5m` (`--timeout`). containerlab's default (2m) when empty. A lab's own timeout (Lab settings → Deploy) wins."
           },
           "containerlab.destroy.extraArgs": {
             "type": "string",
             "default": "",
-            "description": "Additional command-line options appended to all 'containerlab destroy' commands."
+            "markdownDescription": "**This computer**: arguments added to every `containerlab destroy`. A Kubernetes lab host has its own, in Settings → its lab host page."
           },
           "containerlab.drawioDefaultTheme": {
             "type": "string",
@@ -971,12 +977,20 @@
           "containerlab.runtime": {
             "type": "string",
             "default": "docker",
-            "description": "Container runtime to use (docker, podman)."
+            "enum": [
+              "docker",
+              "podman"
+            ],
+            "enumDescriptions": [
+              "Labs on this computer run in Docker.",
+              "Labs on this computer run in Podman."
+            ],
+            "markdownDescription": "The container runtime of labs on **This computer**. A Kubernetes cluster is a lab host of its own: add it with [Add Lab Host](command:containerlab.connection.add) → Kubernetes."
           },
           "containerlab.dockerSocketPath": {
             "type": "string",
             "default": "/var/run/docker.sock",
-            "description": "Path to the Docker or Podman socket (e.g., /run/user/1000/podman/podman.sock for Podman)."
+            "markdownDescription": "**This computer**: the Docker or Podman API socket, for example `/run/user/1000/podman/podman.sock` for Podman."
           },
           "containerlab.refreshMode": {
             "type": "string",
@@ -1006,37 +1020,255 @@
           "containerlab.connections": {
             "type": "array",
             "default": [],
-            "markdownDescription": "Lab hosts to work with, Linux machines that run clab-api-server, each with a `url` (for example `https://lab-host:8090`), a `label`, and optionally a `username` and a `sessionDuration` such as `24h`. Their labs show next to the labs on this machine. Passwords are not stored here: [Manage Lab Hosts](command:containerlab.connection.manage) signs in and keeps the token in VS Code's secret storage.",
+            "scope": "machine",
+            "markdownDescription": "Lab hosts to work with. Their labs show next to the labs on this machine.\n\n- **clab-api-server**: `url` (for example `https://lab-host:8090`), optionally `label`, `username` and `sessionDuration` such as `24h`. Passwords are not stored here: [Manage Lab Hosts](command:containerlab.connection.manage) signs in and keeps the token in VS Code's secret storage.\n- **Kubernetes**: `\"kind\": \"kubernetes\"` and the `kubeContext`, optionally the `kubeconfig` file that has it, a `namespace` for every lab, the deploy defaults `exposeType`, `persistence` and `imagePullSecret`, and a `label`. containerlab on this machine runs the labs on the cluster, so it needs Linux (or WSL). [Add Lab Host](command:containerlab.connection.add) → Kubernetes fills it in and checks the cluster.\n\nEach machine has its own list: a remote window (SSH, WSL, Dev Container) keeps its lab hosts in its Remote settings.",
             "items": {
               "type": "object",
-              "required": [
-                "url"
-              ],
-              "properties": {
-                "label": {
-                  "type": "string",
-                  "description": "Name shown in the Containerlab views."
+              "anyOf": [
+                {
+                  "type": "object",
+                  "title": "clab-api-server",
+                  "markdownDescription": "A Linux machine that runs clab-api-server. Sign in on [Manage Lab Hosts](command:containerlab.connection.manage); the token goes to VS Code's secret storage, never here.",
+                  "required": [
+                    "url"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "description": "Name shown in the Containerlab views."
+                    },
+                    "url": {
+                      "type": "string",
+                      "description": "URL of clab-api-server on the lab host."
+                    },
+                    "username": {
+                      "type": "string",
+                      "description": "Linux user to sign in with."
+                    },
+                    "sessionDuration": {
+                      "type": "string",
+                      "description": "How long a sign-in lasts, for example 24h or 7d. The lab host's default when unset."
+                    },
+                    "captureMethod": {
+                      "type": "string",
+                      "enum": [
+                        "Automatic",
+                        "Wireshark on this computer",
+                        "Wireshark VNC",
+                        "Edgeshark"
+                      ],
+                      "markdownDescription": "Where a capture of this lab host opens; Automatic when unset."
+                    }
+                  },
+                  "additionalProperties": false
                 },
-                "url": {
-                  "type": "string",
-                  "description": "URL of clab-api-server on the lab host."
+                {
+                  "type": "object",
+                  "title": "Kubernetes",
+                  "markdownDescription": "A Kubernetes cluster with clabernetes. containerlab on this machine runs its labs with your kubeconfig, so this machine needs Linux (or WSL) and containerlab, not Docker.",
+                  "required": [
+                    "kind",
+                    "kubeContext"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "kubernetes"
+                      ],
+                      "markdownDescription": "`kubernetes`: the labs run on a Kubernetes cluster with clabernetes."
+                    },
+                    "kubeContext": {
+                      "type": "string",
+                      "markdownDescription": "The kubeconfig context of the cluster."
+                    },
+                    "kubeconfig": {
+                      "type": "string",
+                      "markdownDescription": "The kubeconfig file that has `kubeContext`, for example `~/.kube/lab-prod.yaml`. When unset, the context is looked up in `KUBECONFIG` of the VS Code process, else in `~/.kube/config`."
+                    },
+                    "namespace": {
+                      "type": "string",
+                      "markdownDescription": "The namespace of every lab, if you may only use one. When unset, each lab gets its own namespace, `c9s-<lab>`, which needs the right to create namespaces."
+                    },
+                    "exposeType": {
+                      "type": "string",
+                      "enum": [
+                        "ClusterIP",
+                        "Headless",
+                        "LoadBalancer",
+                        "None"
+                      ],
+                      "enumDescriptions": [
+                        "A Service per node, reachable inside the cluster.",
+                        "DNS names for each node inside the cluster, without a virtual IP.",
+                        "A load balancer address per node, reachable from outside the cluster.",
+                        "No Services: reach nodes through VS Code (terminals, port forwards)."
+                      ],
+                      "markdownDescription": "How node ports are exposed by default (`--expose-type`). clabernetes' default when unset."
+                    },
+                    "persistence": {
+                      "type": "boolean",
+                      "markdownDescription": "`false`: nodes keep no storage, so every restart starts them from their startup config (`--no-persistence`)."
+                    },
+                    "imagePullSecret": {
+                      "type": "string",
+                      "markdownDescription": "A Secret in the lab's namespace for private registries (`--image-pull-secret`), used by every deploy."
+                    },
+                    "label": {
+                      "type": "string",
+                      "description": "Name shown in the Containerlab views. The context when unset."
+                    },
+                    "deployTimeout": {
+                      "type": "string",
+                      "markdownDescription": "containerlab's timeout for deploys that set none, for example `20m` (`--timeout`). containerlab's default (10m) when unset."
+                    },
+                    "noTopologyCR": {
+                      "type": "boolean",
+                      "markdownDescription": "`true`: deploy the nodes without clabernetes' Topology resource (`--no-topology-cr`)."
+                    },
+                    "deployExtraArgs": {
+                      "type": "string",
+                      "markdownDescription": "Arguments added to every `containerlab deploy` and `redeploy` of this lab host."
+                    },
+                    "destroyExtraArgs": {
+                      "type": "string",
+                      "markdownDescription": "Arguments added to every `containerlab destroy` of this lab host."
+                    },
+                    "captureMethod": {
+                      "type": "string",
+                      "enum": [
+                        "Automatic",
+                        "Wireshark on this computer",
+                        "Wireshark VNC",
+                        "Edgeshark"
+                      ],
+                      "markdownDescription": "Where a capture of this lab host opens; Automatic when unset."
+                    },
+                    "wiresharkImage": {
+                      "type": "string",
+                      "markdownDescription": "The Wireshark VNC image for captures of this lab host, with its tag."
+                    }
+                  },
+                  "additionalProperties": false
                 },
-                "username": {
-                  "type": "string",
-                  "description": "Linux user to sign in with."
-                },
-                "sessionDuration": {
-                  "type": "string",
-                  "description": "How long a sign-in lasts, for example 24h or 7d. The lab host's default when unset."
+                {
+                  "type": "object",
+                  "title": "Kubernetes (older form)",
+                  "deprecationMessage": "Use \"kind\": \"kubernetes\" without \"runtime\"; this form keeps working.",
+                  "markdownDescription": "A Kubernetes cluster with clabernetes. containerlab on this machine runs its labs with `-r c9s`, so this machine needs Linux (or WSL) and containerlab, not Docker.",
+                  "required": [
+                    "kind",
+                    "runtime",
+                    "kubeContext"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "local"
+                      ],
+                      "markdownDescription": "`local`: containerlab on this machine runs the labs."
+                    },
+                    "runtime": {
+                      "type": "string",
+                      "enum": [
+                        "c9s"
+                      ],
+                      "markdownDescription": "`c9s`: the labs run on a Kubernetes cluster with clabernetes."
+                    },
+                    "kubeContext": {
+                      "type": "string",
+                      "markdownDescription": "The kubeconfig context of the cluster."
+                    },
+                    "kubeconfig": {
+                      "type": "string",
+                      "markdownDescription": "The kubeconfig file that has `kubeContext`, for example `~/.kube/lab-prod.yaml`. When unset, the context is looked up in `KUBECONFIG` of the VS Code process, else in `~/.kube/config`."
+                    },
+                    "namespace": {
+                      "type": "string",
+                      "markdownDescription": "The namespace of every lab, if you may only use one. When unset, each lab gets its own namespace, `c9s-<lab>`, which needs the right to create namespaces."
+                    },
+                    "exposeType": {
+                      "type": "string",
+                      "enum": [
+                        "ClusterIP",
+                        "Headless",
+                        "LoadBalancer",
+                        "None"
+                      ],
+                      "markdownDescription": "How node ports are exposed by default (`--expose-type`). containerlab's default when unset."
+                    },
+                    "persistence": {
+                      "type": "boolean",
+                      "markdownDescription": "`false` turns persistent node volumes off by default (`--no-persistence`)."
+                    },
+                    "imagePullSecret": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string",
+                      "description": "Name shown in the Containerlab views. The context when unset."
+                    },
+                    "deployTimeout": {
+                      "type": "string",
+                      "markdownDescription": "containerlab's timeout for deploys that set none, for example `20m` (`--timeout`). containerlab's default (10m) when unset."
+                    },
+                    "noTopologyCR": {
+                      "type": "boolean",
+                      "markdownDescription": "`true`: deploy the nodes without clabernetes' Topology resource (`--no-topology-cr`)."
+                    },
+                    "deployExtraArgs": {
+                      "type": "string",
+                      "markdownDescription": "Arguments added to every `containerlab deploy` and `redeploy` of this lab host."
+                    },
+                    "destroyExtraArgs": {
+                      "type": "string",
+                      "markdownDescription": "Arguments added to every `containerlab destroy` of this lab host."
+                    },
+                    "captureMethod": {
+                      "type": "string",
+                      "enum": [
+                        "Automatic",
+                        "Wireshark on this computer",
+                        "Wireshark VNC",
+                        "Edgeshark"
+                      ],
+                      "markdownDescription": "Where a capture of this lab host opens; Automatic when unset."
+                    },
+                    "wiresharkImage": {
+                      "type": "string",
+                      "markdownDescription": "The Wireshark VNC image for captures of this lab host, with its tag."
+                    }
+                  },
+                  "additionalProperties": false
                 }
-              },
-              "additionalProperties": false
+              ],
+              "defaultSnippets": [
+                {
+                  "label": "clab-api-server",
+                  "description": "A lab host that runs clab-api-server",
+                  "body": {
+                    "label": "$1",
+                    "url": "https://$2:8090"
+                  }
+                },
+                {
+                  "label": "Kubernetes (c9s)",
+                  "description": "A cluster with clabernetes, reached through a kubeconfig context",
+                  "body": {
+                    "kind": "local",
+                    "runtime": "c9s",
+                    "kubeContext": "$1"
+                  }
+                }
+              ]
             }
           },
           "containerlab.localConnection": {
             "type": "boolean",
             "default": true,
-            "description": "Show \"Local\", the labs on this machine, next to the lab hosts. Turn it off to work with lab hosts only."
+            "scope": "machine",
+            "description": "Show \"This computer\", the labs on this machine, next to the lab hosts. Turn it off to work with lab hosts only."
           }
         }
       },
@@ -1064,7 +1296,7 @@
             "default": 0,
             "minimum": 0,
             "maximum": 24,
-            "description": "Interface font size in pixels (10\u201324). Set to 0 to follow VS Code. Does not change topology labels or terminal output."
+            "description": "Interface font size in pixels (10–24). Set to 0 to follow VS Code. Does not change topology labels or terminal output."
           },
           "containerlab.appearance.fontFamily": {
             "type": "string",
@@ -1075,6 +1307,11 @@
             "type": "boolean",
             "default": false,
             "description": "Minimize interface animations and transitions in Containerlab views."
+          },
+          "containerlab.appearance.hoverCards": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show a card with a node's or link's details when the pointer rests on it in the topology viewer."
           }
         }
       },
@@ -1209,28 +1446,41 @@
           "containerlab.capture.remoteHostname": {
             "type": "string",
             "default": "",
-            "markdownDescription": "Hostname or IP address for **Edgeshark packet capture** connections. Can be either DNS resolvable hostname, or an IPv4/6 address. This setting tells Edgeshark where to connect for capturing packets.\n\n**Note:** A configured hostname for *this session of VS Code* takes precedence. (Command palette: **Containerlab: Configure session hostname**)"
+            "markdownDescription": "**This computer**: the hostname or IP address Edgeshark's packetflix links name. Found automatically when empty."
           },
           "containerlab.capture.packetflixPort": {
             "type": "number",
             "default": 5001,
-            "markdownDescription": "Port for the **Packetflix WebSocket endpoint** used by Edgeshark packet capture. This is where Edgeshark connects to stream captured packets.",
+            "markdownDescription": "**This computer**: the port of Edgeshark's packetflix endpoint.",
             "minimum": 1,
             "maximum": 65535
           },
           "containerlab.capture.preferredAction": {
             "type": "string",
-            "default": "Wireshark VNC",
+            "default": "Automatic",
             "enum": [
-              "Edgeshark",
-              "Wireshark VNC"
+              "Automatic",
+              "Wireshark on this computer",
+              "Wireshark VNC",
+              "Edgeshark"
             ],
-            "description": "The preferred capture method when using the capture interface quick action on the interface tree item"
+            "enumDescriptions": [
+              "Wireshark on this computer when it is found and the lab host streams captures (Kubernetes), else Wireshark VNC, else Edgeshark or saving a .pcapng.",
+              "Wireshark installed here. Kubernetes (c9s) lab hosts stream the capture into it; Docker and Podman lab hosts open it through Edgeshark's packetflix link.",
+              "Wireshark in a VS Code tab, in a container on the lab host (or on this computer's Docker for a cluster used from here).",
+              "A packetflix link that Wireshark on this computer opens through Edgeshark. Docker and Podman lab hosts only."
+            ],
+            "markdownDescription": "**This computer**: where a capture opens. Kubernetes lab hosts and API Servers have their own, in Settings → their lab host page. When the lab host lacks the method you pick, the capture opens the automatic way and says why."
+          },
+          "containerlab.capture.wireshark.path": {
+            "type": "string",
+            "default": "",
+            "description": "Wireshark for captures from Kubernetes (c9s) lab hosts, which pipe the capture stream into wireshark -k -i -. Found on PATH (or in the usual install location) when empty."
           },
           "containerlab.capture.wireshark.dockerImage": {
             "type": "string",
             "default": "ghcr.io/srl-labs/wireshark-vnc-docker:latest",
-            "description": "The docker image to use for Wireshark/Edgeshark VNC capture. Requires full image name + tag"
+            "markdownDescription": "**This computer**: the Wireshark VNC image, with its tag. A Kubernetes lab host has its own, in Settings → its lab host page."
           },
           "containerlab.capture.wireshark.pullPolicy": {
             "type": "string",
@@ -1240,7 +1490,7 @@
               "missing",
               "never"
             ],
-            "description": "The pull policy of the Wireshark docker image"
+            "markdownDescription": "**This computer**: when the Wireshark VNC image is pulled."
           },
           "containerlab.capture.wireshark.theme": {
             "type": "string",
@@ -1260,12 +1510,12 @@
           "containerlab.capture.wireshark.vncCaptureHostname": {
             "type": "string",
             "default": "",
-            "markdownDescription": "Override the hostname used in the generation for packetflix URI for VNC captures only."
+            "markdownDescription": "**This computer**: the host Wireshark VNC captures name in their packetflix link; localhost when empty."
           },
           "containerlab.capture.edgeshark.extraEnvironmentVars": {
             "type": "string",
             "default": "HTTP_PROXY=, http_proxy=",
-            "description": "Comma-separated environment variables to inject into edgeshark containers (e.g., 'HTTP_PROXY=, http_proxy=, NO_PROXY=localhost'). Each variable will be added to the environment section of both gostwire and packetflix services."
+            "markdownDescription": "**This computer**: comma-separated variables for the Edgeshark containers (e.g. `HTTP_PROXY=, http_proxy=, NO_PROXY=localhost`)."
           }
         }
       }
@@ -1328,7 +1578,8 @@
     "chokidar": "catalog:",
     "ovsx": "catalog:",
     "ws": "catalog:",
-    "@types/ws": "catalog:"
+    "@types/ws": "catalog:",
+    "@srl-labs/containerlab-app-contract": "workspace:*"
   },
   "private": true,
   "bugs": {

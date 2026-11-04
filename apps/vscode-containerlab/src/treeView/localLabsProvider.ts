@@ -6,6 +6,7 @@ import * as utils from "../utils/utils";
 import { favoriteLabs, outputChannel } from "../globals";
 import { FilterUtils } from "../helpers/filterUtils";
 import { getConnections, remoteUri } from "../backend/labBackends";
+import { withServerRuntime } from "../backend/labHostSupport";
 import { LOCAL_CONNECTION, type LabConnection } from "../backend/connections";
 
 import * as c from "./common";
@@ -41,16 +42,23 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
   private cachedUris: Map<string, vscode.Uri> | undefined;
   private scanPromise: Promise<void> | undefined;
   private scanRequested = false;
+  /**
+   * Resolved lab paths by path. Resolving checks the file system; every
+   * snapshot resolves each lab once per folder, so it is cached until files change.
+   */
+  private normalizedPaths = new Map<string, string>();
 
   constructor() {
     this.watcher.onDidCreate((uri) => {
       if (!uri.scheme || uri.scheme === "file") {
+        this.normalizedPaths.clear();
         this.cachedUris?.set(uri.fsPath, uri);
         this.refresh();
       }
     });
     this.watcher.onDidDelete((uri) => {
       if (!uri.scheme || uri.scheme === "file") {
+        this.normalizedPaths.clear();
         this.cachedUris?.delete(uri.fsPath);
         this.refresh();
       }
@@ -65,6 +73,7 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
     // of the subdir deletion.
     this.delSubdirWatcher.onDidDelete((uri) => {
       if (!uri.scheme || uri.scheme === "file") {
+        this.normalizedPaths.clear();
         if (this.cachedUris) {
           const prefix = uri.fsPath + path.sep;
           for (const fsPath of this.cachedUris.keys()) {
@@ -97,6 +106,7 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
           ])
         ).filter((u) => !u.scheme || u.scheme === "file");
         this.cachedUris = new Map(uris.map((u) => [u.fsPath, u]));
+        this.normalizedPaths.clear();
         outputChannel.debug(`[LocalTreeDataProvider] Scan found ${this.cachedUris.size} lab files`);
         this.refresh();
       } catch (err: unknown) {
@@ -112,8 +122,25 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
     return scan;
   }
 
+  /** Starts looking for topology files before the explorer asks for them. */
+  prefetch(): void {
+    if (!this.scanRequested) {
+      this.scanRequested = true;
+      void this.performScan();
+    }
+  }
+
   refresh(): void {
     this._onDidChangeTreeData.fire();
+  }
+
+  private normalize(filePath: string): string {
+    let normalized = this.normalizedPaths.get(filePath);
+    if (normalized === undefined) {
+      normalized = utils.normalizeLabPath(filePath);
+      this.normalizedPaths.set(filePath, normalized);
+    }
+    return normalized;
   }
 
   // Force refresh
@@ -140,7 +167,7 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
     element: c.ClabLabTreeNode | c.ClabFolderTreeNode | undefined
   ): Promise<(c.ClabFolderTreeNode | c.ClabLabTreeNode)[] | undefined> {
     if (element instanceof c.ClabFolderTreeNode) {
-      return this.discoverLabs(element.fullPath);
+      return this.discoverLabs(element.fullPath, element.connectionId);
     }
     if (element instanceof c.ClabConnectionTreeNode) {
       return element.children as (c.ClabFolderTreeNode | c.ClabLabTreeNode)[];
@@ -158,7 +185,9 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
         const status = manager.status(connection);
         let children: vscode.TreeItem[];
         if (connection.kind === "local") {
-          children = (await this.discoverLabs()) ?? [
+          // This machine and each cluster list the topology files here; a
+          // file opened or run from a host's section runs on that host.
+          children = (await this.discoverLabs(undefined, connection.id)) ?? [
             new c.ClabConnectionMessageNode(
               connection.id,
               "undeployed",
@@ -179,7 +208,7 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
           ];
         }
         return new c.ClabConnectionTreeNode(
-          connection,
+          withServerRuntime(connection),
           "undeployed",
           status,
           children,
@@ -211,6 +240,8 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
     const running = new Set(Object.keys(ins.labsOf(connection.id) ?? {}));
     const filter = this.treeFilter ? FilterUtils.createFilter(this.treeFilter) : undefined;
     const nodes = entries
+      // Dot files, like the temp files of a save in progress, as on this machine.
+      .filter((entry) => !path.posix.basename(entry.yamlFileName).startsWith("."))
       .filter((entry) => !running.has(entry.labName))
       .map((entry) => {
         const folder = path.posix.dirname(entry.yamlFileName);
@@ -237,17 +268,18 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
   }
 
   private async discoverLabs(
-    dir?: string
+    dir?: string,
+    connectionId?: string
   ): Promise<(c.ClabFolderTreeNode | c.ClabLabTreeNode)[] | undefined> {
     outputChannel.debug("[LocalTreeDataProvider] Discovering labs...");
 
     const uris = await this.getLabUris();
     const labs: Record<string, c.ClabLabTreeNode> = {};
-    const labPaths = this.getLabPaths();
+    const labPaths = this.getLabPaths(connectionId ?? LOCAL_CONNECTION.id);
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
 
     uris.forEach((uri) =>
-      this.addLab(labs, labPaths, uri.fsPath, favoriteLabs.has(utils.normalizeLabPath(uri.fsPath)))
+      this.addLab(labs, labPaths, uri.fsPath, favoriteLabs.has(this.normalize(uri.fsPath)))
     );
     this.includeFavoriteLabs(uris, labs, labPaths);
     this.applyTreeFilter(labs, workspaceRoot);
@@ -256,6 +288,9 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
     const { labNodes, folderNodes } = this.collectNodes(labs, dirPath, workspaceRoot);
 
     labNodes.sort((a, b) => LocalLabTreeDataProvider.compareLabs(a, b));
+    if (connectionId !== undefined) {
+      for (const node of [...labNodes, ...folderNodes]) c.onConnection(node, connectionId);
+    }
 
     const result: (c.ClabFolderTreeNode | c.ClabLabTreeNode)[] = [...labNodes, ...folderNodes];
     const isEmpty = result.length === 0 && dirPath === workspaceRoot;
@@ -281,7 +316,7 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
     filePath: string,
     isFavorite: boolean
   ): void {
-    const normPath = utils.normalizeLabPath(filePath);
+    const normPath = this.normalize(filePath);
     if (path.basename(filePath).startsWith(".") || labPaths.has(normPath)) {
       return;
     }
@@ -312,9 +347,9 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
     labs: Record<string, c.ClabLabTreeNode>,
     labPaths: Set<string>
   ): void {
+    const found = new Set(uris.map((u) => this.normalize(u.fsPath)));
     favoriteLabs.forEach((p) => {
-      const norm = utils.normalizeLabPath(p);
-      if (!uris.find((u) => utils.normalizeLabPath(u.fsPath) === norm)) {
+      if (!found.has(this.normalize(p))) {
         this.addLab(labs, labPaths, p, true);
       }
     });
@@ -376,11 +411,11 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
   }
 
   // Parse clab inspect data and return a set of absolute labPaths.
-  // Used to check if a locally discovered lab is deployed or not.
-  private getLabPaths() {
+  // Used to check if a locally discovered lab is deployed on a connection or not.
+  private getLabPaths(connectionId: string) {
     const labPaths = new Set<string>();
 
-    const data = ins.labsOf(LOCAL_CONNECTION.id);
+    const data = ins.labsOf(connectionId);
 
     if (Array.isArray(data)) {
       // Old format: flat array of containers (for backward compatibility)

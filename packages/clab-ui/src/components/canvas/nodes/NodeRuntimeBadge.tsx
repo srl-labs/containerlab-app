@@ -1,6 +1,5 @@
 // Deployment badges are not needed by the standalone documentation viewer.
 import React from "react";
-import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import StopRoundedIcon from "@mui/icons-material/StopRounded";
 import PauseRoundedIcon from "@mui/icons-material/PauseRounded";
 import BlockRoundedIcon from "@mui/icons-material/BlockRounded";
@@ -29,8 +28,6 @@ function getRuntimeBadgeColors(state: NodeBadgeState): {
   icon: string;
 } {
   switch (state) {
-    case "running":
-      return { bg: "#16A34A", border: "#14532D", icon: "#ECFDF5" };
     case "paused":
       return { bg: "#F59E0B", border: "#78350F", icon: "#FFFBEB" };
     case "undeployed":
@@ -46,8 +43,6 @@ function getRuntimeBadgeColors(state: NodeBadgeState): {
 
 function getRuntimeBadgeIcon(state: NodeBadgeState, iconColor: string): React.ReactElement {
   switch (state) {
-    case "running":
-      return <PlayArrowRoundedIcon sx={{ fontSize: "0.52rem", color: iconColor }} />;
     case "paused":
       return <PauseRoundedIcon sx={{ fontSize: "0.52rem", color: iconColor }} />;
     case "undeployed":
@@ -61,7 +56,9 @@ function getRuntimeBadgeIcon(state: NodeBadgeState, iconColor: string): React.Re
   }
 }
 
+/** Nothing for a running node: that is the usual state, and the hover card tells it. */
 export default function NodeRuntimeBadge({ state }: { state: NodeBadgeState }) {
+  if (state === "running") return null;
   const colors = getRuntimeBadgeColors(state);
   const style = { ...BADGE_STYLE_BASE, backgroundColor: colors.bg, border: `1px solid ${colors.border}` };
   return (

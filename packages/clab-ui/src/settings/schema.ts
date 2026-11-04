@@ -1,4 +1,5 @@
 /** Host-neutral settings schema and validation, shared by the form and extension host. */
+import type { LabHostSettingRows } from "../host/labHostSettings";
 import type { EndpointConfig } from "../workspace/types";
 
 /**
@@ -15,6 +16,16 @@ export interface LabHostsSnapshot {
     problems: string[];
     containerlabVersion?: string;
   };
+  /** Each lab host's settings for its page, by host id; This computer's under its id too. */
+  settings?: Record<string, LabHostSettingRows>;
+  /** Opens "Add lab host" on this kind, e.g. the cluster form from the command palette; sent once. */
+  add?: "cluster" | "server";
+  /** Kubernetes cluster lab hosts: whether they can be added here, and the default kubeconfig. */
+  clusters?: {
+    /** Why clusters cannot be added here, e.g. containerlab needs Linux. */
+    unavailable?: string;
+    defaultKubeconfig?: string;
+  };
 }
 export interface SettingSchema {
   type: string;
@@ -26,9 +37,13 @@ export interface SettingSchema {
   minimum?: number;
   maximum?: number;
   items?: SettingSchema;
-  properties?: Record<string, SettingSchema>;
+  /** Missing keys read as `undefined` in a JSON import of the manifest. */
+  properties?: Partial<Record<string, SettingSchema>>;
   required?: string[];
   additionalProperties?: boolean | SettingSchema;
+  /** The value matches one of these, e.g. the entry shapes of a list. */
+  anyOf?: SettingSchema[];
+  title?: string;
 }
 export type SettingsCategory =
   | "labHosts"
@@ -80,16 +95,17 @@ const TITLES: Record<string, string> = {
   binaryPath: "Containerlab binary",
   skipCleanupWarning: "Skip cleanup confirmation",
   "deploy.extraArgs": "Deploy arguments",
+  "deploy.timeout": "Deploy timeout",
   "destroy.extraArgs": "Destroy arguments",
   drawioDefaultTheme: "Draw.io theme",
   "gotty.port": "GoTTY port",
-  runtime: "Container runtime",
+  runtime: "Container runtime (this computer)",
   dockerSocketPath: "Container socket",
   refreshMode: "Refresh mode",
   pollInterval: "Polling interval",
   enableInterfaceStats: "Interface statistics",
   connections: "Lab hosts",
-  localConnection: "Labs on this machine",
+  localConnection: "This computer",
   "editor.customNodes": "Custom node templates",
   "editor.updateLinkEndpointsOnKindChange": "Update link endpoints",
   "editor.lockLabByDefault": "Lock canvas by default",
@@ -101,6 +117,7 @@ const TITLES: Record<string, string> = {
   "capture.remoteHostname": "Capture hostname",
   "capture.packetflixPort": "Packetflix port",
   "capture.preferredAction": "Default capture method",
+  "capture.wireshark.path": "Wireshark program",
   "capture.wireshark.dockerImage": "Wireshark image",
   "capture.wireshark.pullPolicy": "Image pull policy",
   "capture.wireshark.theme": "Wireshark theme",
@@ -111,6 +128,7 @@ const TITLES: Record<string, string> = {
   "appearance.fontSize": "Interface font size",
   "appearance.fontFamily": "Interface font family",
   "appearance.reduceMotion": "Reduce motion",
+  "appearance.hoverCards": "Details on hover",
 };
 const RELOAD_KEYS = new Set([
   "binaryPath",
@@ -120,8 +138,28 @@ const RELOAD_KEYS = new Set([
   "pollInterval",
   "enableInterfaceStats",
 ]);
+/**
+ * This computer's settings: they show on its page under Lab hosts, next to
+ * the same settings of every other lab host, not in the app's categories.
+ */
+export const THIS_COMPUTER_SETTING_KEYS: ReadonlySet<string> = new Set([
+  "runtime",
+  "dockerSocketPath",
+  "binaryPath",
+  "deploy.timeout",
+  "deploy.extraArgs",
+  "destroy.extraArgs",
+  "capture.preferredAction",
+  "capture.wireshark.dockerImage",
+  "capture.wireshark.pullPolicy",
+  "capture.wireshark.vncCaptureHostname",
+  "capture.remoteHostname",
+  "capture.packetflixPort",
+  "capture.edgeshark.extraEnvironmentVars"
+]);
+
 function categoryFor(key: string): SettingsCategory {
-  if (key === "connections" || key === "localConnection") return "labHosts";
+  if (key === "connections" || key === "localConnection" || THIS_COMPUTER_SETTING_KEYS.has(key)) return "labHosts";
   if (key.startsWith("appearance.")) return "appearance";
   if (key.startsWith("capture.")) return "capture";
   if (key.startsWith("editor.") || key === "drawioDefaultTheme")
@@ -132,12 +170,6 @@ function categoryFor(key: string): SettingsCategory {
     key.startsWith("gotty.")
   )
     return "terminal";
-  if (
-    key.startsWith("deploy.") ||
-    key.startsWith("destroy.") ||
-    key === "skipCleanupWarning"
-  )
-    return "labs";
   return "general";
 }
 export function createSettingsCatalog(
@@ -205,6 +237,17 @@ export function validateSetting(
   }
   if (schema.enum && !schema.enum.includes(String(value)))
     return `${label} must be one of: ${schema.enum.join(", ")}.`;
+  if (schema.anyOf && schema.anyOf.length > 0) {
+    const errors = schema.anyOf.map((option) =>
+      validateSetting(option, value, label),
+    );
+    if (errors.every((error) => error !== undefined)) {
+      const names = schema.anyOf.map(
+        (option, index) => option.title ?? `shape ${index + 1}`,
+      );
+      return `${label} matches none of: ${names.join(", ")}. ${errors[0]}`;
+    }
+  }
   return undefined;
 }
 export function validateSettingsChange(

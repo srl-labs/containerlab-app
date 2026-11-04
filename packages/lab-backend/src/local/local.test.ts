@@ -18,7 +18,7 @@ import {
   toApplyLabResponse
 } from "./index.ts";
 import { lifecycleLineStream } from "./lifecycle.ts";
-import { containerlabCommand, runChecked } from "./process.ts";
+import { containerlabCommand, lastContainerlabError, runChecked } from "./process.ts";
 
 async function temporaryDirectory(t: TestContext): Promise<string> {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "lab-backend-local-"));
@@ -238,6 +238,65 @@ test("a failed lifecycle action ends with containerlab's error", async (t) => {
   );
 });
 
+/** containerlab's boxed error for a binary that is neither run as root nor SUID root, as it prints it. */
+const ROOT_REQUIRED_OUTPUT = [
+  "          ",
+  "   ERROR  ",
+  "          ",
+  "  This containerlab command requires root privileges or root via SUID to run, effective UID: 1000 SUID: 1000.         ",
+  ""
+].join("\n");
+const ROOT_REQUIRED =
+  "This containerlab command requires root privileges or root via SUID to run, effective UID: 1000 SUID: 1000.";
+
+test("containerlab's boxed ERROR output is its error, also wrapped and with colors", () => {
+  assert.equal(lastContainerlabError(ROOT_REQUIRED_OUTPUT), ROOT_REQUIRED);
+  assert.equal(
+    lastContainerlabError(`17:00:00 INFO Parsing topology\n\x1b[1;30;41m ERROR \x1b[0m\n\n  User 'u' is not part of\n  group 'clab_admins'.\n\n`),
+    "User 'u' is not part of group 'clab_admins'."
+  );
+  assert.equal(lastContainerlabError("21:00:00 ERRO image pull failed"), "image pull failed");
+  assert.equal(lastContainerlabError("21:00:00 INFO fine"), undefined);
+  // containerlab's new-version notice is a box too, but no error.
+  const notice = [
+    "17:00:00 INFO containerlab version",
+    "  🎉=",
+    "  │ A newer containerlab version (0.73.0) is available!",
+    "  │ Release notes: https://containerlab.dev/rn/0.73/",
+    "  │ Run 'clab version upgrade' or see https://containerlab.dev/install/ for other installation options.",
+    "17:00:01 INFO Creating docker network name=clab"
+  ].join("\n");
+  assert.equal(lastContainerlabError(notice), undefined);
+  assert.equal(lastContainerlabError(`${notice}\n${ROOT_REQUIRED_OUTPUT}`), ROOT_REQUIRED);
+});
+
+test("a lifecycle action ends with containerlab's boxed error, never a bare exit status", async (t) => {
+  const root = await temporaryDirectory(t);
+  await fs.writeFile(path.join(root, "lab4.clab.yml"), "name: lab4\n");
+  const binary = await fakeContainerlab(root, ROOT_REQUIRED_OUTPUT, 1);
+  const backend = new LocalLabBackend({ workspaceRoot: root, binaryPath: binary });
+  const expected = `Failed to apply lab 'lab4': ${ROOT_REQUIRED}`;
+
+  const events = await collect(await backend.streamLifecycle("apply", { labName: "lab4", path: "lab4.clab.yml" }));
+  assert.deepEqual(events.at(-1), { type: "error", error: expected });
+  await assert.rejects(backend.runLifecycle("apply", { labName: "lab4", path: "lab4.clab.yml" }), { message: expected });
+});
+
+test("an events stream that containerlab ends with an error fails with it", async (t) => {
+  const root = await temporaryDirectory(t);
+  const binary = await fakeContainerlab(root, ROOT_REQUIRED_OUTPUT, 1);
+  const backend = new LocalLabBackend({ workspaceRoot: root, binaryPath: binary });
+  const events = await backend.events({ initialState: true }, new AbortController().signal);
+  await assert.rejects(
+    (async () => {
+      for await (const _event of events) {
+        // No events before the error.
+      }
+    })(),
+    { message: `containerlab events failed: ${ROOT_REQUIRED}` }
+  );
+});
+
 test("a lab runs one lifecycle action at a time", async (t) => {
   const root = await temporaryDirectory(t);
   await fs.writeFile(path.join(root, "lab3.clab.yml"), "name: lab3\n");
@@ -308,4 +367,32 @@ test("the local user check reads the groups and needs no group for Podman", asyn
   assert.equal(docker.canRunLabs, docker.isRoot || (docker.inClabAdmins && docker.inRuntimeGroup));
   const podman = await detectLocalUser({ runtime: "podman" });
   assert.equal(podman.inRuntimeGroup, true);
+});
+
+test("the workspace watcher skips folders it cannot read", async (t) => {
+  if (process.getuid?.() === 0) return t.skip("root reads every folder");
+  const root = await temporaryDirectory(t);
+  // Like containerlab's lab folder: a new folder holding a root-owned one.
+  const locked = path.join(root, "clab-lab", "node", "tls");
+  const backend = new LocalLabBackend({ workspaceRoot: root, binaryPath: "containerlab" });
+  const controller = new AbortController();
+  const events = (await backend.fs.watch(controller.signal))[Symbol.asyncIterator]();
+  const next = async (wanted: string) => {
+    while (true) {
+      const { value, done } = await events.next();
+      if (done === true) throw new Error(`events ended before ${wanted}`);
+      if (value.path === wanted) return value;
+    }
+  };
+
+  try {
+    await fs.mkdir(path.join(locked, "tls"), { recursive: true });
+    await fs.chmod(locked, 0o000);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    await fs.writeFile(path.join(root, "clab-lab", "node", "config.txt"), "1");
+    assert.equal((await next("clab-lab/node/config.txt")).action, "create");
+  } finally {
+    controller.abort();
+    await fs.chmod(locked, 0o755);
+  }
 });

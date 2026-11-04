@@ -1,3 +1,4 @@
+import type { LabBackendFeatures, LabHostInfo } from "@containerlab/clab-ui/host";
 import type { Locator, Page } from "@playwright/test";
 
 import { expect } from "./browserErrors";
@@ -21,6 +22,56 @@ export const TEST_ENDPOINT: EndpointProfile = {
   label: "Test Endpoint",
   username: "admin",
   sessionDuration: "24h"
+};
+
+/**
+ * What `GET /api/runtime/features` reports for every mocked lab host: a Docker
+ * host without the optional features, so nothing opens their streams.
+ */
+const TEST_LAB_HOST_FEATURES: LabBackendFeatures = {
+  validate: false,
+  graphMermaid: false,
+  graphDot: false,
+  sshxReaders: false,
+  gottyOptions: false,
+  nodeStats: false,
+  terminalResume: false,
+  lifecycleTimeout: true,
+  imageManagement: true,
+  netem: true,
+  snapshots: true,
+  nodePause: true,
+  fcli: true,
+  interfaceInspect: true,
+  edgeshark: true,
+  hostMetrics: true,
+  tailscale: true,
+  shareTools: true,
+  hostCapture: true,
+  manifestExport: false,
+  c9sDeployOptions: false,
+  captureStream: false,
+  captureVnc: false
+};
+
+/**
+ * What `GET /api/runtime/host` reports for every mocked lab host: a Docker
+ * clab-api-server with the features above. The workspace asks it before it
+ * offers anything that depends on the lab host's runtime.
+ */
+const TEST_LAB_HOST: LabHostInfo = {
+  profile: { runtime: "docker" },
+  support: {
+    ...TEST_LAB_HOST_FEATURES,
+    sshAccess: true,
+    deployFromUrl: true,
+    importFromUrl: true,
+    edgesharkManagement: true,
+    wiresharkVnc: true,
+    healthMetrics: true,
+    sharedWorkspace: true,
+    tailscaleStatus: true
+  }
 };
 
 export function connected(endpoint: EndpointProfile): ConnectedEndpoint {
@@ -89,24 +140,16 @@ export async function mockStandaloneApi(
   );
   await page.route("**/files**", (route) => route.fulfill({ json: [] }));
   await page.route("**/api/runtime/inspect/all**", (route) => route.fulfill({ json: {} }));
-  // A lab host without the optional features, so nothing opens their streams.
-  await page.route("**/api/runtime/features**", (route) =>
-    route.fulfill({
-      json: {
-        validate: false,
-        graphMermaid: false,
-        graphDot: false,
-        sshxReaders: false,
-        gottyOptions: false,
-        nodeStats: false,
-        terminalResume: false
-      }
-    })
-  );
+  await page.route("**/api/runtime/features**", (route) => route.fulfill({ json: TEST_LAB_HOST_FEATURES }));
+  await page.route("**/api/runtime/host", (route) => route.fulfill({ json: TEST_LAB_HOST }));
   await page.route("**/api/runtime/ui/custom-nodes**", (route) =>
     route.fulfill({ json: { customNodes: [], defaultNode: "" } })
   );
   await page.route("**/api/runtime/ui/icons/list**", (route) => route.fulfill({ json: { icons: [] } }));
+  // A Docker lab host's settings page reads its Edgeshark status.
+  await page.route("**/api/runtime/capture/edgeshark/status**", (route) =>
+    route.fulfill({ json: { running: true, version: "test", packetflixPort: 5001, runtime: "docker" } })
+  );
   await page.route("**/auth/endpoints/*/metrics", (route) =>
     route.fulfill({
       json: {

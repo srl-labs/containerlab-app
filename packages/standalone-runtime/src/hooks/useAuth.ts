@@ -13,10 +13,10 @@ import {
   DEFAULT_ENDPOINT_SESSION_DURATION,
   useEndpointStore,
   type EndpointConfig,
-  type EndpointSessionDuration,
-  type EndpointStatus
+  type EndpointSessionDuration
 } from "../stores/endpointStore";
 import { useLabStore } from "../stores/labStore";
+import { mergeStoredAndServerEndpoints } from "../endpointMerge";
 
 interface AuthMeResponse {
   authenticated?: boolean;
@@ -58,40 +58,6 @@ function syncRemovedEndpointState(
   }
 }
 
-function markEndpointStatus(
-  endpoint: EndpointConfig,
-  status: EndpointStatus
-): EndpointConfig {
-  return {
-    ...endpoint,
-    status,
-    connected: status === "connected"
-  };
-}
-
-function mergeStoredAndServerEndpoints(
-  previous: Map<string, EndpointConfig>,
-  nextEndpoints: EndpointConfig[]
-): EndpointConfig[] {
-  const merged = new Map<string, EndpointConfig>();
-
-  for (const endpoint of previous.values()) {
-    merged.set(endpoint.id, markEndpointStatus(endpoint, "saved"));
-  }
-
-  for (const endpoint of nextEndpoints) {
-    const previousEndpoint = previous.get(endpoint.id);
-    merged.set(endpoint.id, {
-      ...endpoint,
-      sessionDuration: previousEndpoint?.status === "saved"
-        ? previousEndpoint.sessionDuration
-        : endpoint.sessionDuration
-    });
-  }
-
-  return Array.from(merged.values());
-}
-
 function useEndpointAuth() {
   const endpoints = useEndpointStore((state) => state.endpoints);
   const addEndpointToStore = useEndpointStore((state) => state.addEndpoint);
@@ -111,6 +77,7 @@ function useEndpointAuth() {
   const clearError = useAuthStore((state) => state.clearError);
   const setDefaultApiUrl = useAuthStore((state) => state.setDefaultApiUrl);
   const localEndpoint = useAuthStore((state) => state.localEndpoint);
+  const localEndpoints = useAuthStore((state) => state.localEndpoints);
   const setLocalEndpoint = useAuthStore((state) => state.setLocalEndpoint);
   const setError = useAuthStore((state) => state.setError);
   const setInitialized = useAuthStore((state) => state.setInitialized);
@@ -130,7 +97,13 @@ function useEndpointAuth() {
     if (typeof payload.defaultClabApiUrl === "string") {
       setDefaultApiUrl(payload.defaultClabApiUrl);
     }
-    setLocalEndpoint(payload.localEndpoint ?? null);
+    setLocalEndpoint(payload.localEndpoint ?? null, payload.localEndpoints);
+    useAuthStore.getState().setLocalWireshark(payload.localWireshark === true);
+    useAuthStore.getState().setLabHostSetup({
+      ...(payload.clusterHosts ? { clusterHosts: payload.clusterHosts } : {}),
+      ...(payload.clustersUnavailable ? { clustersUnavailable: payload.clustersUnavailable } : {}),
+      ...(payload.localUnavailable ? { localUnavailable: payload.localUnavailable } : {})
+    });
   }, [setDefaultApiUrl, setLocalEndpoint]);
 
   const refreshEndpoints = useCallback(async () => {
@@ -168,10 +141,9 @@ function useEndpointAuth() {
           ? payload.endpoints.map((endpoint) => withStatus(endpoint))
           : [];
         syncRemovedEndpointState(previousEndpoints, nextEndpoints);
-        if (nextEndpoints.length > 0) {
+        if (nextEndpoints.length > 0 || previousEndpoints.size > 0) {
+          // Kept API Servers come back signed out; local hosts only as the server lists them.
           setEndpoints(mergeStoredAndServerEndpoints(previousEndpoints, nextEndpoints));
-        } else if (previousEndpoints.size > 0) {
-          markAllSaved();
         } else {
           setEndpoints([]);
         }
@@ -228,14 +200,17 @@ function useEndpointAuth() {
     [addEndpointToStore, clearError, setError]
   );
 
-  /** Adds the "This computer" endpoint; it needs no URL or sign-in. */
-  const addLocalEndpoint = useCallback(async (): Promise<EndpointConfig> => {
+  /**
+   * Adds a local lab host: "This computer", or the one at `url` (`local://…`),
+   * such as a Kubernetes cluster. It needs no sign-in.
+   */
+  const addLocalEndpoint = useCallback(async (url?: string): Promise<EndpointConfig> => {
     clearError();
     const response = await runtimeFetch(standaloneServerUrl("/auth/endpoints/add"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ kind: "local" })
+      body: JSON.stringify(url ? { kind: "local", url } : { kind: "local" })
     });
     if (!response.ok) {
       const message = await readError(response, "Failed to use this computer");
@@ -244,7 +219,9 @@ function useEndpointAuth() {
     }
     const endpoint = withStatus(await readJson<EndpointConfig>(response));
     for (const existing of useEndpointStore.getState().endpoints.values()) {
-      if (existing.kind === "local" && existing.id !== endpoint.id) forgetEndpointFromStore(existing.id);
+      if (existing.kind === "local" && existing.url === endpoint.url && existing.id !== endpoint.id) {
+        forgetEndpointFromStore(existing.id);
+      }
     }
     addEndpointToStore(endpoint);
     return endpoint;
@@ -440,6 +417,7 @@ function useEndpointAuth() {
     addLocalEndpoint,
     defaultApiUrl,
     localEndpoint,
+    localEndpoints,
     endpointList,
     endpoints,
     error,

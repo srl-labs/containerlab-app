@@ -4,7 +4,8 @@ import { gottyOptionsError, type ShareToolOptions } from "@srl-labs/containerlab
 
 import type { ClabLabTreeNode } from "../treeView/common";
 import { outputChannel, gottySessions, runningLabsProvider } from "../globals";
-import { backendOf } from "../backend/labBackends";
+import { backendOf, connectionOf } from "../backend/labBackends";
+import { ensureHostSupports } from "../backend/labHostSupport";
 import { isRemoteNode, remoteHostname } from "../backend/remoteNode";
 import { refreshGottySessions, refreshRunningLabsProvider } from "../services/sessionRefresh";
 
@@ -125,6 +126,7 @@ async function gottyStart(action: "attach" | "reattach", node: ClabLabTreeNode |
     vscode.window.showErrorMessage(`No lab selected for GoTTY ${action}.`);
     return;
   }
+  if (!(await ensureHostSupports(connectionOf(node), "shareTools", "GoTTY"))) return;
   const labName = node.name;
   const options = await askForGottyOptions(node);
   if (options === undefined) return;

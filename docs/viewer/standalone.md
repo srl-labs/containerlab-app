@@ -4,7 +4,7 @@ description: Embed the containerlab topology viewer in your own website or docum
 
 # Embed the viewer
 
-`@containerlab/clab-viewer` renders a `.clab.yml` file the way the apps do, on any web page. No React app, no API server, no deployed lab.
+`@containerlab/clab-viewer` renders a `.clab.yml` file the way the apps do, on any web page. No React app, no API Server, no deployed lab.
 { .lead }
 
 Every diagram on this site is the viewer. Give it a topology file, and optionally its annotations file for a saved layout:

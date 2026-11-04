@@ -1,14 +1,57 @@
 import { createHash } from "crypto";
 
 import * as vscode from "vscode";
+import type {
+  ClusterHostSettings,
+  EndpointKind,
+  LabHostCheck
+} from "@srl-labs/containerlab-app-contract";
 import { errorStatus, type TopologyEntry } from "@srl-labs/containerlab-lab-backend";
 import { ApiLabBackend } from "@srl-labs/containerlab-lab-backend/api";
+import { migrateConnectionEntries, type LegacyHostSettings } from "./hostSettings";
+import {
+  CONTAINERLAB_LINUX_ONLY,
+  expandKubeconfigPath
+} from "@srl-labs/containerlab-lab-backend/local";
 
-/** Where labs run: this machine, or a clab-api-server. */
+/**
+ * Where labs run: this machine, a Kubernetes cluster with clabernetes that
+ * containerlab on this machine reaches (`runtime: "c9s"`), or a clab-api-server.
+ * In the settings a cluster is `"kind": "kubernetes"`; inside the extension it
+ * is a local connection, because containerlab on this machine runs its labs.
+ */
 export interface LabConnection {
   id: string;
   label: string;
-  kind: "local" | "api";
+  kind: EndpointKind;
+  /** Local connections only: `c9s` for a cluster; this machine's runtime setting otherwise. */
+  runtime?: "c9s";
+  /** c9s: the kubeconfig context of the cluster. */
+  kubeContext?: string;
+  /**
+   * c9s: the kubeconfig file with the context, `~` expanded; `KUBECONFIG` of
+   * VS Code (or `~/.kube/config`) when unset.
+   */
+  kubeconfig?: string;
+  /** c9s: the namespace of every lab; a namespace per lab (`c9s-<lab>`) when unset. */
+  namespace?: string;
+  /** c9s: how node ports are exposed by default. */
+  exposeType?: "ClusterIP" | "Headless" | "LoadBalancer" | "None";
+  /** c9s: false turns persistent node volumes off by default. */
+  persistence?: boolean;
+  /** c9s: the image pull secret of every lab's pods by default. */
+  imagePullSecret?: string;
+  /** c9s: containerlab's timeout of deploys that set none. */
+  deployTimeout?: string;
+  /** c9s: deploy without clabernetes' Topology resource by default. */
+  noTopologyCR?: boolean;
+  /** c9s: arguments for every deploy and redeploy, and every destroy. */
+  deployExtraArgs?: string;
+  destroyExtraArgs?: string;
+  /** c9s: the Wireshark VNC image of its captures. */
+  wiresharkImage?: string;
+  /** Kubernetes and API Servers: where captures open; This computer's is `capture.preferredAction`. */
+  captureMethod?: string;
   /** The clab-api-server URL; only for API connections. */
   url?: string;
   /** User name to sign in with, from the settings or the last sign-in. */
@@ -18,6 +61,20 @@ export interface LabConnection {
 }
 
 interface ConnectionSetting {
+  kind?: unknown;
+  runtime?: unknown;
+  kubeContext?: unknown;
+  kubeconfig?: unknown;
+  namespace?: unknown;
+  exposeType?: unknown;
+  persistence?: unknown;
+  imagePullSecret?: unknown;
+  deployTimeout?: unknown;
+  noTopologyCR?: unknown;
+  deployExtraArgs?: unknown;
+  destroyExtraArgs?: unknown;
+  wiresharkImage?: unknown;
+  captureMethod?: unknown;
   label?: unknown;
   url?: unknown;
   username?: unknown;
@@ -30,7 +87,11 @@ interface ConnectionSetting {
  */
 export type ConnectionStatus = "connected" | "saved" | "session_expired" | "offline";
 
-export const LOCAL_CONNECTION: LabConnection = { id: "local", label: "Local", kind: "local" };
+export const LOCAL_CONNECTION: LabConnection = {
+  id: "local",
+  label: "This computer",
+  kind: "local"
+};
 
 /** How long a sign-in lasts unless the lab host says otherwise, as in the desktop app. */
 export const DEFAULT_SESSION_DURATION = "24h";
@@ -39,6 +100,7 @@ export const DEFAULT_SESSION_DURATION = "24h";
 export interface LocalStatus {
   available: boolean;
   problems: string[];
+  checks?: LabHostCheck[];
   containerlabVersion?: string;
   username?: string;
 }
@@ -70,12 +132,159 @@ function apiConnectionId(url: string): string {
   return `api-${createHash("sha256").update(url).digest("hex").slice(0, 12)}`;
 }
 
+/**
+ * A stable id for a cluster lab host, by its kubeconfig context, and its
+ * kubeconfig file when it names one: the same context name in two files can
+ * be two clusters. Entries without a file keep the id of the context alone.
+ */
+function clusterConnectionId(kubeContext: string, kubeconfig?: string): string {
+  const key = kubeconfig === undefined ? kubeContext : `${kubeconfig}\n${kubeContext}`;
+  return `c9s-${createHash("sha256").update(key).digest("hex").slice(0, 12)}`;
+}
+
+const EXPOSE_TYPES = new Set(["ClusterIP", "Headless", "LoadBalancer", "None"]);
+
+function settingString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+/** A kubeconfig path from the settings, with `~` expanded. */
+function kubeconfigPath(value: unknown): string | undefined {
+  const configured = settingString(value);
+  return configured === undefined ? undefined : expandKubeconfigPath(configured);
+}
+
+/**
+ * Whether a setting entry is a cluster lab host: `kind: "kubernetes"`, or
+ * `kind: "local", runtime: "c9s"` as earlier builds wrote it.
+ */
+function isClusterSetting(setting: ConnectionSetting): boolean {
+  return setting.kind === "kubernetes" || (setting.kind === "local" && setting.runtime === "c9s");
+}
+
+/** The settings entry of a cluster lab host, as the cluster form saves it. */
+function clusterSettingEntry(settings: ClusterHostSettings): ConnectionSetting {
+  const text = (value: string | undefined) => value?.trim() || undefined;
+  const label = text(settings.label);
+  const kubeconfig = text(settings.kubeconfig);
+  const namespace = text(settings.namespace);
+  const imagePullSecret = text(settings.imagePullSecret);
+  const deployTimeout = text(settings.deployTimeout);
+  return {
+    kind: "kubernetes",
+    ...(label !== undefined ? { label } : {}),
+    kubeContext: settings.kubeContext.trim(),
+    ...(kubeconfig !== undefined ? { kubeconfig } : {}),
+    ...(namespace !== undefined ? { namespace } : {}),
+    ...(settings.exposeType !== undefined && EXPOSE_TYPES.has(settings.exposeType)
+      ? { exposeType: settings.exposeType }
+      : {}),
+    ...(settings.persistence === false ? { persistence: false } : {}),
+    ...(imagePullSecret !== undefined ? { imagePullSecret } : {}),
+    ...(deployTimeout !== undefined ? { deployTimeout } : {}),
+    ...(settings.noTopologyCR === true ? { noTopologyCR: true } : {})
+  };
+}
+
+/** The settings of a lab host's entry that only its page edits, which the cluster form keeps. */
+const PAGE_FIELDS = [
+  "deployExtraArgs",
+  "destroyExtraArgs",
+  "wiresharkImage",
+  "captureMethod"
+] as const;
+
+/** The strings a lab host's page keeps in its entry, as a connection has them. */
+function pageSettings(setting: ConnectionSetting): Partial<LabConnection> {
+  const result: Partial<LabConnection> = {};
+  for (const field of PAGE_FIELDS) {
+    const value = settingString(setting[field]);
+    if (value !== undefined) result[field] = value;
+  }
+  return result;
+}
+
+/** A cluster lab host from its `containerlab.connections` entry. */
+export function clusterConnectionFromSetting(
+  setting: ConnectionSetting
+): LabConnection | undefined {
+  if (!isClusterSetting(setting)) return undefined;
+  const kubeContext = settingString(setting.kubeContext);
+  if (kubeContext === undefined) return undefined;
+  const kubeconfig = kubeconfigPath(setting.kubeconfig);
+  const namespace = settingString(setting.namespace);
+  const exposeType = settingString(setting.exposeType);
+  const imagePullSecret = settingString(setting.imagePullSecret);
+  const deployTimeout = settingString(setting.deployTimeout);
+  return {
+    ...pageSettings(setting),
+    id: clusterConnectionId(kubeContext, kubeconfig),
+    label: settingString(setting.label) ?? kubeContext,
+    kind: "local",
+    runtime: "c9s",
+    kubeContext,
+    ...(kubeconfig !== undefined ? { kubeconfig } : {}),
+    ...(namespace !== undefined ? { namespace } : {}),
+    ...(exposeType !== undefined && EXPOSE_TYPES.has(exposeType)
+      ? { exposeType: exposeType as LabConnection["exposeType"] }
+      : {}),
+    ...(setting.persistence === false ? { persistence: false } : {}),
+    ...(imagePullSecret !== undefined ? { imagePullSecret } : {}),
+    ...(deployTimeout !== undefined ? { deployTimeout } : {}),
+    ...(setting.noTopologyCR === true ? { noTopologyCR: true } : {})
+  };
+}
+
+/** The settings of a cluster connection, for the cluster form; the kubeconfig as the user wrote it. */
+export function clusterSettingsOf(connection: LabConnection): ClusterHostSettings {
+  const configured = vscode.workspace
+    .getConfiguration("containerlab")
+    .get<ConnectionSetting[]>("connections", []);
+  const entry = (Array.isArray(configured) ? configured : []).find(
+    (setting) => clusterConnectionFromSetting(setting)?.id === connection.id
+  );
+  const kubeconfig = settingString(entry?.kubeconfig) ?? connection.kubeconfig;
+  const label = settingString(entry?.label);
+  return {
+    kubeContext: connection.kubeContext ?? "",
+    ...(label !== undefined ? { label } : {}),
+    ...(kubeconfig !== undefined ? { kubeconfig } : {}),
+    ...(connection.namespace !== undefined ? { namespace: connection.namespace } : {}),
+    ...(connection.exposeType !== undefined ? { exposeType: connection.exposeType } : {}),
+    ...(connection.persistence === false ? { persistence: false } : {}),
+    ...(connection.imagePullSecret !== undefined
+      ? { imagePullSecret: connection.imagePullSecret }
+      : {}),
+    ...(connection.deployTimeout !== undefined ? { deployTimeout: connection.deployTimeout } : {}),
+    ...(connection.noTopologyCR === true ? { noTopologyCR: true } : {})
+  };
+}
+
+/** Where a Kubernetes lab host's or an API Server's entry is in the settings; -1 when it is not. */
+function entryIndex(entries: readonly ConnectionSetting[], connection: LabConnection): number {
+  return entries.findIndex((setting) =>
+    connection.kind === "local"
+      ? clusterConnectionFromSetting(setting)?.id === connection.id
+      : typeof setting.url === "string" && normalizeUrl(setting.url) === connection.url
+  );
+}
+
+/** Whether a connection is a Kubernetes cluster that containerlab on this machine runs labs on. */
+export function isClusterConnection(connection: LabConnection): boolean {
+  return connection.kind === "local" && connection.runtime === "c9s";
+}
+
+/** Whether a connection is this machine with Docker or Podman, which is hidden instead of removed. */
+export function isThisComputer(connection: LabConnection): boolean {
+  return connection.kind === "local" && !isClusterConnection(connection);
+}
+
 function tokenKey(url: string): string {
   return `containerlab.connection.token:${url}`;
 }
 
 /**
- * The connections the extension runs labs through: "Local" (this machine)
+ * The connections the extension runs labs through: "This computer" (this machine)
  * and the lab hosts (clab-api-servers) in the `containerlab.connections`
  * setting. The views show the labs of all of them side by side.
  */
@@ -88,10 +297,17 @@ export class ConnectionManager implements vscode.Disposable {
   readonly onDidChange = this.changeEmitter.event;
   private readonly backends = new Map<string, ApiLabBackend>();
   private readonly topologies = new Map<string, { at: number; entries: TopologyEntry[] }>();
+  /** Topology lists being fetched; callers at the same time share the request. */
+  private readonly topologyRequests = new Map<
+    string,
+    { backend: ApiLabBackend; request: Promise<TopologyEntry[]> }
+  >();
   /** Why a connection does not answer: an unreachable host, or what Local is missing. */
   private readonly problems = new Map<string, string>();
   /** What the last check of this machine found. */
   private localStatus: LocalStatus | undefined;
+  /** Each check of the last look at a local connection (this machine or a cluster). */
+  private readonly checks = new Map<string, LabHostCheck[]>();
   private readonly expired = new Set<string>();
   /** Pending checks of lab hosts that do not answer, by connection id. */
   private readonly retries = new Map<string, ReturnType<typeof setTimeout>>();
@@ -134,12 +350,29 @@ export class ConnectionManager implements vscode.Disposable {
     return this.context.globalState.get<Record<string, string>>(USERNAMES_KEY, {});
   }
 
-  /** Whether this machine can run labs at all (Linux, or WSL). */
+  /**
+   * Whether containerlab runs where the extension runs (Linux, or WSL). Labs
+   * on this machine and on Kubernetes clusters both need it.
+   */
   get localAvailable(): boolean {
     return this.localSupported;
   }
 
-  /** Local first (unless turned off), then the configured lab hosts. */
+  /**
+   * Why cluster lab hosts are left out on this platform, when the settings
+   * name any; undefined where containerlab runs.
+   */
+  ignoredClusters(): string | undefined {
+    if (this.localSupported) return undefined;
+    const settings = vscode.workspace
+      .getConfiguration("containerlab")
+      .get<ConnectionSetting[]>("connections", []);
+    const count = (Array.isArray(settings) ? settings : []).filter(isClusterSetting).length;
+    if (count === 0) return undefined;
+    return `${count === 1 ? "1 Kubernetes lab host is" : `${count} Kubernetes lab hosts are`} left out: ${CONTAINERLAB_LINUX_ONLY}`;
+  }
+
+  /** This computer first (unless turned off), then the configured lab hosts. */
   list(): LabConnection[] {
     const connections: LabConnection[] = [];
     if (this.localEnabled()) {
@@ -150,6 +383,14 @@ export class ConnectionManager implements vscode.Disposable {
       .get<ConnectionSetting[]>("connections", []);
     const usernames = this.savedUsernames();
     for (const setting of Array.isArray(settings) ? settings : []) {
+      // containerlab on this machine runs a cluster's labs; without Linux it cannot.
+      const cluster = this.localSupported ? clusterConnectionFromSetting(setting) : undefined;
+      if (cluster) {
+        if (!connections.some((connection) => connection.id === cluster.id))
+          connections.push(cluster);
+        continue;
+      }
+      if (isClusterSetting(setting)) continue;
       const url = typeof setting.url === "string" ? normalizeUrl(setting.url) : undefined;
       if (url === undefined) continue;
       const id = apiConnectionId(url);
@@ -167,6 +408,7 @@ export class ConnectionManager implements vscode.Disposable {
           ? setting.sessionDuration.trim()
           : undefined;
       connections.push({
+        ...pageSettings(setting),
         id,
         label,
         kind: "api",
@@ -193,6 +435,17 @@ export class ConnectionManager implements vscode.Disposable {
     if (connection.kind === "local") return "connected";
     if (this.backends.has(connection.id)) return "connected";
     return this.expired.has(connection.id) ? "session_expired" : "saved";
+  }
+
+  /** The checks of the last look at a local connection, for the Lab Hosts page. */
+  checksOf(connection: LabConnection): LabHostCheck[] | undefined {
+    return this.checks.get(connection.id);
+  }
+
+  /** Records the checks of a local connection and, from them, whether it can run labs. */
+  setChecks(connection: LabConnection, checks: LabHostCheck[], problems: string[]): void {
+    this.checks.set(connection.id, checks);
+    this.setProblem(connection, problems.length === 0 ? undefined : problems.join(" "));
   }
 
   /** What is wrong with a connection that does not answer. */
@@ -262,6 +515,7 @@ export class ConnectionManager implements vscode.Disposable {
   /** Records a check of this machine; its problems show on Local's root. */
   setLocalStatus(status: LocalStatus): void {
     this.localStatus = status;
+    if (status.checks) this.checks.set(LOCAL_CONNECTION.id, status.checks);
     this.setProblem(LOCAL_CONNECTION, status.available ? undefined : status.problems.join(" "));
     this.changeEmitter.fire(LOCAL_CONNECTION);
   }
@@ -395,17 +649,28 @@ export class ConnectionManager implements vscode.Disposable {
     if (cached && Date.now() - cached.at < maxAgeMs) return cached.entries;
     // A host that does not answer is asked again by `retry`, not on every refresh.
     if (this.problems.has(connection.id)) return cached?.entries ?? [];
-    let entries: TopologyEntry[];
-    try {
-      entries = await backend.listTopologies();
-    } catch (error) {
-      if (errorStatus(error) === undefined && this.backends.get(connection.id) === backend) {
-        this.setProblem(connection, error instanceof Error ? error.message : String(error));
+    const pending = this.topologyRequests.get(connection.id);
+    if (pending?.backend === backend) return pending.request;
+    const request = backend.listTopologies().then(
+      (entries) => {
+        this.topologies.set(connection.id, { at: Date.now(), entries });
+        return entries;
+      },
+      (error: unknown) => {
+        if (errorStatus(error) === undefined && this.backends.get(connection.id) === backend) {
+          this.setProblem(connection, error instanceof Error ? error.message : String(error));
+        }
+        throw error;
       }
-      throw error;
-    }
-    this.topologies.set(connection.id, { at: Date.now(), entries });
-    return entries;
+    );
+    const settle = () => {
+      if (this.topologyRequests.get(connection.id)?.request === request) {
+        this.topologyRequests.delete(connection.id);
+      }
+    };
+    request.then(settle, settle);
+    this.topologyRequests.set(connection.id, { backend, request });
+    return request;
   }
 
   /** The cached topologies, without asking the server. */
@@ -445,7 +710,11 @@ export class ConnectionManager implements vscode.Disposable {
     });
   }
 
-  /** Adds a lab host to the user settings, or updates the one with the same URL. */
+  /**
+   * Adds a lab host to the user settings, or updates the one with the same URL.
+   * The setting is machine-scoped, so in a remote window this writes the
+   * remote machine's settings and leaves the local list alone.
+   */
   async addConnection(
     label: string,
     url: string,
@@ -492,6 +761,8 @@ export class ConnectionManager implements vscode.Disposable {
     const next = (Array.isArray(current) ? current : []).map((entry) =>
       typeof entry.url === "string" && normalizeUrl(entry.url) === connection.url
         ? {
+            // What the lab host's page set stays.
+            ...pageSettings(entry),
             label: changes.label,
             url: normalized,
             ...(changes.username !== "" ? { username: changes.username } : {}),
@@ -507,7 +778,104 @@ export class ConnectionManager implements vscode.Disposable {
     return updated;
   }
 
+  /**
+   * Adds a Kubernetes cluster as a lab host, or updates the one with the same
+   * context and kubeconfig. containerlab on this machine runs its labs with `-r c9s`.
+   */
+  async addClusterConnection(input: {
+    kubeContext: string;
+    /** The kubeconfig file with the context; VS Code's default kubeconfig when unset. */
+    kubeconfig?: string;
+    label?: string;
+    namespace?: string;
+  }): Promise<LabConnection> {
+    return this.saveClusterConnection(input);
+  }
+
+  /**
+   * Saves a cluster lab host from the cluster form: a new one, or `previous`
+   * changed. Another entry with the same context and kubeconfig is replaced.
+   */
+  async saveClusterConnection(
+    settings: ClusterHostSettings,
+    previous?: LabConnection
+  ): Promise<LabConnection> {
+    if (!this.localSupported) throw new Error(CONTAINERLAB_LINUX_ONLY);
+    const kubeContext = settings.kubeContext.trim();
+    if (!kubeContext) throw new Error("A Kubernetes lab host needs a kubeconfig context.");
+    const kubeconfig = settings.kubeconfig?.trim();
+    const id = clusterConnectionId(
+      kubeContext,
+      kubeconfig ? expandKubeconfigPath(kubeconfig) : undefined
+    );
+    const config = vscode.workspace.getConfiguration("containerlab");
+    const current = config.get<ConnectionSetting[]>("connections", []);
+    const entries = Array.isArray(current) ? current : [];
+    const replaced = new Set([id, ...(previous ? [previous.id] : [])]);
+    // The edited entry keeps its place in the list; a new one goes last.
+    const index = entries.findIndex((setting) => {
+      const cluster = clusterConnectionFromSetting(setting);
+      return cluster !== undefined && replaced.has(cluster.id);
+    });
+    // What the lab host's page set, and the cluster form does not show, stays.
+    const entry = {
+      ...(index < 0 ? {} : pageSettings(entries[index])),
+      ...clusterSettingEntry({ ...settings, kubeContext })
+    };
+    const next = entries.filter((setting) => {
+      const cluster = clusterConnectionFromSetting(setting);
+      return cluster === undefined || !replaced.has(cluster.id);
+    });
+    next.splice(index < 0 ? next.length : Math.min(index, next.length), 0, entry);
+    await config.update("connections", next, vscode.ConfigurationTarget.Global);
+    if (previous && previous.id !== id) {
+      this.problems.delete(previous.id);
+      this.checks.delete(previous.id);
+    }
+    const connection = this.get(id);
+    if (!connection) throw new Error("The cluster could not be saved.");
+    this.changeEmitter.fire(undefined);
+    return connection;
+  }
+
+  /** The `containerlab.connections` entry of a Kubernetes lab host or an API Server. */
+  entryOf(connection: LabConnection): Record<string, unknown> | undefined {
+    const configured = vscode.workspace
+      .getConfiguration("containerlab")
+      .get<ConnectionSetting[]>("connections", []);
+    const entries = Array.isArray(configured) ? configured : [];
+    return entries[entryIndex(entries, connection)] as Record<string, unknown> | undefined;
+  }
+
+  /** Changes a lab host's entry, e.g. one setting from its settings page. */
+  async updateEntry(
+    connection: LabConnection,
+    change: (entry: Record<string, unknown>) => Record<string, unknown>
+  ): Promise<void> {
+    const config = vscode.workspace.getConfiguration("containerlab");
+    const current = config.get<ConnectionSetting[]>("connections", []);
+    const entries = Array.isArray(current) ? [...current] : [];
+    const index = entryIndex(entries, connection);
+    if (index < 0) throw new Error("This lab host is no longer configured.");
+    entries[index] = change(entries[index] as Record<string, unknown>) as ConnectionSetting;
+    await config.update("connections", entries, vscode.ConfigurationTarget.Global);
+  }
+
   async removeConnection(connection: LabConnection): Promise<void> {
+    if (isClusterConnection(connection)) {
+      const config = vscode.workspace.getConfiguration("containerlab");
+      const current = config.get<ConnectionSetting[]>("connections", []);
+      await config.update(
+        "connections",
+        (Array.isArray(current) ? current : []).filter(
+          (entry) => clusterConnectionFromSetting(entry)?.id !== connection.id
+        ),
+        vscode.ConfigurationTarget.Global
+      );
+      this.problems.delete(connection.id);
+      this.checks.delete(connection.id);
+      return;
+    }
     if (connection.kind !== "api" || connection.url === undefined) return;
     await this.signOut(connection);
     const config = vscode.workspace.getConfiguration("containerlab");
@@ -527,4 +895,41 @@ export class ConnectionManager implements vscode.Disposable {
       .getConfiguration("containerlab")
       .update("localConnection", enabled, vscode.ConfigurationTarget.Global);
   }
+}
+
+const HOST_SETTINGS_MIGRATED_KEY = "containerlab.hostSettingsMigrated";
+
+/**
+ * Once: the values the user set for `deploy.extraArgs`, `destroy.extraArgs`,
+ * `capture.preferredAction` and `capture.wireshark.dockerImage` applied to
+ * every lab host before each had its own; they now are This computer's, so
+ * they are copied into the Kubernetes lab hosts and API Servers they applied
+ * to (`migrateConnectionEntries`).
+ */
+export async function migrateHostSettings(context: vscode.ExtensionContext): Promise<void> {
+  if (context.globalState.get<boolean>(HOST_SETTINGS_MIGRATED_KEY) === true) return;
+  const config = vscode.workspace.getConfiguration("containerlab");
+  const user = (key: string): string | undefined => {
+    const value = config.inspect<string>(key)?.globalValue;
+    return typeof value === "string" ? value : undefined;
+  };
+  const legacy: LegacyHostSettings = {};
+  const deployArgs = user("deploy.extraArgs");
+  const destroyArgs = user("destroy.extraArgs");
+  const captureMethod = user("capture.preferredAction");
+  const wiresharkImage = user("capture.wireshark.dockerImage");
+  if (deployArgs !== undefined) legacy.deployArgs = deployArgs;
+  if (destroyArgs !== undefined) legacy.destroyArgs = destroyArgs;
+  if (captureMethod !== undefined) legacy.captureMethod = captureMethod;
+  if (wiresharkImage !== undefined) legacy.wiresharkImage = wiresharkImage;
+  const entries = config.inspect<unknown[]>("connections")?.globalValue;
+  const migrated = Array.isArray(entries)
+    ? migrateConnectionEntries(entries, legacy, (entry) =>
+        isClusterSetting(entry as ConnectionSetting)
+      )
+    : undefined;
+  if (migrated !== undefined) {
+    await config.update("connections", migrated, vscode.ConfigurationTarget.Global);
+  }
+  await context.globalState.update(HOST_SETTINGS_MIGRATED_KEY, true);
 }

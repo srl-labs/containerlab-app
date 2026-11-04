@@ -13,18 +13,27 @@ import {
   type WebContents
 } from "electron";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
 import type { FastifyInstance } from "fastify";
 
 import {
+  clusterBackendOptions,
   createContainerlabAppServer,
   createLocalEndpoint,
+  createLocalEndpoints,
   parseBooleanEnv,
   resolveLocalBackendConfig,
+  writeLocalBackendClusters,
+  type ClusterHostsOptions,
   type LocalEndpointOptions
 } from "@srl-labs/containerlab-app-server";
-import type { LocalLabBackend } from "@srl-labs/containerlab-lab-backend/local";
+import {
+  containerlabPlatformProblem,
+  defaultKubeconfigFile,
+  type LocalLabBackend
+} from "@srl-labs/containerlab-lab-backend/local";
 
 import {
   TITLEBAR_HEIGHT,
@@ -136,20 +145,41 @@ function resolveSessionPersistenceFile(): string {
   return path.join(electronApp.getPath("userData"), "endpoint-sessions.json");
 }
 
-let localBackend: LocalLabBackend | null = null;
+let localBackends = new Set<LocalLabBackend>();
+
+const DESKTOP_SETUP_URL = "https://srl-labs.github.io/containerlab-app/docs/install/desktop/#run-labs-on-this-computer";
+
+function localBackendFile(): string {
+  return path.join(electronApp.getPath("userData"), "local-backend.json");
+}
+
+/** A path in the home folder as `~/…`, the way users write a kubeconfig path. */
+function homeRelative(file: string): string {
+  const home = os.homedir();
+  return file.startsWith(`${home}${path.sep}`) ? `~${file.slice(home.length)}` : file;
+}
+
+function readLocalBackendFile(): string | undefined {
+  try {
+    return fs.readFileSync(localBackendFile(), "utf8");
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * "This computer", on Linux: labs run with the containerlab CLI as the
  * desktop user, configured by `local-backend.json` in the app's data folder
- * and CONTAINERLAB_DESKTOP_* variables.
+ * and CONTAINERLAB_DESKTOP_* variables. The Kubernetes clusters in its
+ * `clusters` are added, edited and removed in the app.
  */
-function createDesktopLocalEndpoint(): LocalEndpointOptions | undefined {
-  let fileContent: string | undefined;
-  try {
-    fileContent = fs.readFileSync(path.join(electronApp.getPath("userData"), "local-backend.json"), "utf8");
-  } catch {
-    fileContent = undefined;
-  }
+function createDesktopLocalEndpoints(): {
+  localEndpoints: LocalEndpointOptions[];
+  clusterHosts?: ClusterHostsOptions;
+  clustersUnavailable?: string;
+  localUnavailable?: string;
+} {
+  const fileContent = readLocalBackendFile();
   const config = resolveLocalBackendConfig({
     platform: process.platform,
     env: process.env,
@@ -159,18 +189,47 @@ function createDesktopLocalEndpoint(): LocalEndpointOptions | undefined {
     enabledByDefault: true,
     hostScriptsByDefault: true
   });
-  if (!config.enabled) {
-    return undefined;
+  for (const problem of config.problems) {
+    console.warn(`local-backend.json: ${problem}`);
   }
-  const endpoint = createLocalEndpoint({
-    options: config.options,
+  const endpoints = createLocalEndpoints(config, {
     label: "This computer",
-    setupUrl: "https://srl-labs.github.io/containerlab-app/docs/install/desktop/#run-labs-on-this-computer",
+    setupUrl: DESKTOP_SETUP_URL,
     // Like Local in VS Code: labs on this computer are there from the start.
-    autoConnect: true
+    autoConnect: true,
+    clustersEditable: true
   });
-  localBackend = endpoint.backend;
-  return endpoint;
+  localBackends = new Set(endpoints.map((endpoint) => endpoint.backend));
+  const platformProblem = containerlabPlatformProblem();
+  if (!config.enabled) {
+    const why =
+      platformProblem ??
+      "Labs on this computer are turned off (CONTAINERLAB_DESKTOP_LOCAL or \"enabled\" in local-backend.json).";
+    return { localEndpoints: endpoints, clustersUnavailable: why, localUnavailable: why };
+  }
+  return {
+    localEndpoints: endpoints,
+    clusterHosts: {
+      create(settings) {
+        const endpoint = createLocalEndpoint({
+          options: { ...config.options, ...clusterBackendOptions(settings) },
+          label: settings.label ?? settings.kubeContext,
+          setupUrl: DESKTOP_SETUP_URL,
+          autoConnect: true,
+          cluster: settings
+        });
+        localBackends.add(endpoint.backend);
+        return endpoint;
+      },
+      async save(clusters) {
+        const file = localBackendFile();
+        await fs.promises.mkdir(path.dirname(file), { recursive: true });
+        await fs.promises.writeFile(file, writeLocalBackendClusters(readLocalBackendFile(), clusters), { mode: 0o600 });
+      },
+      baseOptions: config.options,
+      defaultKubeconfig: homeRelative(defaultKubeconfigFile())
+    }
+  };
 }
 
 let appServer: FastifyInstance | null = null;
@@ -439,6 +498,21 @@ ipcMain.on("containerlab:set-titlebar-overlay", (event, options: unknown) => {
   applyTitleBarOverlay(window, overlay);
 });
 
+// The cluster form's "Choose file…": a kubeconfig on this computer, by its path.
+ipcMain.handle("containerlab:choose-kubeconfig", async (event): Promise<string | undefined> => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!isAppWindow(window) || URL.parse(event.senderFrame?.url ?? "")?.origin !== appOrigin) {
+    return undefined;
+  }
+  const result = await dialog.showOpenDialog(window, {
+    title: "kubeconfig file of the cluster",
+    buttonLabel: "Use kubeconfig",
+    defaultPath: path.join(os.homedir(), ".kube"),
+    properties: ["openFile", "showHiddenFiles"]
+  });
+  return result.canceled ? undefined : result.filePaths[0];
+});
+
 function openWiresharkCaptureWindow(url: string, serverOrigin: string): void {
   const captureWindow = new BrowserWindow({
     ...windowChromeOptions(),
@@ -486,10 +560,15 @@ function openTerminalWindow(url: string, serverOrigin: string): void {
 }
 
 async function startLocalAppServer(): Promise<string> {
+  const local = createDesktopLocalEndpoints();
   const server = await createContainerlabAppServer({
     defaultClabApiUrl: DEFAULT_CLAB_API_URL,
     isDev: false,
-    localEndpoint: createDesktopLocalEndpoint(),
+    ...local,
+    // Captures of Kubernetes lab hosts open in Wireshark on this machine.
+    localWireshark: process.env.CONTAINERLAB_DESKTOP_WIRESHARK?.trim()
+      ? { binaryPath: process.env.CONTAINERLAB_DESKTOP_WIRESHARK.trim() }
+      : {},
     logger: parseBooleanEnv(process.env.CONTAINERLAB_DESKTOP_DEBUG, false),
     sessionPersistenceFile: resolveSessionPersistenceFile(),
     staticClientRoot: resolveStaticClientRoot()
@@ -555,13 +634,13 @@ async function createMainWindow(): Promise<void> {
 async function stopLocalAppServer(): Promise<void> {
   const server = appServer;
   appServer = null;
-  const backend = localBackend;
-  localBackend = null;
+  const backends = [...localBackends];
+  localBackends = new Set();
   if (server) {
     // Terminal sessions and Wireshark containers of local labs end with the app.
     const closePromise = Promise.all([
       server.close().catch(() => undefined),
-      backend?.dispose()
+      ...backends.map((backend) => backend.dispose())
     ]).catch(() => undefined);
     await Promise.race([
       closePromise,

@@ -214,7 +214,7 @@ test("two users share the complete lab lifecycle and keep private files isolated
     await dialog.getByRole("button", { name: "Shared", exact: true }).click();
     await expect(dialog.getByLabel("Topology file name", { exact: true })).toHaveValue("new-lab");
     await dialog.getByLabel("Topology file name", { exact: true }).fill(`${lab}/draft`);
-    await expect(dialog).toContainText("Everyone signed in to this API server can edit, deploy, and destroy this lab.");
+    await expect(dialog).toContainText("Everyone signed in to this API Server can edit, deploy, and destroy this lab.");
     await page.screenshot({ path: testInfo.outputPath("shared-create-lab.png"), fullPage: true });
     await dialog.screenshot({ path: testInfo.outputPath("shared-create-dialog.png") });
     const draftCreated = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/runtime/topology-file/create");

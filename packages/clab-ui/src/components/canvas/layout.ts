@@ -7,7 +7,6 @@ export { normalizeLayoutableNodePositions } from "./layout/types";
 import type { Node, Edge } from "@xyflow/react";
 import type { LayoutName, LayoutOptions } from "./layout/types";
 import { applyForceLayout } from "./layout/forceLayout";
-import { applyAutoLayout } from "./layout/autoLayout";
 import { applyRadialLayout } from "./layout/radialLayout";
 
 /**
@@ -21,8 +20,11 @@ export async function applyLayout(
   options: LayoutOptions = {}
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   switch (name) {
-    case "auto":
+    case "auto": {
+      // ELK is most of the TopoViewer's code; load it only for the auto layout.
+      const { applyAutoLayout } = await import("./layout/autoLayout");
       return applyAutoLayout(nodes, edges, options);
+    }
     case "radial":
       return applyRadialLayout(nodes, edges, options);
     case "force":

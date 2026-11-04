@@ -4,6 +4,13 @@ import type { AddressInfo } from "node:net";
 import { errorStatus } from "@srl-labs/containerlab-lab-backend";
 import { LocalLabBackend } from "@srl-labs/containerlab-lab-backend/local";
 
+import {
+  enhancedPacketBlock,
+  icmpEchoFrame,
+  interfaceDescriptionBlock,
+  sectionHeaderBlock
+} from "./pcapng";
+
 export interface FakeClabApiServer {
   url: string;
   token: string;
@@ -26,20 +33,226 @@ function sendJson(response: http.ServerResponse, status: number, payload: unknow
  * local folder. Enough to run the file part of the lab backend contract
  * through `ApiLabBackend` and its HTTP client.
  */
-export async function startFakeClabApiServer(workspaceRoot: string): Promise<FakeClabApiServer> {
+/** What the fake server says about itself on `/health`. */
+export interface FakeClabApiServerHealth {
+  /** Left out, like a server older than c9s support; `docker` by default. */
+  runtime?: "docker" | "podman" | "c9s" | null;
+  namespaceMode?: "per-lab" | "fixed";
+  features?: string[];
+  /**
+   * What `GET /api/v1/lab-host` adds for a c9s server, served when `features`
+   * lists `lab-host-info`; these defaults otherwise.
+   */
+  c9s?: Partial<FakeServerC9sHost>;
+  /**
+   * The `defaultTimeout` of `GET /api/v1/lab-host`, as clab-api-server reports
+   * it with `lab-lifecycle-timeout`: 10m on c9s, 5m with Docker and Podman.
+   */
+  defaultTimeout?: string;
+  /** What `GET /api/v1/lab-host` reports in `capture`; clab-api-server's defaults otherwise. */
+  capture?: Partial<FakeServerCapture>;
+}
+
+/** The `capture` of `GET /api/v1/lab-host`, as clab-api-server reports it. */
+interface FakeServerCapture {
+  wiresharkVnc: boolean;
+  wiresharkImage: string;
+  wiresharkPullPolicy: string;
+  /** Docker and Podman only. */
+  edgeshark?: { packetflixPort: number; extraEnvVars: string[] };
+}
+
+/** clab-api-server's capture defaults: Wireshark VNC next to Docker and Podman labs, with Edgeshark. */
+function fakeServerCapture(runtime: string, overrides: Partial<FakeServerCapture> | undefined): FakeServerCapture {
+  const containers = runtime !== "c9s";
+  return {
+    wiresharkVnc: containers,
+    wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:latest",
+    wiresharkPullPolicy: "always",
+    ...(containers ? { edgeshark: { packetflixPort: 5001, extraEnvVars: [] } } : {}),
+    ...overrides
+  };
+}
+
+/** The c9s part of `GET /api/v1/lab-host`. */
+interface FakeServerC9sHost {
+  context: string;
+  cluster: string;
+  namespacePattern: string;
+  sharedNamespacePattern: string;
+  exposeType: string;
+  persistence: boolean;
+  imagePullSecret: string;
+  labQuota: boolean;
+  noTopologyCR: boolean;
+  metrics: boolean;
+}
+
+const FAKE_SERVER_C9S_HOST: FakeServerC9sHost = {
+  context: "c9s-provisioner",
+  cluster: "c9s",
+  namespacePattern: "c9s-alice-{lab}",
+  sharedNamespacePattern: "c9s-shared-{lab}",
+  exposeType: "None",
+  persistence: true,
+  imagePullSecret: "",
+  labQuota: false,
+  noTopologyCR: false,
+  metrics: false
+};
+
+/**
+ * A running c9s lab the fake captures on when `/health` lists
+ * `capture-stream`: nodes n1 and n2, linked n1:eth1 to n2:eth1, pinging.
+ */
+export const FAKE_CAPTURE_LAB = "capture-lab";
+
+const CAPTURE_INTERFACES = [
+  { node: "n1", interface: "eth1", peerNode: "n2", peerInterface: "eth1" },
+  { node: "n2", interface: "eth1", peerNode: "n1", peerInterface: "eth1" }
+];
+
+interface CaptureRequest {
+  targets: string[];
+  durationMs?: number;
+  packetLimit?: number;
+}
+
+/** Go durations the fake understands: whole `ms`, `s` and `m`. */
+function parseDuration(value: string | null | undefined): number | undefined | "invalid" {
+  if (value === null || value === undefined || value === "") return undefined;
+  const match = /^(\d+)(ms|s|m)$/.exec(value);
+  if (!match || Number(match[1]) === 0) return "invalid";
+  return Number(match[1]) * { ms: 1, s: 1000, m: 60_000 }[match[2] as "ms" | "s" | "m"];
+}
+
+/** The targets as `<node>:<interface>`, or an error message naming the capturable ones. */
+function checkTargets(targets: string[]): string | undefined {
+  if (targets.length === 0) return "at least one target is required";
+  const known = CAPTURE_INTERFACES.map((entry) => `${entry.node}:${entry.interface}`);
+  const unknown = targets.find((target) => !known.includes(target));
+  if (unknown) return `${unknown} is not capturable; capturable: ${known.join(", ")}`;
+  if (new Set(targets).size !== targets.length) return "duplicate target";
+  return undefined;
+}
+
+/**
+ * Writes the capture like clab-api-server: one pcapng section, one interface
+ * per target, then a ping on the link every 50 ms until the duration or
+ * packet limit, or until `signal` aborts.
+ */
+async function writeCapture(
+  request: CaptureRequest,
+  write: (data: Uint8Array) => Promise<void> | void,
+  signal: AbortSignal
+): Promise<void> {
+  await write(sectionHeaderBlock("containerlab"));
+  for (const target of request.targets) await write(interfaceDescriptionBlock(target));
+  const deadline = request.durationMs !== undefined ? Date.now() + request.durationMs : Infinity;
+  let packets = 0;
+  for (let sequence = 0; !signal.aborted && Date.now() < deadline; sequence += 1) {
+    for (const [id] of request.targets.entries()) {
+      for (const reply of [false, true]) {
+        if (request.packetLimit !== undefined && packets >= request.packetLimit) return;
+        const now = BigInt(Date.now()) * 1_000_000n;
+        await write(enhancedPacketBlock(id, now, icmpEchoFrame(sequence, reply)));
+        packets += 1;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+export async function startFakeClabApiServer(
+  workspaceRoot: string,
+  health: FakeClabApiServerHealth = {}
+): Promise<FakeClabApiServer> {
   const local = new LocalLabBackend({ workspaceRoot });
   const token = "contract-token";
   const watchers = new Set<AbortController>();
+  const captureEnabled = (health.features ?? []).includes("capture-stream");
 
   const server = http.createServer((request, response) => {
     void (async () => {
       const url = new URL(request.url ?? "/", "http://fake");
       const query = (key: string) => url.searchParams.get(key) ?? "";
+      if (request.method === "GET" && url.pathname === "/health") {
+        // Public, like clab-api-server's: the runtime and the optional features.
+        const runtime = health.runtime === undefined ? "docker" : health.runtime;
+        sendJson(response, 200, {
+          status: "healthy",
+          features: health.features ?? [],
+          ...(runtime !== null ? { runtime } : {}),
+          ...(health.namespaceMode ? { namespaceMode: health.namespaceMode } : {})
+        });
+        return;
+      }
       if (request.headers.authorization !== `Bearer ${token}`) {
         sendJson(response, 401, { error: "Unauthorized" });
         return;
       }
       const route = `${request.method} ${url.pathname}`;
+      if (route === "GET /api/v1/lab-host" && (health.features ?? []).includes("lab-host-info")) {
+        const runtime = health.runtime ?? "docker";
+        const timeouts = (health.features ?? []).includes("lab-lifecycle-timeout");
+        sendJson(response, 200, {
+          runtime,
+          ...(timeouts ? { defaultTimeout: health.defaultTimeout ?? (runtime === "c9s" ? "10m" : "5m") } : {}),
+          capture: fakeServerCapture(runtime, health.capture),
+          ...(runtime === "c9s" ? { c9s: { ...FAKE_SERVER_C9S_HOST, ...health.c9s } } : {})
+        });
+        return;
+      }
+      const capture = /^\/api\/v1\/labs\/([^/]+)(\/capture\/(interfaces|stream))?$/.exec(url.pathname);
+      if (captureEnabled && capture) {
+        const labName = decodeURIComponent(capture[1]);
+        if (labName !== FAKE_CAPTURE_LAB) {
+          sendJson(response, 404, { error: `Lab '${labName}' not found` });
+          return;
+        }
+        const action = capture[3];
+        if (!action && request.method === "GET") {
+          sendJson(
+            response,
+            200,
+            ["n1", "n2"].map((node) => ({ name: `${labName}-${node}`, nodeName: node, lab_name: labName, kind: "linux", state: "running" }))
+          );
+          return;
+        }
+        if (action === "interfaces" && request.method === "GET") {
+          sendJson(response, 200, CAPTURE_INTERFACES);
+          return;
+        }
+        if (action === "stream" && request.method === "GET") {
+          const targets = url.searchParams.getAll("target");
+          const durationMs = parseDuration(url.searchParams.get("duration"));
+          const packetLimit = url.searchParams.has("packetLimit") ? Number(url.searchParams.get("packetLimit")) : undefined;
+          const problem =
+            checkTargets(targets) ??
+            (durationMs === "invalid" ? "invalid duration" : undefined) ??
+            (packetLimit !== undefined && !(Number.isInteger(packetLimit) && packetLimit > 0) ? "invalid packetLimit" : undefined);
+          if (problem) {
+            sendJson(response, 400, { error: problem });
+            return;
+          }
+          const download = ["1", "true"].includes(url.searchParams.get("download") ?? "");
+          response.writeHead(200, {
+            "Content-Type": "application/x-pcapng",
+            ...(download ? { "Content-Disposition": `attachment; filename="${labName}-20261027T140000Z.pcapng"` } : {})
+          });
+          const disconnected = new AbortController();
+          response.on("close", () => disconnected.abort());
+          await writeCapture(
+            { targets, ...(typeof durationMs === "number" ? { durationMs } : {}), ...(packetLimit !== undefined ? { packetLimit } : {}) },
+            (data) => {
+              if (!response.write(data)) return new Promise<void>((resolve) => response.once("drain", () => resolve()));
+            },
+            disconnected.signal
+          );
+          response.end();
+          return;
+        }
+      }
       const topologyFile = /^\/api\/v1\/labs\/([^/]+)\/topology\/file(\/rename)?$/.exec(url.pathname);
       switch (route) {
         case "GET /api/v1/labs/workspace/tree":

@@ -7,12 +7,20 @@
 - Release VSIX, Marketplace, and Open VSX artifacts independently through GitHub Releases.
 - Fix Edgeshark capture on Podman by installing Edgeshark with the `gostwire` discovery hostname, which Podman can resolve.
 - Run containerlab through the shared lab backend: lifecycle actions, terminals, capture, and impairments use the same code as the desktop app.
-- Lab hosts: manage labs on hosts running `clab-api-server`, from any OS and without a local containerlab. Their labs show up in the explorer next to **Local**, each host as a root with its status; every action runs on the host the lab belongs to. Topologies open as `clab-api://` files; deploy, node shell, SSH, telnet, logs, Wireshark capture, images, and Edgeshark work through the API server. New settings `containerlab.connections` and `containerlab.localConnection`.
-- A **Lab Hosts** page in the Containerlab settings adds, signs in to, edits, signs out of, and removes lab hosts, with each host's CPU, memory, and disk, and shows or hides **Local**. **Containerlab: Manage Lab Hosts** and the server button in the explorer title bar open it.
-- When containerlab cannot run on this machine, **Local** shows what is missing, with the commands that fix it, and **Check Again**.
+- Lab hosts: manage labs on hosts running `clab-api-server`, from any OS and without a local containerlab. Their labs show up in the explorer next to **This computer**, each host as a root with its status; every action runs on the host the lab belongs to. Topologies open as `clab-api://` files; deploy, node shell, SSH, telnet, logs, Wireshark capture, images, and Edgeshark work through the API Server. New settings `containerlab.connections` and `containerlab.localConnection`.
+- Lab hosts and **This computer** are saved per machine: a remote window (SSH, WSL, Dev Container) has its own lab hosts instead of the ones added on the local machine.
+- A **Lab Hosts** page in the Containerlab settings adds, signs in to, edits, signs out of, and removes lab hosts, with each host's CPU, memory, and disk, and shows or hides **This computer**. **Containerlab: Manage Lab Hosts** and the server button in the explorer title bar open it.
+- When containerlab cannot run on this machine, **This computer** shows what is missing, with the commands that fix it, and **Check Again**.
 - The extension now activates without containerlab, Docker, or the `clab_admins` group, so lab hosts work on machines that cannot run labs.
 - **Containerlab: Open Labs Overview** (and the dashboard button in the explorer title bar) opens an editor tab with a card per lab of every lab host: a thumbnail of its topology, its state, uptime, and live CPU and memory of running labs, with open, deploy, and destroy.
 - TopoViewer can show each running node's CPU usage on the canvas (**Lab Settings → Appearance → CPU usage on nodes**, off by default). In the boxed node style the value sits inside the box, in the box's text color.
+- Faster startup and lab opening:
+  - The explorer appears without waiting for the containerlab, Docker, and share session checks, which now run in the background. Topology files are searched for while the extension starts.
+  - The explorer no longer redraws every second while labs run; interface traffic counters only update the TopoViewer.
+  - TopoViewer loads about 1.4 MB less script before it draws: the auto layout engine, the syntax highlighting of text annotations, and the geo map worker load when they are used. The topology is read while the view loads, and the code editor is preloaded only once the lab has settled.
+- Editing a topology on a lab host no longer makes nodes jump or the file blink in the explorer: saves replace the files in place instead of moving them aside first, and the TopoViewer ignores late reports of its own saves.
+- A deleted node's name is free again for the next node (deleting `srl1`–`srl3` and adding one gives `srl1`, not `srl4`).
+- Annotations of nodes that no longer exist are removed, so a node added in the YAML no longer takes over a deleted node's position.
 
 ## [0.26.0] - 2026-07-07
 

@@ -1,5 +1,6 @@
 import { runtimeFetch } from "./backend";
 import { standaloneServerUrl } from "./standaloneServerOrigin";
+import { loadLabHostInfo } from "./stores/labHostStore";
 
 import type { EndpointHealthMetrics } from "@containerlab/clab-ui/workspace/types";
 export type { EndpointHealthMetrics } from "@containerlab/clab-ui/workspace/types";
@@ -20,6 +21,10 @@ export async function fetchEndpointHealthMetrics(
   endpointId: string,
   signal?: AbortSignal
 ): Promise<EndpointHealthMetrics> {
+  // A lab host whose runtime has no host to measure, such as a cluster, is not asked.
+  if ((await loadLabHostInfo(endpointId))?.support.healthMetrics === false) {
+    throw new Error("This lab host does not report CPU, memory and disk usage.");
+  }
   const response = await runtimeFetch(
     standaloneServerUrl(`/auth/endpoints/${encodeURIComponent(endpointId)}/metrics`),
     {

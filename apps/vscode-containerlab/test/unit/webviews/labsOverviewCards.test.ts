@@ -7,11 +7,13 @@ import { expect } from "chai";
 
 import {
   buildOverviewCards,
+  overviewHostMetrics,
+  overviewLabHosts,
   type OverviewRunningLab,
   type OverviewTopologyFile
 } from "../../../src/webviews/labsOverview/labsOverviewCards";
 
-const LOCAL = { id: "local", label: "Local" };
+const LOCAL = { id: "local", label: "This computer" };
 const HOST = { id: "lab-host", label: "lab-host.example" };
 const NOW = Date.parse("2026-10-26T12:00:00Z");
 
@@ -77,5 +79,78 @@ describe("buildOverviewCards", () => {
     expect(cards[0]).to.deep.include({ canDeploy: true, canDestroy: false, nodeCount: 0 });
     expect(cards[1]).to.deep.include({ canDestroy: false, topologyRef: undefined });
     expect(cards[0].topologyRef?.yamlPath).to.equal("/labs/alpha.clab.yml");
+  });
+});
+
+describe("overviewLabHosts", () => {
+  it("lists every connection with its sign-in status", () => {
+    const connections = {
+      list: () => [LOCAL, HOST],
+      status: (connection: { id: string }): "connected" | "saved" =>
+        connection.id === "local" ? "connected" : "saved"
+    };
+    expect(overviewLabHosts(connections, LOCAL)).to.deep.equal([
+      { id: "local", label: "This computer", status: "connected" },
+      { id: "lab-host", label: "lab-host.example", status: "saved" }
+    ]);
+  });
+
+  it("is just This computer before the connections load", () => {
+    expect(overviewLabHosts(undefined, LOCAL)).to.deep.equal([
+      { id: "local", label: "This computer", status: "connected" }
+    ]);
+  });
+});
+
+describe("overviewHostMetrics", () => {
+  const metrics = {
+    serverInfo: { version: "0.1.0", uptime: "1h", startTime: "2026-10-26T11:00:00Z" },
+    metrics: { cpu: { usagePercent: 12, numCPU: 8 } }
+  };
+
+  it("returns the lab host's usage", async () => {
+    const backend = {
+      capabilities: { healthMetrics: true },
+      features: async () => ({ hostMetrics: true }),
+      healthMetrics: async () => metrics
+    };
+    expect(await overviewHostMetrics(() => backend as never)).to.deep.equal({ metrics });
+  });
+
+  it("says why there is none: no support, signed out, or a failed request", async () => {
+    const unsupported = {
+      capabilities: { healthMetrics: false },
+      features: async () => ({ hostMetrics: true }),
+      healthMetrics: async () => metrics
+    };
+    expect((await overviewHostMetrics(() => unsupported as never)).error).to.match(
+      /does not report/
+    );
+    // A cluster lab host has none, although its backend kind does.
+    const cluster = {
+      capabilities: { healthMetrics: true },
+      features: async () => ({ hostMetrics: false }),
+      healthMetrics: async () => metrics
+    };
+    expect((await overviewHostMetrics(() => cluster as never)).error).to.match(/does not report/);
+    expect((await overviewHostMetrics(() => unsupported as never)).error).to.match(
+      /does not report/
+    );
+
+    const signedOut = () => {
+      throw new Error("Sign in to lab-host.example first.");
+    };
+    expect(await overviewHostMetrics(signedOut)).to.deep.equal({
+      error: "Sign in to lab-host.example first."
+    });
+
+    const failing = {
+      capabilities: { healthMetrics: true },
+      features: async () => ({ hostMetrics: true }),
+      healthMetrics: async () => Promise.reject(new Error("502 Bad Gateway"))
+    };
+    expect(await overviewHostMetrics(() => failing as never)).to.deep.equal({
+      error: "502 Bad Gateway"
+    });
   });
 });

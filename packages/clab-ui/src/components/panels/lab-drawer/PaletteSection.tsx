@@ -67,6 +67,7 @@ import {
 } from "../../../stores/editHistoryStore";
 import { useUndoRedoControls } from "../../../hooks/app/useUndoRedoControls";
 import { containerlabSchema } from "../../../core/schema/bundledSchema";
+import { useHostTopologyValidation } from "../../../hooks/editor/useHostTopologyValidation";
 import { preloadMonacoCodeEditor } from "../../monaco/preloadMonacoCodeEditor";
 import type { LabFileLinks } from "../../monaco/labFileLinks";
 import type { MonacoEditDetails, MonacoSelection } from "../../monaco/MonacoCodeEditor";
@@ -142,7 +143,9 @@ function downloadNodeTemplates(
 const REACTFLOW_NODE_MIME_TYPE = "application/reactflow-node";
 const ACTION_HOVER_BG = "action.hover";
 const TEXT_SECONDARY = "text.secondary";
-const MONACO_PRELOAD_DELAY_MS = 750;
+// Monaco is ~4MB of script: warm it only once the opened lab has settled.
+// Hovering or opening a source tab loads it right away.
+const MONACO_PRELOAD_DELAY_MS = 8000;
 const PALETTE_ICON_SIZE = 28;
 const PALETTE_LIST_SX = { display: "flex", flexDirection: "column", gap: 0.75 } as const;
 const PALETTE_GRID_SX = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0.75 } as const;
@@ -250,7 +253,10 @@ const SourceEditorTab: React.FC<{
   onReadOnlyEditAttempt,
   history,
   restoreSelection
-}) => (
+}) => {
+  // On a c9s lab host, containerlab validates the topology after each edit.
+  const hostDiagnostics = useHostTopologyValidation(value, language === "yaml" && !readOnly);
+  return (
   <Box sx={{ flex: 1, minHeight: 0, overflowY: "hidden", display: "flex", flexDirection: "column" }}>
     {error !== null && error.length > 0 && (
       <Typography variant="caption" color="error" sx={{ px: 2, py: 0.5 }}>
@@ -304,11 +310,13 @@ const SourceEditorTab: React.FC<{
           onBlur={closeSourceStep}
           history={history}
           restoreSelection={restoreSelection}
+          hostDiagnostics={hostDiagnostics}
         />
       </Suspense>
     </Box>
   </Box>
-);
+  );
+};
 
 /** Why palette cards in a section can't be dragged, and what to do when someone tries. */
 interface PaletteBlock {
@@ -707,12 +715,9 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
     let idleCallbackId: number | null = null;
     const timerId = window.setTimeout(() => {
       if (typeof window.requestIdleCallback === "function") {
-        idleCallbackId = window.requestIdleCallback(
-          () => {
-            void preloadMonacoCodeEditor();
-          },
-          { timeout: 2500 }
-        );
+        idleCallbackId = window.requestIdleCallback(() => {
+          void preloadMonacoCodeEditor();
+        });
         return;
       }
       void preloadMonacoCodeEditor();

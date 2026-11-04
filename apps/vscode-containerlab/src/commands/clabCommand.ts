@@ -12,6 +12,8 @@ export interface LabLifecycleRequest {
   cleanup?: boolean;
   /** Extra containerlab options of deploy, redeploy and destroy. */
   lifecycleOptions?: LabLifecycleOptions;
+  /** The lab host to run on; the node's, else the topology's remembered host. */
+  connectionId?: string;
 }
 
 /**
@@ -68,10 +70,11 @@ export class ClabCommand {
     const labName = this.node?.name;
     await cmd.runWithProgress(
       async ({ output, signal }) => {
-        const { backend, target } = await resolveLab(labPath, labName, this.node?.connectionId);
+        const connectionId = request.connectionId ?? this.node?.connectionId;
+        const { backend, target } = await resolveLab(labPath, labName, connectionId);
         if (action === "deploy" && backend.kind === "api" && isLabSourceUrl(labPath)) {
           // The host clones or downloads the topology into its workspace and deploys it.
-          output(`Deploying ${labPath} on ${connectionOf(this.node).label}...`, "stdout");
+          output(`Deploying ${labPath} on ${connectionOf({ connectionId }).label}...`, "stdout");
           const labs = await backend.deployFromUrl({ url: labPath });
           for (const deployed of Object.keys(labs)) output(`Deployed lab ${deployed}`, "stdout");
           return;

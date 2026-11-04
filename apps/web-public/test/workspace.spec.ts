@@ -22,7 +22,9 @@ test("local backend uses shared dialogs, document tabs, keyboard navigation and 
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const settings = page.getByTestId("standalone-settings-dialog");
   await expect(settings).toBeVisible();
-  await expect(page.getByTestId("standalone-settings-nav-endpoints")).toHaveCount(0);
+  // The sandbox has no lab hosts: no host pages and no "Add lab host".
+  await expect(settings.locator('[data-testid^="standalone-settings-nav-host:"]')).toHaveCount(0);
+  await expect(page.getByTestId("standalone-settings-nav-add")).toHaveCount(0);
   await expect(page.getByTestId("standalone-settings-nav-terminal")).toHaveCount(0);
   await page.getByTestId("standalone-settings-nav-appearance").click();
   await settings.getByRole("button", { name: "Light", exact: true }).click();
@@ -96,7 +98,6 @@ test("shared sidebar resizes independently of the floating palette and toolbar",
   await page.goto("/");
   await waitForWorkspace(page);
   await createTopologyFile(page, "rail", { fromEmptyState: true });
-  await page.getByRole("button", { name: "Unlock lab to edit", exact: true }).click();
   const sidebar = page.getByTestId("workspace-sidebar");
   // Empty labs open the palette on the right by default.
   await page.getByRole("button", { name: "Close panel", exact: true }).click();

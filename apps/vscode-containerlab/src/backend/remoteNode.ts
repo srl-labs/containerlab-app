@@ -9,6 +9,7 @@ import { errorStatus } from "@srl-labs/containerlab-lab-backend";
 
 import type { ClabContainerTreeNode } from "../treeView/common";
 
+import { isClusterConnection } from "./connections";
 import { backendOf, connectionOf, isRemote } from "./labBackends";
 
 const DEFAULT_COLUMNS = 120;
@@ -35,9 +36,14 @@ async function labNameOf(
   throw new Error(`Lab of ${containerName} not found.`);
 }
 
-/** Whether a node runs on a lab host, so its tools go through the host's API. */
+/**
+ * Whether a node's tools go through its lab host's backend: nodes on a
+ * clab-api-server, and nodes of a Kubernetes cluster, whose terminals,
+ * logs and ports LocalLabBackend reaches through Kubernetes with the pod
+ * and container containerlab reports. No kubectl is needed for that.
+ */
 export function isRemoteNode(node: unknown): boolean {
-  return isRemote(node);
+  return isRemote(node) || isClusterConnection(connectionOf(node));
 }
 
 function messageOf(error: unknown): string {
@@ -307,6 +313,8 @@ export async function showRemoteLogs(node: ClabContainerTreeNode): Promise<void>
 }
 
 export interface RemotePortMapping {
+  /** Where the port is reachable, when the lab host says: a load balancer, or a local port-forward. */
+  hostIp?: string;
   hostPort: string;
   containerPort: string;
   protocol: string;
@@ -321,6 +329,7 @@ export async function remoteBrowserPorts(
   const labName = await labNameOf(backend, node.name, node.labName);
   const { ports } = await backend.nodeBrowserPorts(labName, node.name);
   return ports.map((port) => ({
+    ...(port.hostIp ? { hostIp: port.hostIp } : {}),
     hostPort: String(port.hostPort),
     containerPort: String(port.containerPort),
     protocol: port.protocol ?? "tcp",

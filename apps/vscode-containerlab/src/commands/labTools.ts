@@ -27,7 +27,7 @@ import {
   remoteUri,
   resolveLab
 } from "../backend/labBackends";
-import { LOCAL_CONNECTION, type LabConnection } from "../backend/connections";
+import { LOCAL_CONNECTION, isThisComputer, type LabConnection } from "../backend/connections";
 import { CLOS_GENERATOR_PANEL, createPanelWebviewHtml } from "../webviews/shared/webviewPanels";
 
 function errorText(error: unknown): string {
@@ -206,7 +206,7 @@ export async function generateClosTopology(
   );
   panel.iconPath = vscode.Uri.joinPath(context.extensionUri, "resources", "containerlab.svg");
   const initialData: ClosGeneratorInitialData = {
-    targetLabel: selected.kind === "local" ? "this machine" : selected.label
+    targetLabel: isThisComputer(selected) ? "this machine" : selected.label
   };
   panel.webview.html = createPanelWebviewHtml(
     CLOS_GENERATOR_PANEL,

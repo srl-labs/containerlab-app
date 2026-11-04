@@ -4,18 +4,23 @@
  */
 
 import * as vscode from "vscode";
-import type {
-  LabExecRequest,
-  LabHostScriptEvent,
-  LabHostScriptRequest,
-  LabHostScriptResult,
-  LabOperationName,
-  LabSaveConfigsRequest,
-  LabSnapshotSaveRequest,
-  TopoViewerNodesAction
+import {
+  normalizeLabSettings,
+  type LabExecRequest,
+  type LabHostScriptEvent,
+  type LabHostScriptRequest,
+  type LabHostScriptResult,
+  type LabOperationName,
+  type LabSaveConfigsRequest,
+  type LabSnapshotSaveRequest,
+  type TopoViewerNodesAction
 } from "@containerlab/clab-ui/host";
 
-import { resolveLab } from "../../../backend/labBackends";
+import { describeLabHost } from "@srl-labs/containerlab-lab-backend";
+
+import { hostOfLabPath, labNameForPath, resolveLab } from "../../../backend/labBackends";
+import { labHostIdentity } from "../../../backend/hostIdentity";
+import { labSettingsFor, rememberLabSettings } from "../../../backend/labSettings";
 import { runWithProgress } from "../../../commands/command";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -39,7 +44,14 @@ function isOperationName(value: unknown): value is LabOperationName {
     value === "saveSnapshots" ||
     value === "saveConfigs" ||
     value === "inspectDetails" ||
-    value === "runHostScript"
+    value === "runHostScript" ||
+    value === "hostInfo" ||
+    value === "nodeLocations" ||
+    value === "captureInterfaces" ||
+    value === "exportManifests" ||
+    value === "validate" ||
+    value === "labSettings" ||
+    value === "saveLabSettings"
   );
 }
 
@@ -130,6 +142,29 @@ class LabOperationsService {
           await backend.streamHostScript(target, script)
         );
       }
+      case "hostInfo":
+        return { ...(await describeLabHost(backend)), host: labHostIdentity(labPath) };
+      case "nodeLocations":
+        // The inspect records; on c9s they say where each node runs.
+        return backend.inspectLab(target.labName || labNameForPath(labPath));
+      case "captureInterfaces":
+        return backend.captureInterfaces(target.labName || labNameForPath(labPath));
+      case "exportManifests":
+        return backend.exportManifests({
+          ...target,
+          labName: target.labName || labNameForPath(labPath)
+        });
+      case "validate":
+        return backend.validate({ ...target, labName: target.labName || labNameForPath(labPath) });
+      case "labSettings":
+        return labSettingsFor(hostOfLabPath(labPath).id, labPath) ?? null;
+      case "saveLabSettings":
+        await rememberLabSettings(
+          hostOfLabPath(labPath).id,
+          labPath,
+          normalizeLabSettings(request.settings)
+        );
+        return null;
     }
   }
 

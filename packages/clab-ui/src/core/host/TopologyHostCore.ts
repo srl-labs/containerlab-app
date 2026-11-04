@@ -27,7 +27,7 @@ import type { TopologyHost } from "../types/topologyHost";
 import type { TopologyData } from "../types/graph";
 import type { ContainerDataProvider, ParserLogger } from "../parsing/types";
 import { TopologyParser } from "../parsing/TopologyParser";
-import { applyInterfacePatternMigrations } from "../utilities";
+import { applyInterfacePatternMigrations, isSpecialEndpointId } from "../utilities";
 import { isFileNotFoundError, type FileSystemAdapter, type IOLogger } from "../io/types";
 import { AnnotationsIO } from "../io/AnnotationsIO";
 import { TopologyIO, migrateGeneratedNetworkNodeAnnotations } from "../io/TopologyIO";
@@ -201,6 +201,15 @@ export class TopologyHostCore implements TopologyHost {
     }
   }
 
+  /**
+   * Drops the cached snapshot, so the next getSnapshot reads the files and the
+   * runtime data again. updateContext keeps it when only the runtime data
+   * changes, since that happens every second.
+   */
+  invalidateSnapshot(): void {
+    this.snapshot = null;
+  }
+
   getSnapshot(): Promise<TopologySnapshot> {
     return runDocumentOperation(this.documentKey, () => this.getSnapshotUnlocked());
   }
@@ -352,6 +361,18 @@ export class TopologyHostCore implements TopologyHost {
 
   private async onExternalChangeUnlocked(): Promise<TopologySnapshot> {
     this.baseFs.invalidateCache?.();
+    // The files as this host last wrote or read them: a watcher reporting this
+    // host's own save late, as from a lab host. Keep the revision and history,
+    // or the edits the user makes meanwhile are rejected as stale.
+    if (this.snapshot && this.documentBaseline) {
+      const current = await this.captureDocumentState();
+      if (
+        current.yamlContent === this.documentBaseline.yamlContent &&
+        current.annotationsContent === this.documentBaseline.annotationsContent
+      ) {
+        return this.snapshot;
+      }
+    }
     this.variables = null;
     const previousYamlContent = this.documentBaseline?.yamlContent;
     this.past = [];
@@ -942,15 +963,32 @@ export class TopologyHostCore implements TopologyHost {
         (n) => !yamlNodeIds.has(n.id) && !networkNodeIds.has(n.id)
       );
 
+      let migrated: (typeof nodeAnnotations)[number] | undefined;
       if (missingIds.length === 1 && orphanAnnotations.length > 0) {
         const newId = missingIds[0];
         const newPrefix = getIdPrefix(newId);
         const prefixMatches = orphanAnnotations.filter((n) => getIdPrefix(n.id) === newPrefix);
-        const candidate = prefixMatches[0] ?? orphanAnnotations[0];
-        const oldId = candidate.id;
-        candidate.id = newId;
-        await this.annotationsIO.saveAnnotations(this.yamlFilePath, annotations);
+        migrated = prefixMatches[0] ?? orphanAnnotations[0];
+        const oldId = migrated.id;
+        migrated.id = newId;
         this.logger.info(`Migrated annotation id from ${oldId} to ${newId} after YAML rename`);
+      }
+
+      // What is left belongs to no node, e.g. a node deleted outside the
+      // editor. Kept, it would hand its position to the next node added in
+      // the YAML.
+      const leftovers = new Set(
+        orphanAnnotations.filter((n) => n !== migrated && !isSpecialEndpointId(n.id))
+      );
+      if (leftovers.size > 0) {
+        annotations.nodeAnnotations = nodeAnnotations.filter((n) => !leftovers.has(n));
+        this.logger.info(
+          `Removed annotations of missing nodes: ${[...leftovers].map((n) => n.id).join(", ")}`
+        );
+      }
+
+      if (migrated || leftovers.size > 0) {
+        await this.annotationsIO.saveAnnotations(this.yamlFilePath, annotations);
         return true;
       }
     } catch (err) {

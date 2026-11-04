@@ -30,6 +30,7 @@ import { LocalLabTreeDataProvider } from "../../../src/treeView/localLabsProvide
 import type { ClabLabTreeNode } from "../../../src/treeView/common";
 import * as ins from "../../../src/treeView/inspector";
 import * as globals from "../../../src/globals";
+import * as labBackends from "../../../src/backend/labBackends";
 
 const vscodeStub = require("../../helpers/vscode-stub");
 
@@ -155,6 +156,48 @@ describe("LocalLabTreeDataProvider", () => {
     expect(node.description).to.equal("a");
   });
 
+  // A topology opened or run from a cluster's section runs on that cluster.
+  it("lists topology files under each local host with that host's connection", async () => {
+    sinon
+      .stub(vscodeStub.workspace, "findFiles")
+      .resolves([vscodeStub.Uri.file(LAB_B), vscodeStub.Uri.file(LAB_A)]);
+    const cluster = { id: "kind", label: "kind", kind: "local", runtime: "c9s", kubeContext: "kind" };
+    const local = { id: "local", label: "This computer", kind: "local" };
+    sinon.stub(labBackends, "getConnections").returns({
+      grouped: true,
+      list: () => [local, cluster],
+      status: () => "connected",
+      problem: () => undefined
+    } as any);
+    // LAB_B runs on the cluster, so only Local lists it as undeployed.
+    sinon
+      .stub(ins, "labsOf")
+      .callsFake((id: string) =>
+        id === "kind" ? ({ b: [{ Labels: { "clab-topo-file": LAB_B } }] } as any) : undefined
+      );
+
+    const provider = new LocalLabTreeDataProvider();
+    const roots = (await provider.getChildren(undefined)) as any[];
+    const labsUnder = async (root: any) => {
+      const labs: ClabLabTreeNode[] = [];
+      for (const folder of (await provider.getChildren(root)) ?? []) {
+        expect((folder as any).connectionId).to.equal(root.connectionId);
+        labs.push(...((await provider.getChildren(folder)) as ClabLabTreeNode[]));
+      }
+      return labs;
+    };
+    const localLabs = await labsUnder(roots[0]);
+    const clusterLabs = await labsUnder(roots[1]);
+    expect(localLabs.map((node) => [node.labPath.absolute, node.connectionId])).to.deep.equal([
+      [LAB_A, "local"],
+      [LAB_B, "local"]
+    ]);
+    expect(clusterLabs.map((node) => [node.labPath.absolute, node.connectionId])).to.deep.equal([
+      [LAB_A, "kind"]
+    ]);
+    expect(clusterLabs[0].id).to.equal(`kind|lab:${LAB_A}`);
+  });
+
   it("lists root-level labs before folders", async () => {
     sinon
       .stub(vscodeStub.workspace, "findFiles")
@@ -228,5 +271,45 @@ describe("LocalLabTreeDataProvider", () => {
     const labs = await provider.getChildren(nestedFolder);
     expect(labs).to.have.lengthOf(1);
     expect(labs![0].label).to.equal("lab1.clab.yml");
+  });
+
+  it("starts the file scan on prefetch and reuses it for the first listing", async () => {
+    const findFiles = sinon
+      .stub(vscodeStub.workspace, "findFiles")
+      .resolves([vscodeStub.Uri.file("/workspace/root.clab.yml")]);
+
+    const provider = new LocalLabTreeDataProvider();
+    provider.prefetch();
+    expect(findFiles.calledOnce).to.be.true;
+
+    const nodes = await provider.getChildren(undefined);
+    expect(nodes!.map((node) => node.label)).to.deep.equal(["root.clab.yml"]);
+    expect(findFiles.calledOnce).to.be.true;
+  });
+
+  it("resolves each lab path once until files change", async () => {
+    const onDidCreate = sinon.stub();
+    sinon.stub(vscodeStub.workspace, "createFileSystemWatcher").returns({
+      ...fileWatcherStub,
+      onDidCreate
+    });
+    sinon
+      .stub(vscodeStub.workspace, "findFiles")
+      .resolves([
+        vscodeStub.Uri.file("/workspace/a/lab1.clab.yml"),
+        vscodeStub.Uri.file("/workspace/b/lab2.clab.yml")
+      ]);
+    const realpathSync = sinon.stub(require("fs"), "realpathSync").callsFake((p: unknown) => p);
+    sinon.stub(require("fs"), "existsSync").returns(true);
+
+    const provider = new LocalLabTreeDataProvider();
+    const roots = (await provider.getChildren(undefined))!;
+    for (const folder of roots) await provider.getChildren(folder);
+    await provider.getChildren(undefined);
+    expect(realpathSync.callCount).to.equal(2);
+
+    onDidCreate.firstCall.args[0](vscodeStub.Uri.file("/workspace/c/lab3.clab.yml"));
+    await provider.getChildren(undefined);
+    expect(realpathSync.callCount).to.equal(5);
   });
 });

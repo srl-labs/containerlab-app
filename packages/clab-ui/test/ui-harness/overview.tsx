@@ -3,7 +3,7 @@
  * their cards are visible. `?stats=unavailable` plays a lab host without node
  * stats, `?stats=none` a host without a usage feed, `?many=1` adds many labs.
  * `?host=webview` shows it as the editor-tab webview, with a fake extension host
- * answering its messages.
+ * answering its messages. `?hosts=1` lists three lab hosts with their resources.
  */
 import React from "react";
 import { createRoot } from "react-dom/client";
@@ -21,8 +21,10 @@ import { LabsOverview } from "../../src/workspace/overview";
 import {
   canWatchLabUsage,
   nextLabUsage,
+  type FetchLabHostMetrics,
   type LabNodeRunState,
   type LabOverviewCard,
+  type LabOverviewHost,
   type LabRunState,
   type LabUsage,
   type WatchLabUsage
@@ -37,6 +39,28 @@ const params = new URLSearchParams(location.search);
 applyStandaloneAppearance(readStandaloneAppearance(), params.get("theme") === "light" ? "light" : "dark");
 const statsMode = params.get("stats") ?? "live";
 const INTERVAL_MS = Number(params.get("interval") ?? 1000);
+const GIB = 1024 ** 3;
+
+const labHosts: LabOverviewHost[] = params.get("hosts") === "1"
+  ? [
+    { id: "harness", label: "this-host", status: "connected" },
+    { id: "big", label: "big-host", status: "connected" },
+    { id: "away", label: "away-host", status: "saved" }
+  ]
+  : [];
+
+/** Fake usage: this-host is nearly out of memory, big-host has plenty. */
+const fetchHostMetrics: FetchLabHostMetrics = async (endpointId) => {
+  const [total, available, cpu] = endpointId === "big" ? [128, 96, 22] : [64, 4, 91];
+  return {
+    serverInfo: { version: "0.0.0", uptime: "1h", startTime: new Date().toISOString() },
+    metrics: {
+      cpu: { usagePercent: cpu, numCPU: endpointId === "big" ? 32 : 8, loadAvg1: cpu / 10 },
+      mem: { totalMem: total * GIB, usedMem: (total - available) * GIB, availableMem: available * GIB, usagePercent: ((total - available) / total) * 100 },
+      disk: { path: "/", totalDisk: 500 * GIB, usedDisk: 200 * GIB, freeDisk: 300 * GIB, usagePercent: 40 }
+    }
+  };
+};
 
 function nodeNames(path: string): string[] {
   try {
@@ -177,6 +201,8 @@ function OverviewHarness() {
       cards={cards}
       lifecycleAvailable
       showEndpoints={false}
+      labHosts={labHosts}
+      fetchHostMetrics={fetchHostMetrics}
       loadSources={loadSources}
       sourcesRevision={0}
       watchUsage={statsMode === "none" ? undefined : watchUsage}
@@ -200,13 +226,17 @@ function fakeExtensionHost(cards: LabOverviewCard[]) {
     posted.push(message);
     switch (message.type) {
       case "labs-overview:ready":
-        setTimeout(() => send({ type: "labs-overview:state", cards, loading: false, showEndpoints: false, sourcesRevision: 0 }), 100);
+        setTimeout(() => send({ type: "labs-overview:state", cards, loading: false, showEndpoints: false, labHosts, sourcesRevision: 0 }), 100);
         break;
       case "labs-overview:load-sources": {
         const target = cards.find((entry) => entry.id === message.cardId);
         void loadSources(target!).then((sources) => send({ type: "labs-overview:sources", requestId: message.requestId, sources }));
         break;
       }
+      case "labs-overview:host-metrics":
+        void fetchHostMetrics(message.endpointId, new AbortController().signal)
+          .then((metrics) => send({ type: "labs-overview:host-metrics", requestId: message.requestId, metrics }));
+        break;
       case "labs-overview:usage-start": {
         const { streamId, labName } = message;
         if (statsMode === "unavailable") {

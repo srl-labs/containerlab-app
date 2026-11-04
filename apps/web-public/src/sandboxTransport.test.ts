@@ -32,3 +32,14 @@ test("sandbox transport supports file save, upload, rename and download", async 
   assert.equal((await fetch("http://localhost/api/runtime/deploy", { method: "POST" })).status, 501);
   assert.equal((await fetch("http://localhost/api/runtime/file-explorer/file?path=missing.txt")).status, 400);
 });
+
+test("sandbox transport generates Clos topologies without a lab host", async () => {
+  const { fetch } = createSandboxTransport(createMemorySandboxBackend());
+  const generate = (request: unknown) => fetch("http://localhost/sandbox/api/runtime/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ request }) });
+  const response = await generate({ name: "clos", tiers: [{ count: 2, kind: "nokia_srlinux" }, { count: 1, kind: "nokia_srlinux" }], images: { nokia_srlinux: "ghcr.io/nokia/srlinux:latest" } });
+  assert.equal(response.status, 200);
+  const { topologyYaml } = await response.json() as { topologyYaml: string };
+  assert.match(topologyYaml, /^name: clos$/m);
+  assert.match(topologyYaml, /- node1-2:e1-1\n\s+- node2-1:e1-2/);
+  assert.equal((await generate({ name: "clos", tiers: [{ count: 1, kind: "unknown" }], images: {} })).status, 400);
+});

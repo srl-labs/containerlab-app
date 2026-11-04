@@ -17,11 +17,16 @@ export interface StatsCounters {
   pids: number;
 }
 
-/** The counters of a Docker Engine stats response, as `docker stats` reads them. */
-export function statsCounters(stats: Docker.ContainerStats): StatsCounters {
-  const cpuStats = stats.cpu_stats;
+/**
+ * The counters of a Docker Engine stats response, as `docker stats` reads them.
+ * Undefined when the engine could not collect them: it then answers 200 with
+ * only a `message`, e.g. for SR Linux, which renames the container's eth0.
+ */
+export function statsCounters(stats: Docker.ContainerStats): StatsCounters | undefined {
+  const cpuStats = stats.cpu_stats as Docker.ContainerStats["cpu_stats"] | undefined;
+  const memory = stats.memory_stats as Docker.ContainerStats["memory_stats"] | undefined;
+  if (typeof cpuStats?.cpu_usage?.total_usage !== "number" || !memory) return undefined;
   const cpuCount = cpuStats.online_cpus || cpuStats.cpu_usage.percpu_usage?.length || 0;
-  const memory = stats.memory_stats;
   const memoryStats = (memory.stats ?? {}) as Partial<Record<string, number>>;
   // Page cache that can be reclaimed does not count: cgroup v2, then v1.
   const inactive = memoryStats.inactive_file ?? memoryStats.total_inactive_file ?? 0;
@@ -85,7 +90,8 @@ export async function* labStats(
         docker
           .getContainer(container.Id)
           .stats({ stream: false, "one-shot": true })
-          .then(statsCounters, () => undefined)
+          .then(statsCounters)
+          .catch(() => undefined)
       )
     );
     containers.forEach((container, index) => {

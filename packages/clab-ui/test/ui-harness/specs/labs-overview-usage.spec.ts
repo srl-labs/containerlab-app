@@ -127,3 +127,34 @@ test.describe("Labs overview in an editor tab", () => {
     await expect.poll(() => activeWatches(page)).not.toContain("spine-leaf");
   });
 });
+
+/** The lab hosts above the cards: how much each has left, so a new lab goes where it fits. */
+test.describe("Labs overview lab hosts", () => {
+  test("lab hosts show their free resources and the one with the most room", async ({ page }) => {
+    const errors = await openOverview(page, "hosts=1&stats=none");
+    const hosts = page.getByTestId("labs-overview-hosts");
+    const busy = hosts.getByTestId("lab-host-harness");
+    const big = hosts.getByTestId("lab-host-big");
+    await expect(big.getByTestId("lab-host-memory-value")).toHaveText("96 GiB free");
+    await expect(big.getByTestId("lab-host-roomiest")).toBeVisible();
+    await expect(busy.getByTestId("lab-host-roomiest")).toHaveCount(0);
+    await expect(busy.getByTestId("lab-host-memory")).toHaveAttribute("data-level", "full");
+    await expect(busy.getByTestId("lab-host-cpu")).toHaveAttribute("data-level", "full");
+    await expect(busy).toContainText("6 running labs");
+    // A signed-out host is listed without usage.
+    await expect(hosts.getByTestId("lab-host-away")).toContainText("Sign in to see its resources.");
+
+    // A host shows only its labs, and again every lab.
+    await big.click();
+    await expect(page.getByText("No labs match")).toBeVisible();
+    await big.click();
+    await expect(page.getByRole("article", { name: "spine-leaf" })).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+  test("the editor-tab overview asks the extension host for lab host resources", async ({ page }) => {
+    const errors = await openOverview(page, "host=webview&hosts=1&stats=none");
+    await expect(page.getByTestId("lab-host-big").getByTestId("lab-host-memory-value")).toHaveText("96 GiB free");
+    expect(errors).toEqual([]);
+  });
+});

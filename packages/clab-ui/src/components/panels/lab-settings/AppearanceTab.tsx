@@ -13,6 +13,7 @@ import { parseLinkStyle } from "../../canvas/elbowRouting";
 import { getMgmtNetworks } from "../../../core/types/labSettings";
 import { parseMgmtNetworkBadgeMode } from "../../../core/utilities/mgmtNetworks";
 import { SettingsField } from "../../../settings/SettingsField";
+import { NumberTextField } from "../../ui/form";
 import { useEdges } from "../../../stores/graphStore";
 import { useTopoViewerStore } from "../../../stores/topoViewerStore";
 import {
@@ -278,10 +279,9 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
         />
       </SettingsField>
       <SettingsField title="Node size" description="Telemetry node marker size in pixels.">
-        <TextField
+        <NumberTextField
           id="telemetry-node-size"
           size="small"
-          type="number"
           value={String(telemetryNodeSizePx)}
           disabled={isReadOnly}
           onChange={(e) => {
@@ -299,10 +299,9 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
         />
       </SettingsField>
       <SettingsField title="Interface size" description="Interface label size, as a percent of node size.">
-        <TextField
+        <NumberTextField
           id="telemetry-interface-size"
           size="small"
-          type="number"
           value={String(telemetryInterfaceSizePercent)}
           disabled={isReadOnly}
           onChange={(e) => {

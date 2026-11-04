@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@containerlab/clab-ui": "workspace:*",
+    "@kubernetes/client-node": "catalog:",
     "dockerode": "catalog:",
     "ssh2": "catalog:",
     "undici": "catalog:",

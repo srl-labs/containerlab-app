@@ -1,6 +1,6 @@
 {
   "name": "@containerlab/clab-viewer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": false,
   "description": "Standalone interactive containerlab topology viewer for any website.",
   "license": "MIT",

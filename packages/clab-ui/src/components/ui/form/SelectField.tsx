@@ -16,6 +16,8 @@ interface SelectOption {
   value: string;
   label: string;
   icon?: React.ReactNode;
+  /** Listed but not pickable, e.g. a value the lab host refuses. */
+  disabled?: boolean;
 }
 
 interface SelectFieldProps {
@@ -131,7 +133,7 @@ export const SelectField: React.FC<SelectFieldProps> = ({
           </MenuItem>
         )}
         {options.map((opt) => (
-          <MenuItem key={opt.value} value={opt.value}>
+          <MenuItem key={opt.value} value={opt.value} disabled={opt.disabled}>
             {renderOptionLabel(opt.label, opt.icon)}
           </MenuItem>
         ))}

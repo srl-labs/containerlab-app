@@ -1,9 +1,17 @@
 import type {
+  C9sExposeType,
+  LabBackendCapabilities,
+  LabBackendFeatures,
   LabExecRequest,
+  LabHostInfo,
+  LabHostNamespaceMode,
+  LabHostProfile,
   LabHostScriptEvent,
   LabHostScriptRequest,
   LabHostScriptResult,
+  LabHostSupport,
   LabLifecycleOptions,
+  LabRuntimeKind,
   LabOperationSupport,
   LabSnapshotSaveRequest,
   TailscaleStatus,
@@ -14,6 +22,8 @@ import type { FileSystemAdapter } from "@containerlab/clab-ui/session";
 
 import type {
   CaptureCloseAllResponse,
+  CaptureInterface,
+  CaptureStreamOptions,
   CapturePacketflixResponse,
   CaptureTarget,
   CaptureWiresharkVncCreateResponse,
@@ -60,46 +70,16 @@ import type {
 
 export type LabBackendKind = "local" | "api";
 
-/** What a backend can do. Hosts hide the rest instead of letting it fail. */
-export interface LabBackendCapabilities {
-  /** Temporary SSH access to a node through a port the lab host forwards. */
-  sshAccess: boolean;
-  /** Deploy a lab straight from a Git or HTTP URL. */
-  deployFromUrl: boolean;
-  /** Copy a topology from a Git or HTTP URL into the workspace. */
-  importFromUrl: boolean;
-  /** Install and remove Edgeshark on the lab host. */
-  edgesharkManagement: boolean;
-  /** Wireshark in a browser window, through one VNC container per capture. */
-  wiresharkVnc: boolean;
-  /** CPU, memory and disk usage of the lab host. */
-  healthMetrics: boolean;
-  /** The `@shared/` workspace folder for labs that several users edit. */
-  sharedWorkspace: boolean;
-  /** The Tailscale devices of a running lab (`mgmt.tailscale`). */
-  tailscaleStatus: boolean;
-}
-
-/**
- * Operations a lab host may lack although the backend kind has them, e.g. an
- * older clab-api-server. Hosts ask before offering them.
- */
-export interface LabBackendFeatures {
-  /** `containerlab validate`. */
-  validate: boolean;
-  /** `containerlab graph --mermaid`. */
-  graphMermaid: boolean;
-  /** `containerlab graph --dot`. */
-  graphDot: boolean;
-  /** Read-only sshx links. */
-  sshxReaders: boolean;
-  /** GoTTY credentials and shell. */
-  gottyOptions: boolean;
-  /** CPU and memory usage of a lab's nodes (`streamLabStats`). */
-  nodeStats: boolean;
-  /** Terminal sessions that keep running when the client disconnects, and replay their output. */
-  terminalResume: boolean;
-}
+export type {
+  C9sExposeType,
+  LabBackendCapabilities,
+  LabBackendFeatures,
+  LabHostInfo,
+  LabHostNamespaceMode,
+  LabHostProfile,
+  LabHostSupport,
+  LabRuntimeKind
+};
 
 export type LabLifecycleAction =
   | "deploy"
@@ -325,6 +305,8 @@ export interface LabBackend {
   versionCheck(): Promise<VersionCheckResponse>;
   healthMetrics(): Promise<HealthMetricsResponse>;
   features(): Promise<LabBackendFeatures>;
+  /** The runtime of the lab host and, for c9s, its cluster settings. */
+  hostProfile(): Promise<LabHostProfile>;
 
   // Labs
 
@@ -374,6 +356,11 @@ export interface LabBackend {
   ): Promise<GraphExportResponse>;
   /** `containerlab generate`: a Clos topology, returned and not written anywhere. */
   generateTopology(request: GenerateTopologyRequest): Promise<GenerateTopologyResponse>;
+  /**
+   * The Kubernetes resources a c9s deploy would create (`deploy --emit-crs`),
+   * as multi-document YAML. Rejects with 501 without `manifestExport`.
+   */
+  exportManifests(lab: LabTarget): Promise<{ yaml: string }>;
 
   // Lab operations. Hosts check labOperationSupport() before exec by label,
   // snapshots, save --copy, inspect details and deploy restore.
@@ -457,6 +444,20 @@ export interface LabBackend {
   wiresharkVncReady(sessionId: string): Promise<CaptureWiresharkVncReadyResponse>;
   closeWiresharkVnc(sessionId: string): Promise<void>;
   closeAllWiresharkVnc(): Promise<CaptureCloseAllResponse>;
+  /**
+   * The lab-link interfaces of a running lab's nodes, with their peers.
+   * Rejects with 501 without the `captureStream` feature.
+   */
+  captureInterfaces(labName: string): Promise<CaptureInterface[]>;
+  /**
+   * Captures the targets into one pcapng stream: one section, one interface
+   * per target, named `<node>:<interface>`. Resolves once the capture runs;
+   * the stream ends at the duration or packet limit, or when `signal`
+   * aborts, always with a complete last block. Long captures are continuous;
+   * gaps go to `onGap`. On c9s, `containerName` of a target is the inspect
+   * name (`<lab>-<node>`). Rejects with 501 without `captureStream`.
+   */
+  openCaptureStream(labName: string, options: CaptureStreamOptions): Promise<AsyncIterable<Uint8Array>>;
   fetchWiresharkVnc(sessionId: string, request: WiresharkVncRequest): Promise<WiresharkVncResponse>;
   connectWiresharkVnc(
     sessionId: string,

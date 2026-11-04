@@ -39,8 +39,6 @@ clab-topology svg { width: 17px; height: 17px; flex-shrink: 0; }
 .clab-component-heading { display: flex; align-items: center; gap: 10px; padding: 15px 20px; border-bottom: 1px solid var(--clab-border); }
 .clab-component-heading strong { font-size: 13px; font-weight: 550; }
 .clab-component-mark { display: flex; color: var(--clab-accent); }
-.clab-live-badge { margin-left: auto; font-size: 9px; letter-spacing: .13em; color: var(--clab-muted); display: flex; align-items: center; gap: 7px; }
-.clab-live-badge i { width: 5px; height: 5px; background: #65cda1; border-radius: 50%; box-shadow: 0 0 0 3px #65cda112; }
 .clab-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--clab-border); background: var(--clab-raised); gap: 8px; }
 .clab-tabs { display: flex; gap: 3px; }
 .clab-tabs button { display: flex; align-items: center; gap: 7px; border-radius: 6px; padding: 7px 11px; color: var(--clab-muted); font-size: 12px; }
@@ -97,7 +95,6 @@ clab-topology[data-borderless="true"][data-error] .clab-code { border: 0; }
   .clab-actions { gap: 0; }
   .clab-icon-button { padding: 7px; }
   .clab-component-heading { padding: 13px; }
-  .clab-live-badge { font-size: 8px; }
   .clab-node-detail { display: none; }
   .clab-hint { font-size: 9px; }
   .clab-panels { height: min(var(--clab-height, 460px), 360px); }

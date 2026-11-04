@@ -10,9 +10,10 @@ Use a `clab` code fence at the top level of a Markdown page. Option values conta
 | `file` | Inline fence content | YAML file relative to `docs/` |
 | `annotations` | Automatic layout | Annotations JSON file relative to `docs/` |
 | `view` | `topology` | `topology`, `yaml`, or `split` |
-| `borderless` | `false` | Canvas-only preset: removes the frame, surrounding panels, grid, and zoom buttons; makes the canvas transparent. Individual options below override the preset. |
-| `heading`, `toolbar`, `inspector`, `footer` | `true`, or `false` when borderless | Show or hide each surrounding panel independently |
-| `controls` | `true`, or `false` when borderless | Canvas zoom and fit buttons |
+| `borderless` | `false` | Canvas-only preset: removes the frame, surrounding panels, and grid; makes the canvas transparent. Individual options below override the preset. |
+| `heading`, `toolbar`, `footer` | `true`, or `false` when borderless | Show or hide each surrounding panel independently |
+| `inspector` | `false` | Node menu and details below the canvas, with **Show in YAML** |
+| `controls` | `false` | Floating zoom and fit buttons on the canvas |
 | `grid` | `dots`, or `none` when borderless | `dots`, `lines`, or `none` |
 | `transparent` | Same as `borderless` | Let the page background show through the canvas |
 | `theme` | `auto` | `auto`, `light`, or `dark`; auto follows the docs theme or the system preference on other sites |

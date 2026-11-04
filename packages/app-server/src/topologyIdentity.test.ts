@@ -126,3 +126,23 @@ test("runtime actions cannot fall back to a same-named lab from another source",
     labName: "demo", yamlPath: "@shared/demo.clab.yml"
   }, "demo"), TopologySourceConflictError);
 });
+
+test("a cluster lab that containerlab did not deploy matches its topology file by name", async () => {
+  // containerlab -r c9s reports where the topology lives in the cluster, not the file it came from.
+  const clusterLab = (labName: string) => ({
+    labName,
+    labPath: `k8s://c9s-${labName}/topologies/${labName}`,
+    absLabPath: `k8s://c9s-${labName}/topologies/${labName}`
+  });
+  const backend = {
+    inspectAll: async () =>
+      ({ demo: [clusterLab("demo")], other: [clusterLab("other")] }) as unknown as InspectAllLabsResponse
+  };
+  const ref = { labName: "demo", yamlPath: "demo/demo.clab.yml", absoluteYamlPath: "/home/alice/labs/demo/demo.clab.yml" };
+  assert.equal(await resolveRunningLabNameForTopology(backend, ref, "demo"), "demo");
+  assert.equal(findRunningLabNameForTopology(await backend.inspectAll(), { ...ref, absoluteYamlPath: undefined }), "demo");
+  assert.equal(findRunningLabNameForTopology(await backend.inspectAll(), { ...ref, labName: "missing" }), undefined);
+  // A Docker lab of the same name still needs its own file.
+  const docker = { demo: [{ labName: "demo", absLabPath: "/srv/shared/demo.clab.yml" }] } as unknown as InspectAllLabsResponse;
+  assert.equal(findRunningLabNameForTopology(docker, ref), undefined);
+});

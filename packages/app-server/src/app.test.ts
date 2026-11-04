@@ -123,6 +123,7 @@ for (const changes of [
     });
     const cookie = extractSessionCookie(login);
     const endpointId = login.json().id as string;
+    const callsBeforeChange = fetchMock.calls.length;
     const response = await app.inject({
       method: "PATCH",
       url: `/auth/endpoints/${endpointId}`,
@@ -134,7 +135,7 @@ for (const changes of [
     assert.equal(response.json().status, "session_expired");
     assert.equal(
       fetchMock.calls.length,
-      1,
+      callsBeforeChange,
       "must not contact the new endpoint with the old token",
     );
     const request = await app.inject({
@@ -144,6 +145,85 @@ for (const changes of [
     assert.equal(request.statusCode, 401);
   });
 }
+
+test("a lab host reports its runtime when it is added, for its badge", async (t) => {
+  const { app, fetchMock } = await createTestContext(t);
+  fetchMock.on("POST", "https://cluster-host.test/login", () => jsonResponse({ token: "token" }));
+  fetchMock.on("GET", "https://cluster-host.test/health", () =>
+    jsonResponse({ status: "healthy", runtime: "c9s", namespaceMode: "per-lab", features: [] }),
+  );
+  const added = await app.inject({
+    method: "POST",
+    url: "/auth/endpoints/add",
+    payload: { url: "https://cluster-host.test", username: "alice", password: "example" },
+  });
+  assert.equal(added.statusCode, 200, added.body);
+  assert.equal(added.json().runtime, "c9s");
+  assert.equal(added.json().status, "connected");
+});
+
+test("signing in to an API Server again answers with what it reports, so its page keeps its values", async (t) => {
+  const { app, fetchMock } = await createTestContext(t);
+  const url = "https://c9s-signin.test";
+  fetchMock.on("POST", `${url}/login`, () => jsonResponse({ token: "token" }));
+  fetchMock.on("GET", `${url}/api/v1/version`, () => jsonResponse({ version: "test" }));
+  fetchMock.on("GET", `${url}/health`, () =>
+    jsonResponse({ status: "healthy", runtime: "c9s", namespaceMode: "per-lab", features: ["lab-host-info"] }),
+  );
+  fetchMock.on("GET", `${url}/api/v1/lab-host`, () =>
+    jsonResponse({
+      runtime: "c9s",
+      defaultTimeout: "10m",
+      capture: { wiresharkVnc: false, wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:latest", wiresharkPullPolicy: "always" },
+      c9s: {
+        context: "c9s-provisioner",
+        cluster: "c9s",
+        namespacePattern: "c9s-alice-{lab}",
+        sharedNamespacePattern: "c9s-shared-{lab}",
+        exposeType: "None",
+        persistence: true,
+        imagePullSecret: "",
+        labQuota: false,
+        noTopologyCR: false,
+        metrics: true,
+      },
+    }),
+  );
+  const expected = {
+    runtime: "c9s",
+    defaultTimeout: "10m",
+    cluster: "c9s",
+    namespacePattern: "c9s-alice-{lab}",
+    exposeType: "None",
+    persistence: true,
+    noTopologyCR: false,
+    capture: { wiresharkVnc: false, wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:latest", wiresharkPullPolicy: "always" },
+  };
+  const added = await app.inject({
+    method: "POST",
+    url: "/auth/endpoints/add",
+    payload: { url, username: "alice", password: "example" },
+  });
+  assert.equal(added.statusCode, 200, added.body);
+  assert.partialDeepStrictEqual(added.json(), expected);
+  const cookie = extractSessionCookie(added);
+  const endpointId = added.json().id as string;
+
+  // The client replaces its entry with these answers: each carries what the list has.
+  const reconnected = await app.inject({
+    method: "POST",
+    url: `/auth/endpoints/${endpointId}/reconnect`,
+    headers: { cookie },
+    payload: { url, username: "alice", password: "example" },
+  });
+  assert.equal(reconnected.statusCode, 200, reconnected.body);
+  assert.partialDeepStrictEqual(reconnected.json(), { ...expected, status: "connected" });
+  const listed = await app.inject({ url: "/auth/endpoints", headers: { cookie } });
+  assert.partialDeepStrictEqual(listed.json().endpoints[0], expected);
+  const login = await app.inject({ method: "POST", url: "/auth/login", payload: { url, username: "alice", password: "example" } });
+  assert.equal(login.statusCode, 200, login.body);
+  assert.partialDeepStrictEqual(login.json().endpoint, expected);
+});
 
 test("auth startup bounds an unresponsive endpoint and still reports healthy endpoints", async (t) => {
   const { app, fetchMock } = await createTestContext(t);
@@ -735,6 +815,50 @@ test("/files proxies topology entries with bearer auth and Explorer topology ref
       },
     },
   ]);
+});
+
+test("/api/runtime/topology-file/create opens a bare file name in its lab folder", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "http://api.example.test/login", () => {
+    return jsonResponse({ token: "secret-token" });
+  });
+  // clab-api-server stores a bare `<lab>.clab.yml` in the lab's folder.
+  let written: string | undefined;
+  context.fetchMock.on("HEAD", /\/api\/v1\/labs\/campus\/topology\/file\?/, () => new Response(null, { status: 404 }));
+  context.fetchMock.on("GET", /\/api\/v1\/labs\/campus\/topology\/file\?/, () => jsonResponse({ error: "not found" }, 404));
+  context.fetchMock.on("PUT", /\/api\/v1\/labs\/campus\/topology\/file\?/, (call) => {
+    written = call.url.searchParams.get("path") ?? undefined;
+    return jsonResponse({ message: "saved" });
+  });
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/topology/files", () =>
+    jsonResponse(
+      written === undefined
+        ? []
+        : [
+            {
+              labName: "campus",
+              yamlFileName: "campus/campus.clab.yml",
+              annotationsFileName: "campus/campus.clab.yml.annotations.json",
+              hasAnnotations: false,
+              deploymentState: "undeployed",
+            },
+          ],
+    ),
+  );
+
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/topology-file/create",
+    headers: { cookie },
+    payload: { endpointId, fileName: "campus.clab.yml" },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(written, "campus.clab.yml");
+  assert.equal(response.json().topologyRef.yamlPath, "campus/campus.clab.yml");
 });
 
 test("/api/runtime/file-explorer/tree proxies workspace entries without topology polling", async (t) => {
@@ -1558,6 +1682,10 @@ test("/api/lab/destroy/stream forwards DELETE lifecycle request with cleanup", a
 test("/api/lab/destroy/stream forwards only the options destroy takes", async (t) => {
   const context = await createTestContext(t);
   mockLoginAndTopology(context);
+  // Lifecycle options are checked against the host's runtime.
+  context.fetchMock.on("GET", "http://api.example.test/health", () =>
+    jsonResponse({ status: "healthy", features: [], runtime: "docker" }),
+  );
   const { cookie, endpointId } = await loginEndpoint(context, {
     url: "http://api.example.test",
   });
@@ -1602,6 +1730,10 @@ test("/api/lab/destroy/stream forwards only the options destroy takes", async (t
 test("/api/lab/deploy/stream forwards deploy options", async (t) => {
   const context = await createTestContext(t);
   mockLoginAndTopology(context);
+  // Lifecycle options are checked against the host's runtime.
+  context.fetchMock.on("GET", "http://api.example.test/health", () =>
+    jsonResponse({ status: "healthy", features: [], runtime: "docker" }),
+  );
   const { cookie, endpointId } = await loginEndpoint(context, {
     url: "http://api.example.test",
   });
@@ -1714,6 +1846,34 @@ test("/api/lab/apply keeps editable topology lab name when runtime lab name diff
     },
     logs: [],
   });
+});
+
+test("/api/lab/apply dry run counts the Kubernetes resources a c9s apply would change", async (t) => {
+  const context = await createTestContext(t);
+  mockVlanMismatchTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+  const plans = [
+    { labName: "vlan", addedNodes: [], deletedNodes: [], changes: [{ action: "update", kind: "Topology", namespace: "c9s-vlan", name: "vlan" }] },
+    { labName: "vlan", addedNodes: [], deletedNodes: [], changes: [] }
+  ];
+  context.fetchMock.on(
+    "POST",
+    /^http:\/\/api\.example\.test\/api\/v1\/labs\/srlinux-vlan-handling-lab\/apply\?/,
+    () => jsonResponse(plans.shift()),
+  );
+
+  for (const expected of [true, false]) {
+    const response = await context.app.inject({
+      method: "POST",
+      url: "/api/lab/apply",
+      headers: { cookie },
+      payload: { topologyRef: vlanMismatchTopologyRef(endpointId), dryRun: true },
+    });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(response.json().changesPending, expected);
+  }
 });
 
 test("/api/lab/apply/stream keeps editable topology lab name when runtime lab name differs", async (t) => {
@@ -1887,6 +2047,47 @@ function mockLabOperationsServer(context: TestAppContext): void {
     ]),
   );
 }
+
+test("/api/runtime/lab-operations list node locations, validate, and refuse manifests off c9s", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  mockLabOperationsServer(context);
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+  context.fetchMock.on("POST", /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\/validate/, (call) => {
+    assert.equal(call.url.searchParams.get("path"), "labs/demo.clab.yml");
+    return jsonResponse({ valid: false, path: "labs/demo.clab.yml", nodes: 2, links: 1, error: "macvlan is not supported" });
+  });
+  const topologyRef = demoTopologyRef(endpointId);
+
+  const locations = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/lab-operations/node-locations",
+    headers: { cookie },
+    payload: { topologyRef },
+  });
+  assert.equal(locations.statusCode, 200, locations.body);
+  assert.deepEqual(
+    locations.json<Array<{ name: string }>>().map((node) => node.name),
+    ["clab-demo-leaf1", "clab-demo-leaf2"],
+  );
+
+  const validate = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/lab-operations/validate",
+    headers: { cookie },
+    payload: { topologyRef },
+  });
+  assert.equal(validate.statusCode, 200, validate.body);
+  assert.equal(validate.json<{ valid: boolean }>().valid, false);
+
+  const manifests = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/lab-operations/manifests",
+    headers: { cookie },
+    payload: { topologyRef },
+  });
+  assert.equal(manifests.statusCode, 501, manifests.body);
+});
 
 test("/api/runtime/lab-operations stop several nodes in one call", async (t) => {
   const context = await createTestContext(t);
@@ -2463,6 +2664,9 @@ test("prefixed terminal WebSockets forward authenticated upstream output", async
 test("/api/runtime/tailscale returns the Tailscale devices of the lab", async (t) => {
   const context = await createTestContext(t);
   mockLoginAndTopology(context);
+  context.fetchMock.on("GET", "http://api.example.test/health", () =>
+    jsonResponse({ status: "healthy", features: [], runtime: "docker" }),
+  );
   const { cookie, endpointId } = await loginEndpoint(context, {
     url: "http://api.example.test",
   });
@@ -2631,7 +2835,119 @@ test("/api/runtime/features reports what an older clab-api-server lacks", async 
     gottyOptions: false,
     nodeStats: false,
     terminalResume: false,
+    lifecycleTimeout: false,
+    imageManagement: true,
+    netem: true,
+    snapshots: true,
+    nodePause: true,
+    fcli: true,
+    interfaceInspect: true,
+    edgeshark: true,
+    hostMetrics: true,
+    tailscale: true,
+    shareTools: true,
+    hostCapture: true,
+    manifestExport: false,
+    c9sDeployOptions: false,
+    captureStream: false,
+    captureVnc: false,
   });
+});
+
+test("/api/runtime/host reports the runtime and what a c9s clab-api-server offers", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  context.fetchMock.on("GET", "http://api.example.test/health", () =>
+    jsonResponse({ status: "healthy", features: ["node-stats"], runtime: "c9s", namespaceMode: "per-lab" }),
+  );
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+
+  const response = await context.app.inject({
+    method: "GET",
+    url: `/api/runtime/host?endpointId=${encodeURIComponent(endpointId)}`,
+    headers: { cookie },
+  });
+  assert.equal(response.statusCode, 200, response.body);
+  const host = response.json<{ profile: unknown; support: Record<string, boolean> }>();
+  assert.deepEqual(host.profile, { runtime: "c9s", namespaceMode: "per-lab" });
+  assert.equal(host.support.nodeStats, true);
+  assert.equal(host.support.sshAccess, true);
+  for (const flag of ["netem", "imageManagement", "edgesharkManagement", "wiresharkVnc", "healthMetrics", "tailscaleStatus"]) {
+    assert.equal(host.support[flag], false, flag);
+  }
+});
+
+test("/api/runtime/host offers capture streams and VNC of a c9s clab-api-server that lists them", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  context.fetchMock.on("GET", "http://api.example.test/health", () =>
+    jsonResponse({ status: "healthy", features: ["capture-stream", "wireshark-vnc"], runtime: "c9s" }),
+  );
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+  const response = await context.app.inject({
+    method: "GET",
+    url: `/api/runtime/host?endpointId=${encodeURIComponent(endpointId)}`,
+    headers: { cookie },
+  });
+  const host = response.json<{ support: Record<string, boolean> }>();
+  for (const flag of ["captureStream", "captureVnc", "wiresharkVnc"]) {
+    assert.equal(host.support[flag], true, flag);
+  }
+  assert.equal(host.support.edgeshark, false);
+});
+
+test("a capture download from a c9s clab-api-server streams for the session that asked for it", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  context.fetchMock.on("GET", "http://api.example.test/health", () =>
+    jsonResponse({ status: "healthy", features: ["capture-stream"], runtime: "c9s", namespaceMode: "per-lab" }),
+  );
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/demo", () =>
+    jsonResponse([{ name: "demo-n1", state: "running" }]),
+  );
+  const streamed: string[] = [];
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/labs/demo/capture/stream?target=n1%3Aeth1&duration=5s",
+    (call) => {
+      streamed.push(call.headers.get("authorization") ?? "");
+      return new Response(new Uint8Array([10, 20, 30]), { headers: { "Content-Type": "application/x-pcapng" } });
+    },
+  );
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+  const created = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/capture/downloads",
+    headers: { cookie },
+    payload: {
+      endpointId,
+      topologyRef: demoTopologyRef(endpointId),
+      targets: [{ containerName: "demo-n1", interfaceName: "eth1" }],
+      duration: "5s",
+    },
+  });
+  assert.equal(created.statusCode, 201, created.body);
+  const { url } = created.json<{ url: string }>();
+  // Every request gets its own ApiLabBackend; the browser session decides.
+  const other = await loginEndpoint(context, { url: "http://api.example.test" });
+  const stranger = await context.app.inject({ url, headers: { cookie: other.cookie } });
+  assert.equal(stranger.statusCode, 404, "another browser session cannot use it");
+
+  const again = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/capture/downloads",
+    headers: { cookie },
+    payload: {
+      endpointId,
+      topologyRef: demoTopologyRef(endpointId),
+      targets: [{ containerName: "demo-n1", interfaceName: "eth1" }],
+      duration: "5s",
+    },
+  });
+  const download = await context.app.inject({ url: again.json<{ url: string }>().url, headers: { cookie } });
+  assert.equal(download.statusCode, 200, download.body);
+  assert.equal(download.headers["content-type"], "application/x-pcapng");
+  assert.deepEqual(streamed, ["Bearer secret-token"]);
 });
 
 test("share routes forward sshx readers and refuse unsafe GoTTY credentials", async (t) => {

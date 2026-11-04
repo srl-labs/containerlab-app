@@ -315,6 +315,10 @@ export function createFakeClabUiHost(
     }
   }
 
+  const harnessLabOperations = createFakeLabOperations({
+    readYaml: () => files.get(currentYamlPath),
+    record: recordHarnessMessage
+  });
   const host: FakeClabUiHost = {
     async getSnapshot() {
       return core.getSnapshot();
@@ -512,10 +516,8 @@ export function createFakeClabUiHost(
           for (const nodeName of nodeNames) await fakeLifecycle.nodeAction(action, nodeName);
         })();
       },
-      labOperations: createFakeLabOperations({
-        readYaml: () => files.get(currentYamlPath),
-        record: recordHarnessMessage
-      }),
+      labOperations: harnessLabOperations,
+      labHost: () => harnessLabOperations.hostInfo(),
       captureInterface(nodeName, interfaceName, options = {}) {
         recordHarnessMessage({
           command: "clab-interface-capture",

@@ -117,6 +117,8 @@ interface MenuBuilderContext {
   editScriptButton?: (id: string) => void;
   /** Delete a script button */
   deleteScriptButton?: (id: string) => void;
+  /** c9s: copies the kubectl command that opens a shell in the node; absent elsewhere. */
+  copyKubectlExec?: (nodeId: string) => void;
 }
 
 interface EdgeMenuBuilderContext {
@@ -137,6 +139,10 @@ interface EdgeMenuBuilderContext {
   handleDeleteEdge: (id: string) => void;
   showLinkInfo?: (id: string) => void;
   showLinkImpairment?: (id: string) => void;
+  /** Whether the lab host has link impairments (netem); true when unset. */
+  canImpairLinks?: boolean;
+  /** Why links cannot be impaired on this lab host; the item shows greyed out with it. */
+  impairLinksUnavailable?: string;
 }
 
 type PaneMenuActions = Pick<
@@ -759,6 +765,18 @@ export function buildNodeContextMenu(ctx: MenuBuilderContext): ContextMenuItem[]
     // Edit mode lists the files next to Edit Node.
     const filesItem = isEditMode || isNetworkNode ? undefined : buildNodeFilesItem(ctx);
     if (filesItem) items.push(filesItem);
+    if (ctx.copyKubectlExec && isDeployed && !isNetworkNode) {
+      const copy = ctx.copyKubectlExec;
+      items.push({
+        id: "copy-kubectl-exec",
+        label: "Copy kubectl exec command",
+        icon: React.createElement(ContentCopyIcon, { fontSize: "small" }),
+        onClick: () => {
+          copy(targetId);
+          closeContextMenu();
+        }
+      });
+    }
     items.push({
       id: "info-node",
       label: "Info",
@@ -861,7 +879,10 @@ export function buildEdgeContextMenu(ctx: EdgeMenuBuilderContext): ContextMenuIt
     if (captureItems.length > 0) {
       items.push({ id: "divider-capture", label: "", divider: true });
     }
-    items.push(impairmentItem);
+    if (ctx.canImpairLinks !== false) items.push(impairmentItem);
+    else if (ctx.impairLinksUnavailable !== undefined) {
+      items.push({ ...impairmentItem, disabled: true, disabledReason: ctx.impairLinksUnavailable });
+    }
   }
 
   if (isEditMode) {

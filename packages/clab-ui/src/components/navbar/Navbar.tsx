@@ -32,6 +32,7 @@ import RemoveIcon from "@mui/icons-material/Remove";
 import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import StopRoundedIcon from "@mui/icons-material/StopRounded";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import UndoRoundedIcon from "@mui/icons-material/UndoRounded";
@@ -47,7 +48,8 @@ import {
   useIsLocked,
   useIsProcessing,
   useMode,
-  useTopoViewerActions
+  useTopoViewerActions,
+  useTopoViewerStore
 } from "../../stores/topoViewerStore";
 import { useDeploymentCommands } from "../../hooks/ui";
 import type { LayoutOption } from "../../hooks/ui";
@@ -58,14 +60,24 @@ import {
   type LabLifecycleOptions,
   type TopoViewerLifecycleAction
 } from "../../host";
+import { unsupportedReason } from "../../host/kubernetesLimits";
+import type { LabHostInfo } from "../../host/labHostSupport";
+import { hostLabOperationSupport, hostSupports, useLabHostStore } from "../../stores/labHostStore";
 import { useLabOperationsStore } from "../../stores/labOperationsStore";
 import { withShortcut } from "../../utils/shortcuts";
 import { LabOperationsDialogs } from "../panels/lab-operations/LabOperationsDialogs";
 
 import { labOperationMenuItems } from "./LabOperationMenuItems";
+import { LabHostChip } from "./LabHostChip";
+import { useLabHostLoader } from "./useLabHostLoader";
+import { useLifecycleDialogState } from "./useLifecycleDialogState";
 
 import { useLockShake } from "./useLockShake";
 
+const LazyManifestExportDialog = React.lazy(async () => {
+  const module = await import("../panels/kubernetes/ManifestExportDialog");
+  return { default: module.ManifestExportDialog };
+});
 const LazyLifecycleOptionsDialog = React.lazy(async () => {
   const module = await import("../panels/lifecycle-options/LifecycleOptionsDialog");
   return { default: module.LifecycleOptionsDialog };
@@ -239,6 +251,12 @@ export interface NavbarProps {
 
 // This is a UI composition component with lots of conditional rendering and menu wiring.
 /* eslint-disable complexity */
+/** On a Kubernetes lab host, Save VM Snapshots shows greyed out with why. */
+function snapshotLimit(info: LabHostInfo | undefined): { unavailable?: { snapshots: string } } {
+  const reason = unsupportedReason(info?.profile, "vmSnapshots");
+  return reason !== undefined ? { unavailable: { snapshots: reason } } : {};
+}
+
 export const Navbar: React.FC<NavbarProps> = ({
   hasActiveTopology = true,
   lifecycleActionsAvailable = true,
@@ -274,8 +292,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isDirty = useIsDirty();
   const { toggleLock, setProcessing } = useTopoViewerActions();
   const deploymentCommands = useDeploymentCommands();
-  const hasLabOperations = useClabUiHost().topoViewer.labOperations !== undefined;
-  const labOperationSupport = useLabOperationsStore((state) => state.support);
+  const { labOperations, openLabHostSettings } = useClabUiHost().topoViewer;
+  const hasLabOperations = labOperations !== undefined;
+  const [manifestRequest, setManifestRequest] = React.useState<Promise<{ yaml: string }> | null>(null);
+  const labName = useTopoViewerStore((state) => state.labName);
+  useLabHostLoader();
+  const labHostInfo = useLabHostStore((state) => state.info);
+  const operationSupport = useLabOperationsStore((state) => state.support);
+  const labOperationSupport = React.useMemo(
+    () => hostLabOperationSupport(operationSupport, labHostInfo),
+    [operationSupport, labHostInfo]
+  );
   const openLabOperation = useLabOperationsStore((state) => state.openDialog);
   const lockButtonRef = React.useRef<HTMLButtonElement>(null);
   useLockShake(lockButtonRef);
@@ -439,24 +466,25 @@ export const Navbar: React.FC<NavbarProps> = ({
     validateTopology?.();
   }, [validateTopology]);
 
-  const [lifecycleOptionsOpen, setLifecycleOptionsOpen] = React.useState(false);
+  const {
+    dialog: lifecycleDialog,
+    open: openLifecycleDialog,
+    close: handleCloseLifecycleOptions,
+    saveSettings: handleSaveLabSettings
+  } = useLifecycleDialogState(labOperations);
 
   const handleOpenLifecycleOptions = React.useCallback(() => {
     setDeployMenuPosition(null);
-    setLifecycleOptionsOpen(true);
-  }, []);
-
-  const handleCloseLifecycleOptions = React.useCallback(() => {
-    setLifecycleOptionsOpen(false);
-  }, []);
+    openLifecycleDialog();
+  }, [openLifecycleDialog]);
 
   const handleRunWithOptions = React.useCallback(
     (action: TopoViewerLifecycleAction, options?: LabLifecycleOptions) => {
-      setLifecycleOptionsOpen(false);
+      handleCloseLifecycleOptions();
       setProcessing(true, action.startsWith("destroy") ? "destroy" : "deploy", options?.nodeFilter);
       deploymentCommands.onRunWithOptions(action, options);
     },
-    [setProcessing, deploymentCommands]
+    [setProcessing, deploymentCommands, handleCloseLifecycleOptions]
   );
 
   // Primary action: apply the on-disk topology (deploys when absent,
@@ -582,6 +610,18 @@ export const Navbar: React.FC<NavbarProps> = ({
         disableGutters
         sx={{ minHeight: 0, p: 0.5, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px", "& > *": { flexShrink: 0 } }}
       >
+        {labHostInfo?.host ? (
+          <>
+            <LabHostChip
+              host={labHostInfo.host}
+              container={TOOLBAR_CONTAINER}
+              {...(openLabHostSettings
+                ? { onOpen: () => openLabHostSettings(labHostInfo.host?.id ?? "") }
+                : {})}
+            />
+            <Divider orientation="vertical" flexItem sx={TOOLBAR_DIVIDER_SX} />
+          </>
+        ) : null}
         {lifecycleActionsAvailable && (
           <>
             {/* Apply topology (deploys when absent, reconciles when running) */}
@@ -726,11 +766,27 @@ export const Navbar: React.FC<NavbarProps> = ({
                 labOperationMenuItems({
                   support: labOperationSupport,
                   disabled: isRunningActionDisabled,
+                  ...snapshotLimit(labHostInfo),
                   onOpen: (kind) => {
                     setDeployMenuPosition(null);
                     openLabOperation(kind);
                   }
                 })}
+              {labOperations && hostSupports(labHostInfo, "manifestExport") && labHostInfo !== undefined ? (
+                <MenuItem
+                  onClick={() => {
+                    setDeployMenuPosition(null);
+                    setManifestRequest(labOperations.exportManifests());
+                  }}
+                  disabled={!isTopologyActive}
+                  data-testid="navbar-deploy-item-export-manifests"
+                >
+                  <ListItemIcon>
+                    <DescriptionOutlinedIcon />
+                  </ListItemIcon>
+                  <ListItemText>Export Kubernetes Manifests…</ListItemText>
+                </MenuItem>
+              ) : null}
               <Divider />
               {validateTopology ? (
                 <MenuItem
@@ -757,18 +813,36 @@ export const Navbar: React.FC<NavbarProps> = ({
               {extraDeployMenuItems ? <Divider /> : null}
               {extraDeployMenuItems}
             </Menu>
-            {lifecycleOptionsOpen && (
+            {lifecycleDialog && (
               <React.Suspense fallback={null}>
                 <LazyLifecycleOptionsDialog
                   open
                   deploymentState={deploymentState}
                   canRestoreSnapshots={labOperationSupport.deployRestore}
+                  canSetTimeout={labHostInfo?.support.lifecycleTimeout === true}
+                  {...(labHostInfo ? { labHostProfile: labHostInfo.profile } : {})}
+                  {...(lifecycleDialog.settings ? { labSettings: lifecycleDialog.settings } : {})}
+                  {...(labOperations ? { onSaveSettings: handleSaveLabSettings } : {})}
+                  runtime={labHostInfo?.profile.runtime}
+                  {...(labHostInfo?.profile.runtime === "c9s"
+                    ? { c9sProfile: labHostInfo.profile, c9sReadOnly: !labHostInfo.support.c9sDeployOptions }
+                    : {})}
                   onClose={handleCloseLifecycleOptions}
                   onRun={handleRunWithOptions}
                 />
               </React.Suspense>
             )}
             {hasLabOperations && <LabOperationsDialogs />}
+            {manifestRequest && (
+              <React.Suspense fallback={null}>
+                <LazyManifestExportDialog
+                  open
+                  labName={labName}
+                  request={manifestRequest}
+                  onClose={() => setManifestRequest(null)}
+                />
+              </React.Suspense>
+            )}
             {applyPlanRequest && (
               <React.Suspense fallback={null}>
                 <LazyApplyPlanDialog

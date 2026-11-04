@@ -33,6 +33,7 @@ nav = [
     { "Node templates" = "guides/templates.md" },
     { "Layout and style" = "guides/appearance.md" },
     { "Run a lab" = "guides/labs.md" },
+    { "Labs on Kubernetes" = "guides/kubernetes.md" },
     { "Troubleshoot" = "guides/troubleshooting.md" },
     { "Shared labs" = "guides/shared-labs.md" },
     { "Export" = "guides/export.md" },

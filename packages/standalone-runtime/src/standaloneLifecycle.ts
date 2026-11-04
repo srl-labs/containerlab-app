@@ -16,6 +16,7 @@ import {
 } from "@containerlab/clab-ui/session";
 
 import { refreshTopologyDirtyState } from "./standaloneDirtyState";
+import { lifecycleOptionsWithLabSettings } from "./standaloneLabSettings";
 import { standaloneServerUrl } from "./standaloneServerOrigin";
 import type {
   DeploymentState,
@@ -409,7 +410,18 @@ function withLifecycleOptions(
   rawOptions: unknown
 ): LifecycleCommandConfig {
   const kind = LIFECYCLE_ACTION_OPTION_KIND[command];
-  const lifecycleOptions = kind ? normalizeLabLifecycleOptions(kind, rawOptions) : undefined;
+  // The app server narrows the options to the lab host's runtime; c9s ones too.
+  const lifecycleOptions = kind ? normalizeLabLifecycleOptions(kind, rawOptions, "any") : undefined;
+  return lifecycleOptions ? { ...config, lifecycleOptions } : config;
+}
+
+/** Deploy, redeploy, destroy and apply use the lab's settings when they run without options. */
+function withLabSettings(config: LifecycleCommandConfig, topologyRef: TopologyRef): LifecycleCommandConfig {
+  const action = config.commandType;
+  if (action !== "deploy" && action !== "redeploy" && action !== "destroy" && action !== "apply") {
+    return config;
+  }
+  const lifecycleOptions = lifecycleOptionsWithLabSettings(action, config.lifecycleOptions, { topologyRef });
   return lifecycleOptions ? { ...config, lifecycleOptions } : config;
 }
 
@@ -688,6 +700,7 @@ export function createStandaloneLifecycleManager(
       isCancelled(): boolean;
     }
   ): Promise<void> {
+    config = withLabSettings(config, topologyRef);
     const label = topologyRef.labName || topologyRef.yamlPath;
     const request = createActiveLifecycleRequest(config, topologyRef, execution, sessionId);
     recordingTopologyId = topologyRef.topologyId;

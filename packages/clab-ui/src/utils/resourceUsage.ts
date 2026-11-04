@@ -32,3 +32,17 @@ export const CPU_LOAD_COLORS: Readonly<Record<CpuLoadLevel, string>> = {
   medium: "#f59e0b",
   high: "#ef4444"
 };
+
+const BIT_RATE_UNITS = ["bps", "kbps", "Mbps", "Gbps", "Tbps"];
+
+/** A link's traffic in bits per second, in steps of 1000. */
+export function formatBitRate(bps: number | null | undefined): string {
+  if (bps === null || bps === undefined || !Number.isFinite(bps)) return "–";
+  let value = Math.max(0, bps);
+  let unit = 0;
+  while (value >= 1000 && unit < BIT_RATE_UNITS.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  return `${value >= 100 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${BIT_RATE_UNITS[unit]}`;
+}

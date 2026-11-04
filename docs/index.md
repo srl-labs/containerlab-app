@@ -8,21 +8,21 @@ hide:
 ---
 
 <div class="home-hero" markdown>
-# The GUI<br> for containerlab.
+# The GUI for <span class="hero-cli">containerlab</span>
 
-Draw a network, deploy it, and look inside it. In VS Code, on your desktop, or in your browser.
+<div class="hero-side" markdown>
+<p class="hero-lede"><strong>Draw a network, deploy it, and look inside it.</strong> In VS Code, on your desktop, or in your browser.</p>
 
 <div class="hero-actions" markdown>
 [Read the docs :lucide-arrow-right:](getting-started/index.md){ .hero-button .hero-button-primary }
 [Try the sandbox :lucide-arrow-up-right:](https://srl-labs.github.io/containerlab-app/){ .hero-button .hero-button-secondary }
 </div>
+</div>
 
 </div>
 
-```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="Leaf–spine fabric" view="split" height="420" loading="eager"
+```clab file="examples/fabric.clab.yml" annotations="diagrams/home-fabric.annotations.json" title="Leaf–spine fabric" view="split" height="420" loading="eager"
 ```
-
-<div class="demo-caption">This is the real editor's renderer. Select a node to find it in the YAML.</div>
 
 <div class="home-section-heading" markdown>
 ## From drawing to a running network

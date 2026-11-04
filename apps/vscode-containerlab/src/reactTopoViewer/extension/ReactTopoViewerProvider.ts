@@ -177,6 +177,8 @@ export class ReactTopoViewer {
         ? createRuntimeContainerDataProvider(this.runtimeContainers)
         : undefined
     });
+    // The cached snapshot may carry the runtime data from before this resync.
+    this.topologyHost.invalidateSnapshot();
     const snapshot = await this.topologyHost.getSnapshot();
     this.lastTopologyEdges = snapshot.edges;
     panel.webview.postMessage(buildTopologySnapshotMessage(snapshot, "resync"));
@@ -197,16 +199,26 @@ export class ReactTopoViewer {
       panel.webview.postMessage(buildTopologySnapshotMessage(snapshot, "external-change"));
     };
 
+    const loadExternalChange = async (): Promise<unknown> => {
+      const host = this.topologyHost;
+      if (!host) return null;
+      const { revision } = await host.getSnapshot();
+      const snapshot = await host.onExternalChange();
+      // Files that did not change, e.g. this panel's own save reported late,
+      // need no redraw: it would interrupt what the user is doing.
+      return snapshot.revision === revision ? null : snapshot;
+    };
+
     this.watcherManager.setupFileWatcher(
       this.lastYamlFilePath,
       updateController,
-      () => this.topologyHost?.onExternalChange() ?? Promise.resolve(null),
+      loadExternalChange,
       postSnapshot
     );
     this.watcherManager.setupSaveListener(
       this.lastYamlFilePath,
       updateController,
-      () => this.topologyHost?.onExternalChange() ?? Promise.resolve(null),
+      loadExternalChange,
       postSnapshot
     );
     this.watcherManager.setupDockerImagesSubscription(
@@ -379,6 +391,12 @@ export class ReactTopoViewer {
           }
         }
       }
+    });
+
+    // Read and parse the topology while the webview loads its bundle; the
+    // webview's snapshot request then gets the cached result.
+    this.topologyHost.getSnapshot().catch((err: unknown) => {
+      log.warn(`[ReactTopoViewer] Prefetching the topology failed: ${formatErrorMessage(err)}`);
     });
 
     this.initializeWatchers(panel);

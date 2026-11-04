@@ -26,6 +26,17 @@ interface ConnectionWatch {
   controller: AbortController;
 }
 
+let registered: RemoteLabFileSystem | undefined;
+
+/**
+ * The registered provider. VS Code's file service deletes the target of a
+ * rename that overwrites, and stats before every write; called directly, a
+ * rename replaces the file on the lab host in one step.
+ */
+export function registeredRemoteLabFileSystem(): RemoteLabFileSystem | undefined {
+  return registered;
+}
+
 /**
  * Files of a clab-api-server workspace as `clab-api://<connection>/<path>`,
  * so remote topologies open in the normal editors and the topology viewer.
@@ -38,13 +49,15 @@ export class RemoteLabFileSystem implements vscode.FileSystemProvider {
   constructor(private readonly connections: ConnectionManager) {}
 
   static register(connections: ConnectionManager): vscode.Disposable {
-    return vscode.workspace.registerFileSystemProvider(
-      REMOTE_SCHEME,
-      new RemoteLabFileSystem(connections),
-      {
-        isCaseSensitive: true
-      }
-    );
+    const provider = new RemoteLabFileSystem(connections);
+    registered = provider;
+    const registration = vscode.workspace.registerFileSystemProvider(REMOTE_SCHEME, provider, {
+      isCaseSensitive: true
+    });
+    return new vscode.Disposable(() => {
+      registration.dispose();
+      if (registered === provider) registered = undefined;
+    });
   }
 
   private async backend(uri: vscode.Uri): Promise<LabBackend> {

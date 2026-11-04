@@ -24,7 +24,8 @@ export {
   PREFIX_MACVLAN,
   PREFIX_VXLAN,
   PREFIX_VXLAN_STITCH,
-  PREFIX_DUMMY
+  PREFIX_DUMMY,
+  isSpecialEndpointId
 } from "./LinkTypes";
 
 // Annotation migrations

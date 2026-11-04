@@ -56,6 +56,12 @@ test.describe("Standalone Settings Dialog", () => {
     await expect(dialog.getByTestId("standalone-settings-nav-general")).toBeVisible();
     await expect(dialog.getByTestId("standalone-settings-nav-terminal")).toBeVisible();
     await expect(dialog.getByTestId("standalone-settings-nav-about")).toBeVisible();
+    // Each lab host has its page under Lab hosts, then Add lab host; capture settings are on the host pages.
+    await expect(dialog.getByTestId("standalone-settings-nav-host:test-endpoint")).toContainText("Test Endpoint");
+    await expect(dialog.getByTestId("standalone-settings-nav-host:test-endpoint")).toContainText("API Server");
+    await expect(dialog.getByTestId("standalone-settings-nav-add")).toBeVisible();
+    await expect(dialog.getByTestId("standalone-settings-nav-endpoints")).toHaveCount(0);
+    await expect(dialog.getByTestId("standalone-settings-nav-capture")).toHaveCount(0);
 
     await dialog.getByTestId("standalone-settings-nav-terminal").click();
     await expect(dialog.getByRole("heading", { name: "Terminal", exact: true })).toBeVisible();
@@ -105,7 +111,7 @@ test.describe("Standalone Settings Dialog", () => {
     await expect(page.getByTestId("standalone-settings-button")).toBeVisible({ timeout: 30_000 });
 
     const dialog = await openSettings(page);
-    await dialog.getByTestId("standalone-settings-nav-endpoints").click();
+    await dialog.getByTestId("standalone-settings-nav-host:test-endpoint").click();
     await expect(dialog.getByText("CPU")).toBeVisible();
     await expect(dialog.getByText("Memory")).toBeVisible();
     await expect(dialog.getByText("Disk")).toBeVisible();
@@ -115,6 +121,10 @@ test.describe("Standalone Settings Dialog", () => {
     await expect(dialog.getByText("68%", { exact: true })).toBeVisible();
     await expect(dialog.getByText("4.0 GiB / 8.0 GiB", { exact: true })).toBeVisible();
     await expect(dialog.getByText("100 GiB / 200 GiB on /", { exact: true })).toBeVisible();
+    // A connected Docker lab host's page has its capture method and Edgeshark.
+    await expect(dialog.getByRole("combobox", { name: "Default capture method" })).toBeVisible();
+    await expect(dialog.getByTestId("standalone-settings-capture-status").getByRole("textbox")).toHaveValue("Running (test)");
+    await expect(dialog.getByTestId("standalone-settings-capture-uninstall")).toBeVisible();
   });
 
   test("the rail exposes topology creation and endpoint management", async ({ page }) => {
@@ -130,12 +140,18 @@ test.describe("Standalone Settings Dialog", () => {
     await page.getByRole("button", { name: "Close explorer", exact: true }).click();
 
     const dialog = await openSettings(page);
-    await dialog.getByTestId("standalone-settings-nav-endpoints").click();
-    await expect(dialog.getByRole("heading", { name: "Lab hosts", exact: true })).toBeVisible();
+    await dialog.getByTestId("standalone-settings-nav-host:test-endpoint").click();
+    await expect(dialog.getByRole("heading", { name: "Test Endpoint", exact: true, level: 2 })).toBeVisible();
+    await expect(dialog.getByTestId("lab-host-settings-page")).toHaveAttribute("data-kind", "server");
     await expect(dialog.getByRole("button", { name: "Edit Test Endpoint", exact: true })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Sign in to Test Endpoint again", exact: true })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Remove Test Endpoint", exact: true })).toBeVisible();
-    await expect(dialog.getByRole("heading", { name: "Add a lab host", exact: true })).toBeVisible();
+    // Each host's capture method is on its page.
+    await expect(dialog.getByRole("combobox", { name: "Default capture method" })).toBeVisible();
+    await dialog.getByTestId("standalone-settings-nav-add").click();
+    await expect(dialog.getByRole("heading", { name: "Add lab host", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("radiogroup", { name: "Where should labs run?" })).toBeVisible();
+    await expect(dialog.getByLabel("Lab host URL", { exact: true })).toBeVisible();
   });
 
   test("opens documentation from the Help & Feedback rail button", async ({ page }) => {
@@ -182,7 +198,7 @@ test.describe("Standalone Settings Dialog", () => {
 
   test("exports and imports endpoint profiles from settings", async ({ page }) => {
     const dialog = await openSettings(page);
-    await dialog.getByTestId("standalone-settings-nav-endpoints").click();
+    await dialog.getByTestId("standalone-settings-nav-add").click();
 
     const downloadPromise = page.waitForEvent("download");
     await dialog.getByTestId("standalone-endpoints-export").click();
@@ -235,7 +251,8 @@ test.describe("Standalone Settings Dialog", () => {
     });
 
     await expect(dialog.getByText("Imported 1 lab host profile", { exact: false })).toBeVisible();
-    await expect(dialog.getByText("Imported Endpoint")).toBeVisible();
+    // The imported lab host gets its page in the menu.
+    await expect(dialog.getByRole("navigation", { name: "Settings categories" })).toContainText("Imported Endpoint");
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem("clab-standalone-endpoints")))
       .toContain("Imported Endpoint");

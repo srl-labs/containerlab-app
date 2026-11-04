@@ -53,7 +53,7 @@ for (const phase of ["temporary write", "backup", "replacement"] as const) {
   test(`a failed second ${phase} restores both original files`, async () => {
     const { fs, files, originals } = fixture((operation, source, target) => {
       if (phase === "temporary write") return operation === "write" && source.endsWith("-lab.json");
-      if (phase === "backup") return operation === "rename" && source === "/lab.json";
+      if (phase === "backup") return operation === "write" && source.includes(".bak-");
       return operation === "rename" && source.includes(".tmp-") && target === "/lab.json";
     });
     fs.beginTransaction();
@@ -107,10 +107,9 @@ for (const phase of ["backup", "replacement"] as const) {
   test(`a lost acknowledgement after ${phase} still restores the originals`, async () => {
     const { fs, files, originals } = fixture(
       (operation, source, target) =>
-        operation === "rename" &&
-        (phase === "backup"
-          ? source === "/lab.json"
-          : source.includes(".tmp-") && target === "/lab.json"),
+        phase === "backup"
+          ? operation === "write" && source.includes(".bak-") && source.endsWith("-lab.json")
+          : operation === "rename" && source.includes(".tmp-") && target === "/lab.json",
       true
     );
     fs.beginTransaction();
@@ -129,5 +128,59 @@ test("a failed delete rolls back preceding writes", async () => {
   await fs.writeFile("/lab.yml", "new yaml");
   await fs.unlink("/lab.json");
   await assert.rejects(fs.commitTransaction());
+  assert.deepEqual(files, originals);
+});
+
+test("written files exist with complete content at every step of a commit", async () => {
+  const { fs, files } = fixture(() => false);
+  const seen: string[] = [];
+  const check = () => {
+    for (const file of ["/lab.yml", "/lab.json"]) {
+      const content = files.get(file);
+      assert.ok(content !== undefined, `${file} is missing during the commit`);
+      seen.push(content);
+    }
+  };
+  const base = (fs as unknown as { base: FileSystemAdapter }).base;
+  for (const method of ["writeFile", "rename", "unlink", "exists", "readFile"] as const) {
+    const original = base[method].bind(base) as (...args: unknown[]) => Promise<unknown>;
+    (base as unknown as Record<string, unknown>)[method] = async (...args: unknown[]) => {
+      check();
+      const result = await original(...args);
+      check();
+      return result;
+    };
+  }
+  fs.beginTransaction();
+  await fs.writeFile("/lab.yml", "new yaml");
+  await fs.writeFile("/lab.json", "new annotations");
+  await fs.commitTransaction();
+  assert.equal(files.get("/lab.yml"), "new yaml");
+  assert.equal(files.get("/lab.json"), "new annotations");
+  assert.deepEqual([...files.keys()].sort(), ["/lab.json", "/lab.yml"]);
+  assert.ok(seen.every((content) => content.startsWith("old ") || content.startsWith("new ")));
+});
+
+test("a lone write replaces its file without a backup", async () => {
+  const operations: string[] = [];
+  const { fs, files } = fixture((operation, source, target) => {
+    operations.push(`${operation} ${source}${target !== undefined ? ` ${target}` : ""}`);
+    return false;
+  });
+  fs.beginTransaction();
+  await fs.writeFile("/lab.json", "new annotations");
+  await fs.commitTransaction();
+  assert.equal(files.get("/lab.json"), "new annotations");
+  assert.equal(operations.filter((operation) => operation.includes(".bak-")).length, 0);
+});
+
+test("a lone write whose replacement fails keeps the old file", async () => {
+  const { fs, files, originals } = fixture(
+    (operation, source, target) =>
+      operation === "rename" && source.includes(".tmp-") && target === "/lab.json"
+  );
+  fs.beginTransaction();
+  await fs.writeFile("/lab.json", "new annotations");
+  await assert.rejects(fs.commitTransaction(), /failed rename/);
   assert.deepEqual(files, originals);
 });

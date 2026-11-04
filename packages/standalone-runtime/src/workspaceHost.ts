@@ -5,6 +5,7 @@ import { getStandaloneBackend } from "./backend";
 import { publicAssetUrl } from "./publicAssetUrl";
 import { buildDetachedTerminalUrl } from "./runtimeDetachedTerminal";
 import { openLabFileInWorkspace, type LabFileWorkspace } from "./standaloneLabFiles";
+import { useAuthStore } from "./stores/authStore";
 import { useLabStore } from "./stores/labStore";
 import { useWorkspaceViewStore } from "./stores/workspaceViewStore";
 import { resolveFileTab, runtimeUiActions, useLabTabsStore } from "@containerlab/clab-ui/workspace/state";
@@ -100,7 +101,9 @@ const labFileWorkspace: LabFileWorkspace = {
 
 /** The adapter contains effects; clab-ui owns the views and their interaction state. */
 export const workspaceHost: WorkspaceHost = {
-  get capabilities() { return getStandaloneBackend().capabilities; },
+  get capabilities() {
+    return { ...getStandaloneBackend().capabilities, localWireshark: useAuthStore.getState().localWireshark };
+  },
   assetUrl: publicAssetUrl,
   get api() {
     return getStandaloneBackend().capabilities.lifecycle ? runtimeApi : idleRuntimeApi;

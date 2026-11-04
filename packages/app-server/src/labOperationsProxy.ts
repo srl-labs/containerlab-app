@@ -240,6 +240,28 @@ export function registerLabOperationsProxy(
     withLab(request, reply, (backend, labName) => backend.inspectLabDetails({ labName }))
   );
 
+  // Where the nodes of a running lab are: on c9s their namespace, pod and exposed ports.
+  app.post<{ Body: RuntimeTargetBody }>("/api/runtime/lab-operations/node-locations", (request, reply) =>
+    withLab(request, reply, (backend, labName) => backend.inspectLab(labName))
+  );
+
+  // The lab-link interfaces a lab host with capture streams (c9s) captures on.
+  app.post<{ Body: RuntimeTargetBody }>("/api/runtime/lab-operations/capture-interfaces", (request, reply) =>
+    withLab(request, reply, (backend, labName) => backend.captureInterfaces(labName))
+  );
+
+  app.post<{ Body: RuntimeTargetBody }>("/api/runtime/lab-operations/manifests", (request, reply) =>
+    withLab(request, reply, (backend, _labName, _body, target) =>
+      backend.exportManifests(target)
+    )
+  );
+
+  app.post<{ Body: RuntimeTargetBody }>("/api/runtime/lab-operations/validate", (request, reply) =>
+    withLab(request, reply, (backend, _labName, _body, target) =>
+      backend.validate(target)
+    )
+  );
+
   app.post<{ Params: { action: string }; Body: NodesBody }>(
     "/api/runtime/lab-operations/nodes/:action",
     (request, reply) => {

@@ -76,7 +76,7 @@ const backend = {
   }
 };
 
-const LOCAL = { id: "local", label: "Local", kind: "local" as const };
+const LOCAL = { id: "local", label: "This computer", kind: "local" as const };
 
 export function getLocalBackend() {
   return backend;
@@ -129,4 +129,8 @@ export async function resolveLab(labPath: string, labName?: string, connectionId
 
 export function labNameForPath(labPath: string): string {
   return path.basename(labPath).replace(/\.clab\.ya?ml$/i, "");
+}
+
+export function viewLabPath(_connection: unknown, labPath: string): string {
+  return labPath;
 }

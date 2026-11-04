@@ -4,7 +4,7 @@
  * Uses ReactFlow instance for viewport operations.
  * The event handling should be integrated via ReactFlow's onPaneClick callback.
  */
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 import type { ReactFlowInstance } from "@xyflow/react";
 
 import { log } from "../../utils/logger";
@@ -53,6 +53,37 @@ interface NodeExtraData {
   mgmtIpv4Address: string;
   fromCustomTemplate?: boolean;
   [key: string]: unknown;
+}
+
+/** How long a handed-out name stays taken while its node is not in the graph yet. */
+const NAME_RESERVATION_MS = 5000;
+
+/**
+ * Names handed out whose nodes are not in the graph yet, so two quick
+ * creations do not get the same name. Once the node is in the graph, the
+ * graph keeps its name taken; deleting the node frees the name.
+ */
+export function createNameReservations(now: () => number = Date.now) {
+  const reserved = new Map<string, number>();
+  return {
+    /** The graph's names plus the names handed out for nodes still on their way. */
+    usedIds(graphIds: ReadonlySet<string>): Set<string> {
+      const used = new Set<string>(graphIds);
+      const time = now();
+      for (const [id, reservedAt] of reserved) {
+        if (graphIds.has(id) || time - reservedAt > NAME_RESERVATION_MS) {
+          reserved.delete(id);
+        } else {
+          used.add(id);
+        }
+      }
+      return used;
+    },
+    /** Keeps a new node's name taken until the node is in the graph. */
+    created(id: string, graphIds: ReadonlySet<string>): void {
+      if (!graphIds.has(id)) reserved.set(id, now());
+    }
+  };
 }
 
 /**
@@ -254,24 +285,9 @@ export function useNodeCreation(
   const { onNodeCreated } = options;
   const optionsRef = useRef(options);
   optionsRef.current = options;
-  const reservedIdsRef = useRef<Set<string>>(new Set());
+  const reservationsRef = useRef(createNameReservations());
 
-  useEffect(() => {
-    if (reservedIdsRef.current.size === 0) return;
-    const usedIds = options.getUsedNodeIds();
-    for (const id of reservedIdsRef.current) {
-      if (!usedIds.has(id)) {
-        reservedIdsRef.current.delete(id);
-      }
-    }
-  }, [options.getUsedNodeIds]);
-
-  const getUsedIds = () => {
-    const base = optionsRef.current.getUsedNodeIds();
-    const combined = new Set<string>(base);
-    for (const id of reservedIdsRef.current) combined.add(id);
-    return combined;
-  };
+  const getUsedIds = () => reservationsRef.current.usedIds(optionsRef.current.getUsedNodeIds());
 
   /**
    * Create a node at a specific position
@@ -300,8 +316,8 @@ export function useNodeCreation(
 
       log.info(`[NodeCreation] Created node: ${nodeId} at (${position.x}, ${position.y})`);
 
-      reservedIdsRef.current.add(nodeId);
       onNodeCreated(nodeId, topoNode, position);
+      reservationsRef.current.created(nodeId, optionsRef.current.getUsedNodeIds());
     },
     [onNodeCreated]
   );

@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import type { NodeLifecycleAction } from "@srl-labs/containerlab-lab-backend";
 
 import type { ClabContainerTreeNode } from "../treeView/common";
-import { labNameForPath, resolveLab } from "../backend/labBackends";
+import { connectionOf, labNameForPath, resolveLab } from "../backend/labBackends";
 import { outputChannel } from "../globals";
 
 import { runWithProgress } from "./command";
@@ -10,6 +10,7 @@ import {
   createTopoViewerLifecycleHandlers,
   notifyCurrentTopoViewerOfCommandFailure
 } from "./graph";
+import { ensureHostSupports } from "../backend/labHostSupport";
 
 type TopologyNodeLifecycleAction = "start" | "stop" | "restart";
 
@@ -26,6 +27,7 @@ async function runNodeAction(
     vscode.window.showErrorMessage("No containerId found.");
     return;
   }
+  if (!(await ensureHostSupports(connectionOf(node), "nodePause", "Pausing nodes"))) return;
 
   try {
     const { backend } = await resolveLab(node.labPath.absolute, node.labName, node.connectionId);

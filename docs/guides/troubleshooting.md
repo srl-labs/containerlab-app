@@ -42,7 +42,7 @@ Right-click a node or a link and choose **Capture**, then tick the interfaces: f
 ![Packet capture](../images/app/capture-dark.webp#only-dark){ .shot }
 ![Packet capture](../images/app/capture-light.webp#only-light){ .shot }
 
-Capture runs [Edgeshark](https://edgeshark.siemens.io/) and a Wireshark container on the lab host, so Docker there must be able to pull and run them. In VS Code you can switch the default to Edgeshark with your local Wireshark; see the [capture settings](../reference/vscode-settings.md#packet-capture).
+Capture runs [Edgeshark](https://edgeshark.siemens.io/) and a Wireshark container on the lab host, so Docker there must be able to pull and run them. To open captures in your own Wireshark or through Edgeshark instead, change the [default capture method](labs.md#default-capture-method).
 
 ## Impair a link
 

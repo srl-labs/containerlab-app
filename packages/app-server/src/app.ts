@@ -11,6 +11,7 @@ import type { ServerOptions as HttpsServerOptions } from "node:https";
 import { ApiLabBackend } from "@srl-labs/containerlab-lab-backend/api";
 import type {
   AppConfigResponse,
+  ClusterHostSettings,
   LocalEndpointStatus
 } from "@srl-labs/containerlab-app-contract";
 import type { LabBackend } from "@srl-labs/containerlab-lab-backend";
@@ -21,6 +22,7 @@ import {
   DEFAULT_ENDPOINT_SESSION_DURATION,
   buildEndpointId,
   createEndpointSessionStore,
+  LOCAL_ENDPOINT_URL,
 } from "./endpointSessionStore.ts";
 import {
   getEndpointIdFromRequest,
@@ -28,15 +30,25 @@ import {
   getSessionIdFromRequest,
   setSessionCookie,
 } from "./middleware.ts";
+import type { LocalWiresharkOptions } from "./captureStreamProxy.ts";
 import { registerStandaloneProxies } from "./registerProxies.ts";
 import { createStandaloneTopologySessionManager } from "./topologySessionManager.ts";
 import { normalizeBasePath } from "./basePath.ts";
 import type { ResolvedEndpoint } from "./endpointResolver.ts";
 import { apiUiStore, type EndpointUiStore } from "./uiStore.ts";
+import { registerLabHostRoutes, type ClusterHostsOptions } from "./labHostRoutes.ts";
 
-/** A "This computer" endpoint that runs labs with containerlab on this machine. */
+/**
+ * A local lab host: containerlab on this machine with Docker or Podman, or
+ * with a Kubernetes cluster (c9s) it reaches through the user's kubeconfig.
+ */
 export interface LocalEndpointOptions {
-  /** The backend every local endpoint uses; it acts as the app's own OS user. */
+  /**
+   * The `local://…` address that tells local lab hosts apart; this machine's
+   * (`local://this-computer`) when unset.
+   */
+  url?: string;
+  /** The backend of the lab host; it acts as the app's own OS user. */
   backend: LabBackend;
   /** Custom node templates and icons of that user. */
   ui: EndpointUiStore;
@@ -50,6 +62,11 @@ export interface LocalEndpointOptions {
    * the way VS Code always offers Local. Users can still remove it.
    */
   autoConnect?: boolean;
+  /**
+   * A Kubernetes cluster the user added in the app (`clusterHosts`): its
+   * settings for the edit form. It is listed even while its checks fail.
+   */
+  cluster?: ClusterHostSettings;
 }
 
 export interface CreateStandaloneAppOptions {
@@ -62,6 +79,24 @@ export interface CreateStandaloneAppOptions {
    * should: every browser session would act as the server's OS user.
    */
   localEndpoint?: LocalEndpointOptions;
+  /** Several local lab hosts, e.g. this machine and Kubernetes clusters; wins over `localEndpoint`. */
+  localEndpoints?: LocalEndpointOptions[];
+  /**
+   * The user adds, edits and removes Kubernetes clusters in the app. Only for
+   * a single-user app on the user's own machine (the desktop app): the routes
+   * read the kubeconfig files of the server's OS user.
+   */
+  clusterHosts?: ClusterHostsOptions;
+  /** Why clusters cannot be added in the app, shown in "Add lab host" (the web app). */
+  clustersUnavailable?: string;
+  /** Why the app offers no labs on its own machine, shown in "Add lab host". */
+  localUnavailable?: string;
+  /**
+   * Start Wireshark on this machine for captures of lab hosts with capture
+   * streams. Only for a single-user app on the user's own machine, such as
+   * the desktop app: Wireshark opens where the server runs.
+   */
+  localWireshark?: LocalWiresharkOptions;
   logger?: boolean;
   sessionPersistenceFile?: string;
   staticClientRoot?: string;
@@ -303,9 +338,12 @@ export async function createStandaloneApp(
     return endpointSessions.replaceSession(sessionId, []);
   };
 
-  const local = options.localEndpoint;
+  const locals = (options.localEndpoints ?? (options.localEndpoint ? [options.localEndpoint] : [])).map(
+    (local) => ({ ...local, url: local.url ?? LOCAL_ENDPOINT_URL })
+  );
   const backendsFor = (endpoint: EndpointEntry): Omit<ResolvedEndpoint, "endpoint"> | null => {
     if (endpoint.kind === "local") {
+      const local = locals.find((candidate) => candidate.url === endpoint.url);
       return local ? { backend: local.backend, ui: local.ui } : null;
     }
     const backend = new ApiLabBackend({ baseUrl: endpoint.url, token: endpoint.token });
@@ -348,40 +386,71 @@ export async function createStandaloneApp(
     async (scoped: FastifyInstance) => {
       registerAuthRoutes(scoped, {
         backendFor,
-        localEndpoint: local,
+        localEndpoints: locals,
         defaultApiUrl: defaultClabApiUrl,
         disposeEndpointSessions: topologySessions.disposeSessionsForEndpoint,
         ensureSession,
         endpointSessions,
         resolveSession,
       });
+      registerLabHostRoutes(scoped, {
+        locals,
+        ...(options.clusterHosts ? { clusterHosts: options.clusterHosts } : {})
+      });
       registerStandaloneProxies(
         scoped,
         resolveEndpoint,
         listEndpoints,
         topologySessions,
+        options.localWireshark ? { localWireshark: options.localWireshark } : {},
       );
 
       scoped.get<{ Querystring: { fresh?: string } }>("/api/config", async (request, reply) => {
         await connectLocalEndpoint(request, reply, {
           endpointSessions,
           ensureSession,
-          localEndpoint: local,
+          localEndpoints: locals,
           resolveSession,
         });
-        const endpoints = listEndpoints(request, reply).map((entry) => ({
-          id: entry.id,
-          kind: entry.kind,
-          url: entry.url,
-          label: entry.label,
-          username: entry.username,
-          sessionDuration: entry.sessionDuration,
-        }));
-        const payload: AppConfigResponse = { endpoints, defaultClabApiUrl };
-        if (local) {
-          payload.localEndpoint = await local.status({
-            fresh: request.query.fresh === "1",
-          });
+        const fresh = request.query.fresh === "1";
+        const statuses = await Promise.all(
+          locals.map(async (local) => ({ ...(await local.status({ fresh })), url: local.url })),
+        );
+        // A local host's runtime comes along, so a cluster never reads as this computer before its check.
+        const endpoints = listEndpoints(request, reply).map((entry) => {
+          const runtime =
+            entry.kind === "local" ? statuses.find((status) => status.url === entry.url)?.runtime : undefined;
+          return {
+            id: entry.id,
+            kind: entry.kind,
+            url: entry.url,
+            label: entry.label,
+            username: entry.username,
+            sessionDuration: entry.sessionDuration,
+            ...(runtime ? { runtime } : {}),
+          };
+        });
+        const payload: AppConfigResponse = {
+          endpoints,
+          defaultClabApiUrl,
+          ...(options.localWireshark ? { localWireshark: true } : {}),
+          ...(options.clusterHosts
+            ? {
+                clusterHosts: options.clusterHosts.defaultKubeconfig
+                  ? { defaultKubeconfig: options.clusterHosts.defaultKubeconfig }
+                  : {}
+              }
+            : {}),
+          ...(options.clustersUnavailable ? { clustersUnavailable: options.clustersUnavailable } : {}),
+        };
+        if (locals.length > 0) {
+          // The first host keeps its status as is, for apps that offer one.
+          payload.localEndpoint = await locals[0].status({ fresh });
+          payload.localEndpoints = statuses;
+        }
+        // "This computer" is a local host with Docker or Podman; clusters do not count.
+        if (options.localUnavailable && !(payload.localEndpoints ?? []).some((status) => status.runtime !== "c9s")) {
+          payload.localUnavailable = options.localUnavailable;
         }
         return reply.send(payload);
       });

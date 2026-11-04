@@ -1,5 +1,7 @@
 import {
   applyStandaloneAppearance,
+  dispatchEndpointUiAction,
+  labHostKind,
   persistStandaloneAppearance,
   persistTabOrientation,
   readPersistedTabOrientation,
@@ -9,9 +11,23 @@ import {
   type TabOrientation
 } from "@containerlab/clab-ui/workspace/state";
 import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/workspace";
+import { labHostIdentityOf } from "@containerlab/clab-ui/settings";
 import { hasDesktopTitleBar } from "./desktopChrome";
 import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
-import type { LocalEndpointOffer } from "@containerlab/clab-ui/workspace/types";
+import type {
+  ClusterHostsSupport,
+  LabHostSetupProps,
+  LocalEndpointOffer
+} from "@containerlab/clab-ui/workspace/types";
+import {
+  checkClusterSettings,
+  checkLocalLabHost,
+  deleteCluster,
+  kubeconfigContexts,
+  saveCluster
+} from "./standaloneLabHostSetup";
+import { loadLabHostInfo, useLabHostStore } from "./stores/labHostStore";
+import { useAuthStore } from "./stores/authStore";
 import { openWorkspaceFileInTab, workspaceHost } from "./workspaceHost";
 import { getStandaloneBackend, runtimeFetch } from "./backend";
 import { createNodeStatsFeed } from "./standaloneNodeStats";
@@ -101,7 +117,6 @@ import {
   pullRuntimeImage,
   isFileLabTab,
   getSessionHostnameOverride,
-  loadCapturePreferences,
   loadTerminalPreferences,
   persistTerminalPreferences,
   reconcileUiIcons,
@@ -137,9 +152,18 @@ import {
   type WiresharkCaptureRequest,
 } from "./wiresharkCaptureLauncher";
 import { openWiresharkCaptureWindow } from "./wiresharkCaptureWindow";
+import {
+  edgesharkCaptureRouteFor,
+  hostCapturesStreams,
+  openStreamCaptureDialog,
+  streamCaptureSelection,
+} from "./streamCapture";
 import { validateTopologyFlow } from "./standaloneLabTools";
 import type { CaptureTarget } from "./runtimeApi";
-import type { LabFileRequest } from "@containerlab/clab-ui/host";
+import {
+  imageManagementUnavailableMessage,
+  type LabFileRequest,
+} from "@containerlab/clab-ui/host";
 import {
   controlNodesLifecycle,
   createStandaloneLabOperations,
@@ -584,13 +608,43 @@ async function openTopologyInTab(
     resolveLabTabFallbackEndpointId(),
   );
   showDocument();
+  const previousTabId = useLabTabsStore.getState().activeTabId;
   const openResult = useLabTabsStore.getState().openOrFocusTab(resolvedTab);
-  await activateLabTabById(openResult.tab.id, {
-    deploymentState: options.deploymentState,
-  });
+  try {
+    await activateLabTabById(openResult.tab.id, {
+      deploymentState: options.deploymentState,
+    });
+  } catch (error: unknown) {
+    // The canvas still holds the previous lab; a new tab must not show it.
+    if (!openResult.alreadyOpen) {
+      await restoreTabAfterFailedOpen(openResult.tab.id, previousTabId);
+    }
+    throw error;
+  }
   if (!openResult.alreadyOpen) {
     requestViewportFitFromHost();
   }
+}
+
+async function restoreTabAfterFailedOpen(
+  tabId: string,
+  previousTabId: string | null,
+): Promise<void> {
+  const tabs = useLabTabsStore.getState();
+  tabs.closeTab(tabId);
+  const previous = tabs.tabs.find((tab) => tab.id === previousTabId);
+  const loaded = topologyManager.getCurrentTopologyRef()?.topologyId;
+  if (previous && !isFileLabTab(previous) && previous.topologyRef.topologyId === loaded) {
+    tabs.setActiveTab(previous.id);
+    return;
+  }
+  if (previous) {
+    await activateLabTabById(previous.id).catch(() => {});
+    return;
+  }
+  await queueTopologyTabActivation(async () => {
+    await topologyManager.clearActiveTopology();
+  });
 }
 
 async function confirmCloseLabTab(tabId: string): Promise<boolean> {
@@ -947,7 +1001,20 @@ function openCanvasCaptures(requests: WiresharkCaptureRequest[]): void {
     return;
   }
 
-  if (loadCapturePreferences(target.endpointId).preferredAction === "edgeshark") {
+  // A c9s lab host captures the picked link ends as one stream; its dialog asks where it goes.
+  if (hostCapturesStreams(target.endpointId)) {
+    void openStreamCaptureDialog({
+      target,
+      ...streamCaptureSelection(
+        target.topologyRef?.labName,
+        captures.flatMap((capture) => capture.targets),
+      ),
+      title: "Capture",
+    });
+    return;
+  }
+
+  if (edgesharkCaptureRouteFor(target.endpointId) === "edgeshark") {
     for (const capture of captures) {
       void openPacketflixCapture(target, capture.targets);
     }
@@ -1574,6 +1641,22 @@ function setupStandaloneUiHost(): void {
           ? tailscaleStatus
           : undefined,
         ...(getStandaloneBackend().capabilities.lifecycle ? { labOperations } : { labOperations: undefined }),
+        // The runtime of the topology's lab host decides what the view offers.
+        ...(getStandaloneBackend().capabilities.lifecycle
+          ? {
+              labHost: async () => {
+                const endpointId = topologyManager.getCurrentEndpointId();
+                if (!endpointId) return undefined;
+                const info = await loadLabHostInfo(endpointId);
+                // Which lab host it is, for the toolbar's chip.
+                const endpoint = useEndpointStore.getState().endpoints.get(endpointId);
+                return info && endpoint ? { ...info, host: labHostIdentityOf(endpoint) } : info;
+              },
+              openLabHostSettings: (hostId: string) => {
+                dispatchEndpointUiAction({ action: "settings", endpointId: hostId });
+              },
+            }
+          : {}),
       },
       topology: {
         ...apiHost.topology,
@@ -1623,6 +1706,7 @@ function StandaloneApp() {
     error,
     exportEndpoints,
     localEndpoint,
+    localEndpoints,
     hasConnectedEndpoint,
     hasEndpointSession,
     importEndpoints,
@@ -1630,10 +1714,12 @@ function StandaloneApp() {
     logout,
     reconnectEndpoint,
     refreshConfig,
+    refreshEndpoints,
     removeEndpoint,
     updateEndpoint,
     setEndpointSessionDuration,
   } = useAuth();
+  const labHostConfig = useAuthStore((state) => state.labHostSetup);
   const [appearance, setAppearance] = useState<StandaloneAppearance>(readStandaloneAppearance);
   const [theme, setTheme] = useState<"light" | "dark">(() => currentTheme);
   const [tabOrientation, setTabOrientation] = useState<TabOrientation>(
@@ -1801,19 +1887,27 @@ function StandaloneApp() {
     [addEndpoint, refreshConfig],
   );
 
+  // "This computer" is the app server's local host with Docker or Podman; a cluster is not this computer.
+  const thisComputer = useMemo(
+    () =>
+      localEndpoints.find((status) => labHostKind({ kind: "local", ...status }) === "this-computer") ??
+      (localEndpoint && labHostKind({ kind: "local", ...localEndpoint }) === "this-computer" ? localEndpoint : undefined),
+    [localEndpoint, localEndpoints],
+  );
   const localEndpointOffer = useMemo<LocalEndpointOffer | undefined>(
     () =>
-      localEndpoint
+      thisComputer
         ? {
-            available: localEndpoint.available,
-            problems: localEndpoint.problems,
-            ...(localEndpoint.containerlabVersion
-              ? { containerlabVersion: localEndpoint.containerlabVersion }
+            ...(thisComputer.url ? { url: thisComputer.url } : {}),
+            available: thisComputer.available,
+            problems: thisComputer.problems,
+            ...(thisComputer.containerlabVersion
+              ? { containerlabVersion: thisComputer.containerlabVersion }
               : {}),
-            label: localEndpoint.label,
-            ...(localEndpoint.setupUrl ? { setupUrl: localEndpoint.setupUrl } : {}),
+            label: thisComputer.label,
+            ...(thisComputer.setupUrl ? { setupUrl: thisComputer.setupUrl } : {}),
             onAdd: async () => {
-              await addLocalEndpoint();
+              await addLocalEndpoint(thisComputer.url);
               await refreshConfig().catch(() => {});
               scheduleExplorerSnapshot(0);
             },
@@ -1822,7 +1916,47 @@ function StandaloneApp() {
             }
           }
         : undefined,
-    [addLocalEndpoint, localEndpoint, refreshConfig],
+    [addLocalEndpoint, thisComputer, refreshConfig],
+  );
+
+  // Images live in a container runtime: a cluster lab host has none to manage.
+  const labHosts = useLabHostStore((state) => state.hosts);
+  const imageEndpoints = useMemo(
+    () => endpointList.filter((endpoint) => labHosts.get(endpoint.id)?.support.imageManagement !== false),
+    [endpointList, labHosts],
+  );
+  // Without a host that has images, say why instead of asking the server's default host.
+  const imagesUnavailable = useMemo(
+    () =>
+      imageEndpoints.length > 0 || endpointList.length === 0
+        ? undefined
+        : imageManagementUnavailableMessage(
+            endpointList.map((endpoint) => labHosts.get(endpoint.id)?.profile).find(Boolean),
+          ),
+    [imageEndpoints, endpointList, labHosts],
+  );
+
+  // Kubernetes clusters the app server runs labs on.
+  const extraLocalEndpointOffers = useMemo<LocalEndpointOffer[]>(
+    () =>
+      localEndpoints.filter((status) => status.url !== thisComputer?.url).map((status) => ({
+        ...(status.url ? { url: status.url } : {}),
+        available: status.available,
+        problems: status.problems,
+        ...(status.containerlabVersion ? { containerlabVersion: status.containerlabVersion } : {}),
+        label: status.label,
+        addLabel: `Use ${status.label}`,
+        ...(status.setupUrl ? { setupUrl: status.setupUrl } : {}),
+        onAdd: async () => {
+          await addLocalEndpoint(status.url);
+          await refreshConfig().catch(() => {});
+          scheduleExplorerSnapshot(0);
+        },
+        onCheckAgain: async () => {
+          await refreshConfig(true);
+        }
+      })),
+    [addLocalEndpoint, localEndpoints, refreshConfig, thisComputer],
   );
 
   const handleExportEndpoints = useCallback(() => {
@@ -1852,12 +1986,58 @@ function StandaloneApp() {
 
   const handleRemoveEndpoint = useCallback(
     async (endpointId: string) => {
+      const endpoint = endpointList.find((entry) => entry.id === endpointId);
+      // A cluster the user added in the app is forgotten there too.
+      if (endpoint?.kind === "local" && endpoint.editable === true) {
+        await deleteCluster(endpoint.url);
+      }
       await closeEndpointTabsAndActivateNext(endpointId);
       await removeEndpoint(endpointId);
+      await refreshConfig().catch(() => {});
       scheduleExplorerSnapshot(0);
     },
-    [removeEndpoint],
+    [endpointList, refreshConfig, removeEndpoint],
   );
+
+  // Kubernetes clusters the app server manages (the desktop app), checks, and why a kind is not offered.
+  const labHostSetup = useMemo<LabHostSetupProps>(() => {
+    const clusterHosts: ClusterHostsSupport | undefined = labHostConfig.clusterHosts
+      ? {
+          ...(labHostConfig.clusterHosts.defaultKubeconfig
+            ? { defaultKubeconfig: labHostConfig.clusterHosts.defaultKubeconfig }
+            : {}),
+          listContexts: kubeconfigContexts,
+          ...(window.containerlabDesktop?.chooseKubeconfigFile
+            ? { chooseKubeconfig: () => window.containerlabDesktop?.chooseKubeconfigFile?.() ?? Promise.resolve(undefined) }
+            : {}),
+          check: checkClusterSettings,
+          save: async (settings, endpointId) => {
+            const previous = endpointId ? endpointList.find((entry) => entry.id === endpointId) : undefined;
+            const url = await saveCluster(settings, previous?.url);
+            if (previous && previous.url !== url) {
+              await closeEndpointTabsAndActivateNext(previous.id);
+              await removeEndpoint(previous.id);
+            }
+            await addLocalEndpoint(url);
+            await refreshConfig().catch(() => {});
+            await refreshEndpoints().catch(() => {});
+            scheduleExplorerSnapshot(0);
+          },
+        }
+      : undefined;
+    return {
+      onCheckEndpoint: async (endpointId) => {
+        const endpoint = endpointList.find((entry) => entry.id === endpointId);
+        if (!endpoint) return [];
+        const checks = await checkLocalLabHost(endpoint.url);
+        await refreshEndpoints().catch(() => {});
+        return checks;
+      },
+      ...(clusterHosts ? { clusterHosts } : {}),
+      ...(labHostConfig.clustersUnavailable ? { clustersUnavailable: labHostConfig.clustersUnavailable } : {}),
+      ...(labHostConfig.localUnavailable ? { thisComputerUnavailable: labHostConfig.localUnavailable } : {}),
+    };
+  }, [addLocalEndpoint, endpointList, labHostConfig, refreshConfig, refreshEndpoints, removeEndpoint]);
 
   const showAppearance = useCallback((next: StandaloneAppearance) => {
     currentTheme = applyStandaloneAppearance(next);
@@ -2028,12 +2208,13 @@ function StandaloneApp() {
                   open={imageManagerOpen}
                   runtime={standaloneRuntime!}
                   onClose={closeImageManager}
-                  endpointOptions={endpointList.map((endpoint) => ({
+                  {...(imagesUnavailable ? { unavailableMessage: imagesUnavailable } : {})}
+                  endpointOptions={imageEndpoints.map((endpoint) => ({
                     id: endpoint.id,
                     label: endpoint.label,
                   }))}
                   initialEndpointId={
-                    endpointList.find(
+                    imageEndpoints.find(
                       (endpoint) => endpoint.status === "connected",
                     )?.id
                   }
@@ -2063,6 +2244,8 @@ function StandaloneApp() {
             onSaveTerminalPreferences={handleSaveTerminalPreferences}
             terminalPreferences={terminalPreferences}
             localEndpoint={localEndpointOffer}
+            extraLocalEndpoints={extraLocalEndpointOffers}
+            labHostSetup={labHostSetup}
           />
       </>
     </>
@@ -2118,6 +2301,8 @@ function SettingsOverlayMounted(props: {
   onTabOrientationChange: (orientation: TabOrientation) => void;
   terminalPreferences: TerminalPreferences;
   localEndpoint?: LocalEndpointOffer;
+  extraLocalEndpoints?: readonly LocalEndpointOffer[];
+  labHostSetup?: LabHostSetupProps;
 }) {
   return (
     <MuiThemeProvider>
@@ -2144,6 +2329,8 @@ function SettingsOverlayMounted(props: {
           onSaveTerminalPreferences={props.onSaveTerminalPreferences}
           terminalPreferences={props.terminalPreferences}
           localEndpoint={props.localEndpoint}
+          extraLocalEndpoints={props.extraLocalEndpoints}
+          labHostSetup={props.labHostSetup}
         />
       </Suspense>
     </MuiThemeProvider>

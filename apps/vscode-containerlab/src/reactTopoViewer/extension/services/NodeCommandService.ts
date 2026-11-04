@@ -12,6 +12,8 @@ import {
   flattenContainers
 } from "../../../treeView/common";
 import { runningLabsProvider } from "../../../globals";
+import { connectionOf } from "../../../backend/labBackends";
+import { isClusterConnection } from "../../../backend/connections";
 import type { EndpointResult } from "@containerlab/clab-ui/session";
 
 import { formatErrorMessage, log } from "./logger";
@@ -85,6 +87,17 @@ function createInterfaceObject(
     ifIndex: 0,
     state: ""
   };
+}
+
+/**
+ * Interfaces of a topology that runs on a Kubernetes cluster carry the
+ * cluster's connection, so the capture goes through its capture stream.
+ */
+function onTopologyHost(iface: ClabInterfaceTreeNode, yamlFilePath: string): ClabInterfaceTreeNode {
+  const connection = connectionOf(yamlFilePath);
+  return isClusterConnection(connection)
+    ? Object.assign(iface, { connectionId: connection.id })
+    : iface;
 }
 
 /**
@@ -346,7 +359,9 @@ class NodeCommandService {
         yamlFilePath
       );
       const alias = intf.alias || (target.interfaceName !== intf.name ? target.interfaceName : "");
-      ifaces.push(createInterfaceObject(target.nodeName, intf.name, alias));
+      ifaces.push(
+        onTopologyHost(createInterfaceObject(target.nodeName, intf.name, alias), yamlFilePath)
+      );
     }
     await vscode.commands.executeCommand("containerlab.interface.capture", ifaces[0], ifaces);
     return {
@@ -389,10 +404,13 @@ class NodeCommandService {
             : await this.resolveInterfaces(nodeName, requested, yamlFilePath);
           const actualNames = resolved.map((intf) => intf.name);
           const ifaces = resolved.map((intf, index) =>
-            createInterfaceObject(
-              nodeName,
-              intf.name,
-              intf.alias || (requested[index] !== intf.name ? requested[index] : "")
+            onTopologyHost(
+              createInterfaceObject(
+                nodeName,
+                intf.name,
+                intf.alias || (requested[index] !== intf.name ? requested[index] : "")
+              ),
+              yamlFilePath
             )
           );
           if (ifaces.length > 1) {
