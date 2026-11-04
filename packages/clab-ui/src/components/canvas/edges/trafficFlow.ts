@@ -33,9 +33,23 @@ export function resolveTrafficFlows(extraData: Record<string, unknown> | undefin
   };
 }
 
-/** Cycle time on a log scale, so 1 Mbps and 10 Gbps both look different from idle. */
+/**
+ * Cycle time on a log scale, so 1 Mbps and 10 Gbps both look different from idle.
+ * It moves in half-decade steps: a new duration makes running dashes jump, and
+ * rates change a little with every stats update.
+ */
 export function trafficFlowCycleSeconds(bps: number): number {
-  const decades = Math.log10(Math.max(bps, TRAFFIC_FLOW_MIN_BPS) / TRAFFIC_FLOW_MIN_BPS);
+  const decades = Math.round(2 * Math.log10(Math.max(bps, TRAFFIC_FLOW_MIN_BPS) / TRAFFIC_FLOW_MIN_BPS)) / 2;
   const seconds = SLOWEST_CYCLE_SECONDS / (1 + decades);
   return Math.min(SLOWEST_CYCLE_SECONDS, Math.max(FASTEST_CYCLE_SECONDS, seconds));
+}
+
+/**
+ * The whole CSS animation in one value. The direction has to be part of it: setting
+ * `animation` again resets a separate `animationDirection`, and React only sets
+ * the style properties that changed.
+ */
+export function trafficFlowAnimation(bps: number, reverse: boolean): string {
+  const direction = reverse ? "reverse" : "normal";
+  return `clabTrafficFlow ${trafficFlowCycleSeconds(bps).toFixed(2)}s linear infinite ${direction}`;
 }

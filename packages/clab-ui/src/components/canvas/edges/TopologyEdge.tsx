@@ -50,7 +50,7 @@ import {
   type ElbowLabelPlacement
 } from "./elbowLinkLayout";
 import { DEFAULT_ENDPOINT_LABEL_OFFSET } from "../../../annotations/endpointLabelOffset";
-import { TRAFFIC_FLOW_MIN_BPS, resolveTrafficFlows, trafficFlowCycleSeconds } from "./trafficFlow";
+import { TRAFFIC_FLOW_MIN_BPS, resolveTrafficFlows, trafficFlowAnimation } from "./trafficFlow";
 import {
   clampTelemetryInterfaceSizePercent,
   clampTelemetryNodeSizePx,
@@ -1320,8 +1320,7 @@ const TrafficFlowPath: React.FC<{
         strokeDasharray: "4 8",
         strokeLinecap: "round",
         opacity,
-        animation: `clabTrafficFlow ${trafficFlowCycleSeconds(bps).toFixed(2)}s linear infinite`,
-        animationDirection: reverse ? "reverse" : "normal"
+        animation: trafficFlowAnimation(bps, reverse)
       }}
     />
   );
