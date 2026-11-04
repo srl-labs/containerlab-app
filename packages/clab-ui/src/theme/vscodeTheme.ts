@@ -141,7 +141,7 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
       },
       // Traffic flow dashes on links advance one dash cycle per animation run.
       "@keyframes clabTrafficFlow": {
-        to: { strokeDashoffset: -12 }
+        to: { strokeDashoffset: -18 }
       },
       "@media (prefers-reduced-motion: reduce)": {
         ".clab-traffic-flow": { animation: "none !important" }

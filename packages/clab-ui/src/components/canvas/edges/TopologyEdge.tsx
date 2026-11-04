@@ -50,7 +50,14 @@ import {
   type ElbowLabelPlacement
 } from "./elbowLinkLayout";
 import { DEFAULT_ENDPOINT_LABEL_OFFSET } from "../../../annotations/endpointLabelOffset";
-import { TRAFFIC_FLOW_MIN_BPS, resolveTrafficFlows, trafficFlowAnimation } from "./trafficFlow";
+import {
+  TRAFFIC_FLOW_DASH_ARRAY,
+  TRAFFIC_FLOW_MIN_BPS,
+  TRAFFIC_FLOW_WIDTH,
+  resolveTrafficFlows,
+  trafficFlowAnimation,
+  trafficLaneOffset
+} from "./trafficFlow";
 import {
   clampTelemetryInterfaceSizePercent,
   clampTelemetryNodeSizePx,
@@ -1302,22 +1309,23 @@ const TrafficFlowPath: React.FC<{
   path: string;
   bps: number;
   color: string;
-  width: number;
+  offset: { x: number; y: number };
   opacity: number;
   reverse: boolean;
-}> = ({ path, bps, color, width, opacity, reverse }) => {
+}> = ({ path, bps, color, offset, opacity, reverse }) => {
   if (bps < TRAFFIC_FLOW_MIN_BPS) return null;
   return (
     <path
       d={path}
       fill="none"
       pointerEvents="none"
+      transform={`translate(${offset.x} ${offset.y})`}
       className="clab-traffic-flow"
       data-testid="traffic-flow"
       style={{
         stroke: color,
-        strokeWidth: width + 1.5,
-        strokeDasharray: "4 8",
+        strokeWidth: TRAFFIC_FLOW_WIDTH,
+        strokeDasharray: TRAFFIC_FLOW_DASH_ARRAY,
         strokeLinecap: "round",
         opacity,
         animation: trafficFlowAnimation(bps, reverse)
@@ -1422,23 +1430,25 @@ function shouldRenderEdgeLabels(
 }
 
 /** Both directions of a link's live traffic, when the setting is on and the lab runs. */
-const TrafficFlowOverlay: React.FC<{ data: unknown; path: string; stroke: StrokeStyle }> = ({
-  data,
-  path,
-  stroke
-}) => {
+const TrafficFlowOverlay: React.FC<{
+  data: unknown;
+  path: string;
+  points: EdgeGeometry["points"];
+  stroke: StrokeStyle;
+}> = ({ data, path, points, stroke }) => {
   const animateTraffic = useAnimateTraffic();
   const deploymentState = useDeploymentState();
   // Traffic only flows on a running lab; stats from an earlier run must not animate.
   if (!animateTraffic || deploymentState !== "deployed") return null;
   const flows = resolveTrafficFlows(asObjectRecord(asObjectRecord(data)?.extraData) ?? undefined);
+  const lane = trafficLaneOffset(points, stroke.width);
   return (
     <>
       <TrafficFlowPath
         path={path}
         bps={flows.forwardBps}
         color={TRAFFIC_FLOW_FORWARD_COLOR}
-        width={stroke.width}
+        offset={lane}
         opacity={stroke.opacity}
         reverse={false}
       />
@@ -1446,7 +1456,7 @@ const TrafficFlowOverlay: React.FC<{ data: unknown; path: string; stroke: Stroke
         path={path}
         bps={flows.reverseBps}
         color={TRAFFIC_FLOW_REVERSE_COLOR}
-        width={stroke.width}
+        offset={{ x: -lane.x, y: -lane.y }}
         opacity={stroke.opacity}
         reverse
       />
@@ -1610,7 +1620,7 @@ const TopologyEdgeComponent: React.FC<EdgeProps> = ({ id, source, target, data, 
         }}
         className="react-flow__edge-path"
       />
-      <TrafficFlowOverlay data={data} path={geometry.path} stroke={stroke} />
+      <TrafficFlowOverlay data={data} path={geometry.path} points={geometry.points} stroke={stroke} />
       {shouldRenderLabels && (
         <EdgeLabelRenderer>
           {sourceRenderedLabel !== null && sourceRenderedLabel.length > 0 && (

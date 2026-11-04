@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveTrafficFlows, trafficFlowAnimation, trafficFlowCycleSeconds } from "./trafficFlow";
+import {
+  resolveTrafficFlows,
+  trafficFlowAnimation,
+  trafficFlowCycleSeconds,
+  trafficLaneOffset
+} from "./trafficFlow";
 
 test("each direction comes from the sending end, else from the receiving end", () => {
   assert.deepEqual(
@@ -29,7 +34,7 @@ test("more traffic moves the dashes faster, within bounds", () => {
   const gbps = trafficFlowCycleSeconds(10_000_000_000);
   assert.ok(idle > mbps && mbps > gbps);
   assert.equal(trafficFlowCycleSeconds(0), idle);
-  assert.ok(gbps >= 0.18 && idle <= 1.6);
+  assert.ok(gbps >= 0.4 && idle <= 2.4);
 });
 
 test("the animation value carries its direction, which a separate style would lose", () => {
@@ -40,4 +45,16 @@ test("the animation value carries its direction, which a separate style would lo
 test("small rate changes keep the same speed, so running dashes do not jump", () => {
   assert.equal(trafficFlowCycleSeconds(20_000_000), trafficFlowCycleSeconds(21_000_000));
   assert.notEqual(trafficFlowCycleSeconds(20_000_000), trafficFlowCycleSeconds(2_000_000_000));
+});
+
+test("the forward lane runs on the right of the way traffic travels, beside the link", () => {
+  // Travelling right, in screen coordinates with y pointing down, right is down.
+  const right = trafficLaneOffset({ sx: 0, sy: 0, tx: 100, ty: 0 }, 2);
+  assert.equal(right.x === 0, true);
+  assert.equal(right.y, 3.5);
+  // Travelling down, right is towards smaller x.
+  const down = trafficLaneOffset({ sx: 0, sy: 0, tx: 0, ty: 100 }, 2);
+  assert.equal(down.x, -3.5);
+  assert.equal(down.y === 0, true);
+  assert.deepEqual(trafficLaneOffset({ sx: 5, sy: 5, tx: 5, ty: 5 }, 2), { x: 0, y: 0 });
 });
