@@ -14,8 +14,6 @@ import {
 } from "@containerlab/clab-ui/host";
 
 import {
-  getLocalBackend,
-  isRemote,
   isUriString,
   labNameForPath,
   labPathOf,
@@ -24,7 +22,7 @@ import {
   resolveLab
 } from "../backend/labBackends";
 
-import { execCommandInTerminal, runWithProgress } from "./command";
+import { runWithProgress } from "./command";
 import { showRenderedTopology } from "./renderedTopology";
 
 /**
@@ -80,37 +78,6 @@ export async function graphDrawIOHorizontal(node?: ClabLabTreeNode) {
 
 export async function graphDrawIOVertical(node?: ClabLabTreeNode) {
   await runGraphDrawIO(node, "vertical");
-}
-
-/**
- * Graph Lab (draw.io, Interactive) => always run in Terminal
- */
-export async function graphDrawIOInteractive(node?: ClabLabTreeNode) {
-  node = await getSelectedLabNode(node);
-  if (!node) {
-    return;
-  }
-  if (isRemote(node)) {
-    vscode.window.showInformationMessage(
-      "The interactive draw.io graph runs on this machine only. Use the horizontal or vertical layout for labs on a lab host."
-    );
-    return;
-  }
-
-  const backend = getLocalBackend();
-  execCommandInTerminal(
-    backend.commandLine([
-      "graph",
-      "-r",
-      backend.options.runtime,
-      "--drawio",
-      "--drawio-args",
-      "-I",
-      "-t",
-      node.labPath.absolute
-    ]),
-    "Containerlab Graph"
-  );
 }
 
 /**

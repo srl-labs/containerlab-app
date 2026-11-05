@@ -96,7 +96,7 @@ interface FcliBody extends RuntimeTargetBody {
 }
 
 interface DrawioBody extends RuntimeTargetBody {
-  layout?: "horizontal" | "vertical" | "interactive";
+  layout?: "horizontal" | "vertical";
   theme?: string;
 }
 
@@ -1110,7 +1110,7 @@ export function registerRuntimeProxy(
       try {
         const rawLayout = normalizeOptionalString(request.body.layout)?.toLowerCase();
         const layout = rawLayout ?? "horizontal";
-        if (layout !== "horizontal" && layout !== "vertical" && layout !== "interactive") {
+        if (layout !== "horizontal" && layout !== "vertical") {
           throw new RequestError("Invalid drawio layout.", 400);
         }
 

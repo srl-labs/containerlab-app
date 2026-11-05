@@ -783,7 +783,7 @@ export async function runFcliCommand(
 
 export async function generateDrawioGraph(
   input: RuntimeTargetRequest & {
-    layout: "horizontal" | "vertical" | "interactive";
+    layout: "horizontal" | "vertical";
     theme?: string;
   }
 ): Promise<DrawioGenerateResponse> {

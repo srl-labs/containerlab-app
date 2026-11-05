@@ -500,7 +500,6 @@ function registerCommands(context: vscode.ExtensionContext) {
     ["containerlab.lab.sshToAllNodes", cmd.sshToLab],
     ["containerlab.lab.graph.drawio.horizontal", cmd.graphDrawIOHorizontal],
     ["containerlab.lab.graph.drawio.vertical", cmd.graphDrawIOVertical],
-    ["containerlab.lab.graph.drawio.interactive", cmd.graphDrawIOInteractive],
     ["containerlab.lab.graph.mermaid", cmd.graphMermaid],
     ["containerlab.lab.graph.dot", cmd.graphDot],
     ["containerlab.lab.validate", cmd.validateLab],

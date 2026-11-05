@@ -702,7 +702,7 @@ export class ApiLabBackend implements LabBackend {
 
   graphDrawio(
     lab: LabTarget,
-    options: { layout: "horizontal" | "vertical" | "interactive"; theme?: string }
+    options: { layout: "horizontal" | "vertical"; theme?: string }
   ) {
     return this.client.generateDrawioGraph(this.token, lab.labName, options);
   }

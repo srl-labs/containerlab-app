@@ -682,7 +682,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       }
     };
 
-    const runDrawio = async (layout: "horizontal" | "vertical" | "interactive"): Promise<void> => {
+    const runDrawio = async (layout: "horizontal" | "vertical"): Promise<void> => {
       const topologyRef = resolveActionTopologyRef();
       if (!topologyRef) {
         postExplorerError("Graph actions require a lab item.");
@@ -702,18 +702,6 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
           response.content,
           "application/xml"
         );
-
-        if (layout === "interactive") {
-          const output = [response.output?.trim(), response.message?.trim()]
-            .filter((value): value is string => Boolean(value && value.length > 0))
-            .join("\n\n");
-          openCommandOutputTerminal(
-            `draw.io interactive: ${topologyRef.labName}`,
-            "graph drawio -I",
-            output || "Interactive draw.io output is unavailable.",
-            topologyRef
-          );
-        }
 
         runtimeUiActions.notify(
           response.message || `Generated draw.io (${layout}) for ${topologyRef.labName}.`,
@@ -1331,7 +1319,6 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       "containerlab.editor.topoViewerEditor.open": openTopologyFile,
       "containerlab.lab.graph.drawio.horizontal": () => runDrawio("horizontal"),
       "containerlab.lab.graph.drawio.vertical": () => runDrawio("vertical"),
-      "containerlab.lab.graph.drawio.interactive": () => runDrawio("interactive"),
       "containerlab.lab.graph.mermaid": () => runLabTool((target) => exportGraphFlow(target, "mermaid")),
       "containerlab.lab.graph.dot": () => runLabTool((target) => exportGraphFlow(target, "dot")),
       "containerlab.lab.validate": () => runLabTool(validateTopologyFlow),

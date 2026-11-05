@@ -213,13 +213,12 @@ export async function saveLab(
 export async function drawioGraph(
   options: ResolvedLocalOptions,
   topology: string,
-  layout: "horizontal" | "vertical" | "interactive",
+  layout: "horizontal" | "vertical",
   theme = "nokia_modern"
 ): Promise<DrawioGenerateResponse> {
-  const effectiveLayout = layout === "interactive" ? "horizontal" : layout;
   const result = await clab(
     options,
-    ["graph", "-r", options.runtime, "--drawio", "--drawio-args", `--theme ${theme} --layout ${effectiveLayout}`, "-t", topology],
+    ["graph", "-r", options.runtime, "--drawio", "--drawio-args", `--theme ${theme} --layout ${layout}`, "-t", topology],
     5 * 60_000
   );
   const drawioFile = topology.replace(/\.ya?ml$/i, "") + ".drawio";
@@ -227,10 +226,7 @@ export async function drawioGraph(
   return {
     fileName: path.basename(drawioFile),
     content: await fs.readFile(drawioFile, "utf8"),
-    layout: effectiveLayout,
-    ...(layout === "interactive"
-      ? { message: "Interactive draw.io mode needs a terminal; generated horizontal layout." }
-      : {}),
+    layout,
     ...(output ? { output } : {})
   };
 }

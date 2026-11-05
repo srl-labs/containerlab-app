@@ -149,7 +149,6 @@ const COMMAND_LABELS: Record<string, string> = {
   "containerlab.lab.graph.topoViewer": "Open TopoViewer",
   "containerlab.lab.graph.drawio.horizontal": "Graph (draw.io, Horizontal)",
   "containerlab.lab.graph.drawio.vertical": "Graph (draw.io, Vertical)",
-  "containerlab.lab.graph.drawio.interactive": "Graph (draw.io, Interactive)",
   "containerlab.lab.graph.mermaid": "Export Graph (Mermaid)",
   "containerlab.lab.graph.dot": "Export Graph (Graphviz)",
   "containerlab.lab.validate": "Validate Topology",
@@ -738,7 +737,6 @@ function appendLabActions(
 
   pushAction(actions, seen, registry, "containerlab.lab.graph.drawio.horizontal", [item]);
   pushAction(actions, seen, registry, "containerlab.lab.graph.drawio.vertical", [item]);
-  pushAction(actions, seen, registry, "containerlab.lab.graph.drawio.interactive", [item]);
   pushAction(actions, seen, registry, "containerlab.lab.graph.mermaid", [item]);
   pushAction(actions, seen, registry, "containerlab.lab.graph.dot", [item]);
   pushAction(actions, seen, registry, "containerlab.lab.graph.topoViewer", [item]);

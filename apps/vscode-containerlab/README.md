@@ -33,7 +33,6 @@ A Visual Studio Code extension that integrates [containerlab](https://containerl
   - **Interactive TopoViewer:** Launches a dynamic, web-based topology UI (view/edit mode depends on lab state).
   - **Draw.io (Horizontal):** Generates a `.drawio` file in a horizontal layout. (`pos` labels override the layout.)
   - **Draw.io (Vertical):** Generates a `.drawio` file in a vertical layout. (`pos` labels override the layout.)
-  - **Draw.io (Interactive):** Runs containerlab graph generation in interactive Draw.io mode.
 
 - **Clone Labs from Git:**
   Easily clone labs from any Git repository or choose from a list of popular labs directly within the extension.

@@ -1137,7 +1137,7 @@ export class ClabApiClient {
     token: string,
     labName: string,
     input: {
-      layout: "horizontal" | "vertical" | "interactive";
+      layout: "horizontal" | "vertical";
       theme?: string;
     },
   ): Promise<DrawioGenerateResponse> {

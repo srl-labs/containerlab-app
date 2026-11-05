@@ -210,11 +210,6 @@
         "category": "Containerlab"
       },
       {
-        "command": "containerlab.lab.graph.drawio.interactive",
-        "title": "Graph (draw.io, Interactive)",
-        "category": "Containerlab"
-      },
-      {
         "command": "containerlab.lab.graph.mermaid",
         "title": "Export Graph (Mermaid)",
         "category": "Containerlab"
@@ -825,10 +820,6 @@
           "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
         },
         {
-          "command": "containerlab.lab.graph.drawio.interactive",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
-        },
-        {
           "command": "containerlab.lab.graph.mermaid",
           "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
         },
@@ -864,10 +855,6 @@
         },
         {
           "command": "containerlab.lab.graph.drawio.vertical",
-          "group": "graph@0"
-        },
-        {
-          "command": "containerlab.lab.graph.drawio.interactive",
           "group": "graph@0"
         }
       ],

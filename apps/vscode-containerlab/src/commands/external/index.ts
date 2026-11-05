@@ -2,12 +2,7 @@
  * External tool and repo commands
  */
 
-export {
-  graphDrawIOHorizontal,
-  graphDrawIOVertical,
-  graphDrawIOInteractive,
-  graphTopoviewer
-} from "../graph";
+export { graphDrawIOHorizontal, graphDrawIOVertical, graphTopoviewer } from "../graph";
 export { inspectAllLabs, inspectOneLab } from "../inspect";
 export { openBrowser } from "../openBrowser";
 export { cloneRepo } from "../cloneRepo";

@@ -40,7 +40,7 @@ The bundle is only the picture and the mapping. It expects a Grafana with matchi
 
 ## Draw.io
 
-The graph actions generate a Draw.io file, laid out horizontally or vertically, for quick documentation. VS Code also has an interactive Draw.io mode. Use SVG when the diagram should look exactly like your canvas.
+The graph actions generate a Draw.io file, laid out horizontally or vertically, for quick documentation. Use SVG when the diagram should look exactly like your canvas.
 
 ## Mermaid and Graphviz
 

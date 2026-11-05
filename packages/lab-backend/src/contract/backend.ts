@@ -343,7 +343,7 @@ export interface LabBackend {
   ): Promise<SaveConfigResponse>;
   graphDrawio(
     lab: LabTarget,
-    options: { layout: "horizontal" | "vertical" | "interactive"; theme?: string }
+    options: { layout: "horizontal" | "vertical"; theme?: string }
   ): Promise<DrawioGenerateResponse>;
   fcli(lab: LabTarget, command: string): Promise<FcliCommandResponse>;
   /** The Tailscale proxy, sidecars and tailscale nodes of a running lab. */
