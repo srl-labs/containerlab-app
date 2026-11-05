@@ -112,7 +112,7 @@ const TITLES: Record<string, string> = {
   "node.execCommandMapping": "Shell commands by node kind",
   "node.sshUserMapping": "SSH users by node kind",
   "node.telnetPort": "Telnet port",
-  "extras.fcli.extraDockerArgs": "fcli container arguments",
+  "extras.fcling.extraDockerArgs": "fcling container arguments",
   "capture.remoteHostname": "Capture hostname",
   "capture.packetflixPort": "Packetflix port",
   "capture.preferredAction": "Default capture method",

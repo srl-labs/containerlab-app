@@ -43,6 +43,8 @@ Supported imports:
 - `@containerlab/clab-ui/node-impairments`
 - `@containerlab/clab-ui/clos-generator`
 - `@containerlab/clab-ui/wireshark-vnc`
+- `@containerlab/clab-ui/fabric`
+- `@containerlab/clab-ui/fabric/engine`
 - `@containerlab/clab-ui/styles/global.css`
 
 Do not import from `src/*`, `core/*`, or `services/*`. Those are internal repo

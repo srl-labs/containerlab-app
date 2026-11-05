@@ -182,6 +182,7 @@ const ACTION_ICON_BY_COMMAND: Record<string, SvgIconComponent> = {
   "containerlab.lab.gotty.detach": OpenInBrowserOutlinedIcon,
   "containerlab.lab.gotty.reattach": OpenInBrowserOutlinedIcon,
   "containerlab.lab.gotty.copylink": OpenInBrowserOutlinedIcon,
+  "containerlab.lab.fabric": HubOutlinedIcon,
   "containerlab.file.open": ArticleOutlinedIcon,
   "containerlab.file.opentopology": AccountTreeOutlinedIcon,
   "containerlab.file.newfile": NoteAddOutlinedIcon,
@@ -234,7 +235,7 @@ const ACTION_ICON_RULES: ReadonlyArray<CommandIconRule> = [
     match: (command) => command.includes("showlogs") || command.includes("logs"),
     icon: ArticleOutlinedIcon
   },
-  { match: (command) => command.startsWith("containerlab.lab.fcli."), icon: BuildOutlinedIcon },
+  { match: (command) => command.startsWith("containerlab.lab.fcling."), icon: BuildOutlinedIcon },
   { match: (command) => command.includes(".gotty."), icon: OpenInBrowserOutlinedIcon },
   { match: (command) => command.startsWith("containerlab.lab.graph."), icon: AccountTreeOutlinedIcon },
   {
@@ -265,7 +266,8 @@ const ACTION_ICON_RULES: ReadonlyArray<CommandIconRule> = [
 const ACTION_GROUP_RULES: ReadonlyArray<CommandActionGroupRule> = [
   { match: (command) => command.startsWith("containerlab.lab.graph."), group: "graph" },
   { match: (command) => command.includes(".save"), group: "save" },
-  { match: (command) => command.startsWith("containerlab.lab.fcli."), group: "tools" },
+  { match: (command) => command.startsWith("containerlab.lab.fcling."), group: "tools" },
+  { match: (command) => command === "containerlab.lab.fabric", group: "tools" },
   { match: (command) => command.startsWith("containerlab.node.capture"), group: "capture" },
   {
     match: (command) =>

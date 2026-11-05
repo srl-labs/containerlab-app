@@ -1,5 +1,6 @@
 import type { Uri, Webview } from "vscode";
 import type { ClosGeneratorInitialData } from "@containerlab/clab-ui/clos-generator";
+import type { FabricWebviewInitialData } from "@containerlab/clab-ui/fabric/engine";
 import type { ImageManagerInitialData } from "@containerlab/clab-ui/image-manager";
 import type { InspectWebviewInitialData } from "@containerlab/clab-ui/inspect";
 import type { LabsOverviewWebviewInitialData } from "@containerlab/clab-ui/labs-overview/cards";
@@ -49,6 +50,12 @@ export const LABS_OVERVIEW_PANEL: WebviewPanelDefinition<LabsOverviewWebviewInit
   scriptFile: "labsOverviewWebview.js",
   webviewKind: "containerlab-labs-overview",
   title: "Labs Overview"
+};
+
+export const FABRIC_PANEL: WebviewPanelDefinition<FabricWebviewInitialData> = {
+  scriptFile: "fabricWebview.js",
+  webviewKind: "containerlab-fabric",
+  title: (initialData) => `Fabric: ${initialData.labName}`
 };
 
 export const IMAGE_MANAGER_PANEL: WebviewPanelDefinition<ImageManagerInitialData> = {

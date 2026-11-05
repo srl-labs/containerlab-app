@@ -100,7 +100,6 @@ On a lab host:
 ## Only in VS Code
 
 - Sharing a running lab's terminals with SSHX or GoTTY.
-- fcli helpers for SR Linux labs.
 
 Every setting is listed in the [VS Code settings reference](../reference/vscode-settings.md). Open them with **Containerlab: Open Settings** from the command palette.
 

@@ -9,6 +9,7 @@ import {
   type ExplorerUiState
 } from "./shared/explorer/types";
 import type { LabHostTag } from "../host/labHostIdentity";
+import { isFclingCommand } from "./hostSupportCommands";
 
 interface ExplorerTreeProvider {
   getChildren(element?: unknown):
@@ -43,6 +44,9 @@ interface ExplorerTreeItemLike {
   state?: string;
   status?: string;
   link?: string;
+  /** A lab's node: its containerlab kind and image. */
+  kind?: string;
+  image?: string;
 }
 
 interface LabShareInfo {
@@ -179,15 +183,16 @@ const COMMAND_LABELS: Record<string, string> = {
   "containerlab.interface.setRate": "Set Rate",
   "containerlab.interface.setCorruption": "Set Corruption",
   "containerlab.interface.copyMACAddress": "Copy MAC Address",
-  "containerlab.lab.fcli.bgpPeers": "Run fcli bgp-peers",
-  "containerlab.lab.fcli.bgpRib": "Run fcli bgp-rib",
-  "containerlab.lab.fcli.ipv4Rib": "Run fcli ipv4-rib",
-  "containerlab.lab.fcli.lldp": "Run fcli lldp",
-  "containerlab.lab.fcli.mac": "Run fcli mac",
-  "containerlab.lab.fcli.ni": "Run fcli ni",
-  "containerlab.lab.fcli.subif": "Run fcli subif",
-  "containerlab.lab.fcli.sysInfo": "Run fcli sys-info",
-  "containerlab.lab.fcli.custom": "Run Custom fcli",
+  "containerlab.lab.fabric": "Open Fabric View",
+  "containerlab.lab.fcling.bgpPeers": "Run fcling bgp-peers",
+  "containerlab.lab.fcling.bgpRib": "Run fcling bgp-rib",
+  "containerlab.lab.fcling.ipv4Rib": "Run fcling ipv4-rib",
+  "containerlab.lab.fcling.lldp": "Run fcling lldp",
+  "containerlab.lab.fcling.mac": "Run fcling mac",
+  "containerlab.lab.fcling.ni": "Run fcling ni",
+  "containerlab.lab.fcling.subif": "Run fcling subif",
+  "containerlab.lab.fcling.sysInfo": "Run fcling sys-info",
+  "containerlab.lab.fcling.custom": "Run Custom fcling",
   "containerlab.lab.deploy.specificFile": "Deploy Lab File",
   "containerlab.images.manage": "Manage Images",
   "containerlab.inspectAll": "Inspect All Labs",
@@ -722,15 +727,16 @@ function appendLabActions(
     pushAction(actions, seen, registry, "containerlab.lab.gotty.attach", [item]);
     pushAction(actions, seen, registry, "containerlab.lab.gotty.detach", [item], undefined, true);
     pushAction(actions, seen, registry, "containerlab.lab.gotty.reattach", [item]);
-    pushAction(actions, seen, registry, "containerlab.lab.fcli.bgpPeers", [item]);
-    pushAction(actions, seen, registry, "containerlab.lab.fcli.bgpRib", [item]);
-    pushAction(actions, seen, registry, "containerlab.lab.fcli.ipv4Rib", [item]);
-    pushAction(actions, seen, registry, "containerlab.lab.fcli.lldp", [item]);
-    pushAction(actions, seen, registry, "containerlab.lab.fcli.mac", [item]);
-    pushAction(actions, seen, registry, "containerlab.lab.fcli.ni", [item]);
-    pushAction(actions, seen, registry, "containerlab.lab.fcli.subif", [item]);
-    pushAction(actions, seen, registry, "containerlab.lab.fcli.sysInfo", [item]);
-    pushAction(actions, seen, registry, "containerlab.lab.fcli.custom", [item]);
+    pushAction(actions, seen, registry, "containerlab.lab.fabric", [item]);
+    pushAction(actions, seen, registry, "containerlab.lab.fcling.bgpPeers", [item]);
+    pushAction(actions, seen, registry, "containerlab.lab.fcling.bgpRib", [item]);
+    pushAction(actions, seen, registry, "containerlab.lab.fcling.ipv4Rib", [item]);
+    pushAction(actions, seen, registry, "containerlab.lab.fcling.lldp", [item]);
+    pushAction(actions, seen, registry, "containerlab.lab.fcling.mac", [item]);
+    pushAction(actions, seen, registry, "containerlab.lab.fcling.ni", [item]);
+    pushAction(actions, seen, registry, "containerlab.lab.fcling.subif", [item]);
+    pushAction(actions, seen, registry, "containerlab.lab.fcling.sysInfo", [item]);
+    pushAction(actions, seen, registry, "containerlab.lab.fcling.custom", [item]);
   }
 
   pushAction(actions, seen, registry, "containerlab.lab.graph.mermaid", [item]);
@@ -1061,6 +1067,19 @@ function shouldResolveChildren(item: ExplorerTreeItemLike): boolean {
   return item.collapsibleState !== TREE_ITEM_COLLAPSIBLE_NONE;
 }
 
+/** Kinds containerlab reserves for SR Linux; any other kind counts by its image, as fcling goes by. */
+const SR_LINUX_KINDS: ReadonlySet<string> = new Set(["srl", "nokia_srlinux"]);
+
+function isSrLinuxNode(item: ExplorerTreeItemLike): boolean {
+  return SR_LINUX_KINDS.has(item.kind ?? "") || (item.image ?? "").includes("srlinux");
+}
+
+/** fcling reads nothing of these nodes. Nodes that do not say what they are get the benefit of the doubt. */
+function lacksSrLinuxNodes(children: readonly ExplorerTreeItemLike[]): boolean {
+  const described = children.filter((child) => Boolean(child.kind) || Boolean(child.image));
+  return described.length > 0 && !described.some(isSrLinuxNode);
+}
+
 function shouldResolveNodeChildren(
   item: ExplorerTreeItemLike,
   sectionId: ExplorerSectionId,
@@ -1118,7 +1137,11 @@ async function buildNode(
       buildNode(provider, child, sectionId, options, registry, `${pathId}/${index}`)
     )
   );
-  const nodeActions = getNodeActions(sectionId, item, registry, options);
+  const allNodeActions = getNodeActions(sectionId, item, registry, options);
+  const nodeActions =
+    isLabContext(contextValue) && lacksSrLinuxNodes(childrenItems)
+      ? allNodeActions.filter((action) => !isFclingCommand(action.commandId))
+      : allNodeActions;
   if (shareInfo) {
     const copyCommandId =
       shareInfo.kind === "sshx" ? "containerlab.lab.sshx.copyLink" : "containerlab.lab.gotty.copyLink";

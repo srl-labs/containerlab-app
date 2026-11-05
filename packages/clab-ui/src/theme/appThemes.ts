@@ -132,6 +132,8 @@ function paletteVars(mode: AppThemeMode, palette: ThemePalette): VarMap {
     "--vscode-charts-yellow": palette.warning,
     "--vscode-testing-iconPassed": palette.success,
     "--vscode-charts-green": palette.success,
+    "--vscode-charts-purple": "#a371f7",
+    "--vscode-charts-orange": "#d18616",
     "--vscode-progressBar-background": palette.accent,
     "--vscode-editor-selectionBackground": palette.editorSelection,
     "--vscode-editor-inactiveSelectionBackground": mix(palette.background, palette.editorSelection, 0.5),

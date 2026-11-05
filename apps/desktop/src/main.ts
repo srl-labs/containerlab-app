@@ -397,6 +397,9 @@ function applyNavigationPolicy(window: BrowserWindow, serverOrigin: string): voi
       case "terminal":
         openTerminalWindow(url, serverOrigin);
         break;
+      case "fabric":
+        openFabricWindow(url, serverOrigin);
+        break;
       case "external":
         openExternalUrl(url);
         break;
@@ -536,6 +539,27 @@ function openWiresharkCaptureWindow(url: string, serverOrigin: string): void {
   });
 
   void captureWindow.loadURL(url);
+}
+
+function openFabricWindow(url: string, serverOrigin: string): void {
+  const fabricWindow = new BrowserWindow({
+    ...windowChromeOptions(),
+    center: true,
+    height: 860,
+    minHeight: 420,
+    minWidth: 640,
+    parent: mainWindow ?? undefined,
+    title: "Fabric",
+    width: 1320
+  });
+
+  terminalWindows.add(fabricWindow);
+  applyNavigationPolicy(fabricWindow, serverOrigin);
+  fabricWindow.on("closed", () => {
+    terminalWindows.delete(fabricWindow);
+  });
+
+  void fabricWindow.loadURL(url);
 }
 
 function openTerminalWindow(url: string, serverOrigin: string): void {

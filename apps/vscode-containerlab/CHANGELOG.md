@@ -2,6 +2,8 @@
 
 ## [0.26.4] - Unreleased
 
+- **Open Fabric View** on a running lab shows what is wrong with its SR Linux fabric and what changed: topology health, incidents, a history that can go back in time, lenses and every report. It runs `fcling` next to the lab and keeps its history until the lab is destroyed.
+- fcli is replaced by fcling. Its menu entries run the same reports, and the setting `containerlab.extras.fcli.extraDockerArgs` is now `containerlab.extras.fcling.extraDockerArgs`.
 - Build from the shared monorepo UI workspace, now named `@containerlab/clab-ui`.
 - Restore the extension-specific Marketplace documentation.
 - Release VSIX, Marketplace, and Open VSX artifacts independently through GitHub Releases.

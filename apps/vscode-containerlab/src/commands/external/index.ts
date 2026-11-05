@@ -11,13 +11,13 @@ export { clonePopularRepo } from "../clonePopularRepo";
 export { openLink } from "../openLink";
 export { generateClosTopology, graphDot, graphMermaid, validateLab } from "../labTools";
 export {
-  fcliBgpPeers,
-  fcliBgpRib,
-  fcliIpv4Rib,
-  fcliLldp,
-  fcliMac,
-  fcliNi,
-  fcliSubif,
-  fcliSysInfo,
-  fcliCustom
-} from "../fcli";
+  fclingBgpPeers,
+  fclingBgpRib,
+  fclingIpv4Rib,
+  fclingLldp,
+  fclingMac,
+  fclingNi,
+  fclingSubif,
+  fclingSysInfo,
+  fclingCustom
+} from "../fcling";

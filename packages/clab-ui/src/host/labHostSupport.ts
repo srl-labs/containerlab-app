@@ -131,8 +131,8 @@ export interface LabBackendFeatures {
   snapshots: boolean;
   /** Pause and unpause single nodes. */
   nodePause: boolean;
-  /** `fcli` reports over the lab's nodes. */
-  fcli: boolean;
+  /** `fcling` reports over the lab's nodes, and its engine behind the Fabric view. */
+  fcling: boolean;
   /** `containerlab inspect interfaces`. */
   interfaceInspect: boolean;
   /** Edgeshark capture (Packetflix links and Wireshark VNC) and its management. */
@@ -196,7 +196,7 @@ export type ContainerRuntimeFeature =
   | "netem"
   | "snapshots"
   | "nodePause"
-  | "fcli"
+  | "fcling"
   | "interfaceInspect"
   | "edgeshark"
   | "hostMetrics"
@@ -213,7 +213,7 @@ export function containerRuntimeFeatures(
     netem: containerRuntime,
     snapshots: containerRuntime,
     nodePause: containerRuntime,
-    fcli: containerRuntime,
+    fcling: containerRuntime,
     interfaceInspect: containerRuntime,
     edgeshark: containerRuntime,
     hostMetrics: containerRuntime,
@@ -270,7 +270,7 @@ const BOOLEAN_KEYS: readonly (keyof LabHostSupport)[] = [
   "netem",
   "snapshots",
   "nodePause",
-  "fcli",
+  "fcling",
   "interfaceInspect",
   "edgeshark",
   "hostMetrics",

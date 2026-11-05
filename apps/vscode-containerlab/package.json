@@ -444,47 +444,52 @@
         "title": "Copy GoTTY link"
       },
       {
-        "command": "containerlab.lab.fcli.bgpPeers",
+        "command": "containerlab.lab.fabric",
+        "title": "Open Fabric View",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.fcling.bgpPeers",
         "title": "bgp-peers",
         "category": "Containerlab"
       },
       {
-        "command": "containerlab.lab.fcli.bgpRib",
+        "command": "containerlab.lab.fcling.bgpRib",
         "title": "bgp-rib",
         "category": "Containerlab"
       },
       {
-        "command": "containerlab.lab.fcli.ipv4Rib",
+        "command": "containerlab.lab.fcling.ipv4Rib",
         "title": "ipv4-rib",
         "category": "Containerlab"
       },
       {
-        "command": "containerlab.lab.fcli.lldp",
+        "command": "containerlab.lab.fcling.lldp",
         "title": "lldp",
         "category": "Containerlab"
       },
       {
-        "command": "containerlab.lab.fcli.mac",
+        "command": "containerlab.lab.fcling.mac",
         "title": "mac",
         "category": "Containerlab"
       },
       {
-        "command": "containerlab.lab.fcli.ni",
+        "command": "containerlab.lab.fcling.ni",
         "title": "ni",
         "category": "Containerlab"
       },
       {
-        "command": "containerlab.lab.fcli.subif",
+        "command": "containerlab.lab.fcling.subif",
         "title": "subif",
         "category": "Containerlab"
       },
       {
-        "command": "containerlab.lab.fcli.sysInfo",
+        "command": "containerlab.lab.fcling.sysInfo",
         "title": "sys-info",
         "category": "Containerlab"
       },
       {
-        "command": "containerlab.lab.fcli.custom",
+        "command": "containerlab.lab.fcling.custom",
         "title": "custom",
         "category": "Containerlab"
       },
@@ -1366,10 +1371,10 @@
             "minimum": 1,
             "maximum": 65535
           },
-          "containerlab.extras.fcli.extraDockerArgs": {
+          "containerlab.extras.fcling.extraDockerArgs": {
             "type": "string",
             "default": "",
-            "description": "Additional docker (or podman) arguments to append to the fcli command"
+            "description": "Additional docker (or podman) arguments to append to the fcling command"
           }
         }
       },

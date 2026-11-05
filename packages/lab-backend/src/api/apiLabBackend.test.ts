@@ -44,14 +44,14 @@ function mockServer(
   return requests;
 }
 
-const NEW_SERVER = ["validate", "graph-mermaid", "graph-dot", "sshx-readers", "gotty-options"];
+const NEW_SERVER = ["fcling", "validate", "graph-mermaid", "graph-dot", "sshx-readers", "gotty-options"];
 
 const DOCKER_RUNTIME_FEATURES = {
   imageManagement: true,
   netem: true,
   snapshots: true,
   nodePause: true,
-  fcli: true,
+  fcling: true,
   interfaceInspect: true,
   edgeshark: true,
   hostMetrics: true,
@@ -69,7 +69,7 @@ test("the lab runtime comes from /health; a server without one is an old Docker 
   const c9s = new ApiLabBackend({ baseUrl: "https://c9s.test", token: "token" });
   assert.deepEqual(await c9s.hostProfile(), { runtime: "c9s", namespaceMode: "per-lab" });
   const features = await c9s.features();
-  for (const flag of ["imageManagement", "netem", "snapshots", "nodePause", "fcli", "interfaceInspect", "edgeshark"] as const) {
+  for (const flag of ["imageManagement", "netem", "snapshots", "nodePause", "fcling", "interfaceInspect", "edgeshark"] as const) {
     assert.equal(features[flag], false, flag);
   }
   assert.equal(features.c9sDeployOptions, false);
@@ -261,7 +261,8 @@ test("features come from the server's health endpoint and older servers list non
     nodeStats: false,
     terminalResume: false,
     lifecycleTimeout: false,
-    ...DOCKER_RUNTIME_FEATURES
+    ...DOCKER_RUNTIME_FEATURES,
+    fcling: false
   });
 });
 
@@ -654,4 +655,24 @@ test("an events stream that is read later survives garbage collection", async (t
   stream?.write(`${JSON.stringify({ type: "container", action: "start", actor_name: "lab-n1" })}\n`);
   const first = await events[Symbol.asyncIterator]().next();
   assert.deepEqual(first, { done: false, value: { type: "container", action: "start", actor_name: "lab-n1" } });
+});
+
+test("a server that does not list fcling still runs fcli: the feature and its calls are off", async (t) => {
+  const features = NEW_SERVER.filter((feature) => feature !== "fcling");
+  const requests = mockServer(t, { features, health: { runtime: "docker" } });
+  const backend = new ApiLabBackend({ baseUrl: "https://old.test", token: "token" });
+  assert.equal((await backend.features()).fcling, false);
+  await assert.rejects(backend.fcling({ labName: "lab1" }, "bgp-peers"), /Update clab-api-server/);
+  await assert.rejects(backend.startFclingEngine({ labName: "lab1" }), /Update clab-api-server/);
+  assert.equal(requests.some((request) => request.url.pathname.includes("/fcling")), false);
+});
+
+test("the engine's API is not asked for what the Fabric view does not offer", async (t) => {
+  const requests = mockServer(t, { features: NEW_SERVER, health: { runtime: "docker" } });
+  const backend = new ApiLabBackend({ baseUrl: "https://new.test", token: "token" });
+  await assert.rejects(
+    backend.fclingApi({ labName: "lab1" }, { method: "POST", path: "chat" }),
+    (error: Error & { status?: number }) => error.status === 403
+  );
+  assert.equal(requests.some((request) => request.url.pathname.includes("/fcling")), false);
 });

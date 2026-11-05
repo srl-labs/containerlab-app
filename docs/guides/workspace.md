@@ -62,7 +62,7 @@ Panels open on the side of the canvas and stay out of the way otherwise.
 | Terminals | VS Code terminals | Terminal windows in the app |
 | Exports | Saved through a VS Code dialog | Downloaded |
 | Node templates | VS Code settings | Per user, per lab host |
-| Extras | SSHX, GoTTY, fcli | Shared labs, lab host profiles to export |
+| Extras | SSHX, GoTTY | Shared labs, lab host profiles to export |
 
 <div class="next" markdown>
 [:lucide-arrow-right: Build a topology](topologies.md)

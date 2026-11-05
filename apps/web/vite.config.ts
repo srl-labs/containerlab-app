@@ -86,6 +86,7 @@ export default defineConfig(({ command }) => {
           "./src/main.tsx",
           "./src/terminalMain.tsx",
           "./src/wiresharkVncMain.tsx",
+          "./src/fabricMain.tsx",
           "../../packages/standalone-runtime/src/standaloneApp.tsx",
           "../../packages/standalone-runtime/src/mainUiDependencies.ts",
           "../../packages/standalone-runtime/src/mainRuntimeDependencies.ts",
@@ -120,7 +121,8 @@ export default defineConfig(({ command }) => {
         input: {
           main: path.resolve(__dirname, "index.html"),
           terminal: path.resolve(__dirname, "terminal.html"),
-          wireshark: path.resolve(__dirname, "wireshark.html")
+          wireshark: path.resolve(__dirname, "wireshark.html"),
+          fabric: path.resolve(__dirname, "fabric.html")
         }
       }
     }

@@ -91,6 +91,7 @@ describe("decideWindowOpen", () => {
   test("routes the terminal and Wireshark pages to their own windows", () => {
     assert.equal(decideWindowOpen(`${ORIGIN}/terminal.html?node=srl1`, ORIGIN), "terminal");
     assert.equal(decideWindowOpen(`${ORIGIN}/wireshark.html?session=abc#vnc`, ORIGIN), "wireshark");
+    assert.equal(decideWindowOpen(`${ORIGIN}/fabric.html?labName=lab1`, ORIGIN), "fabric");
   });
 
   test("hands other same-origin pages and external http(s) URLs to the browser", () => {

@@ -10,6 +10,7 @@
     "./terminal-main": "./src/terminalMain.tsx",
     "./web-main": "./src/main.tsx",
     "./wireshark-vnc-main": "./src/wiresharkVncMain.tsx",
+    "./fabric-main": "./src/fabricMain.tsx",
     "./backend": "./src/backend.ts",
     "./host": "./src/standaloneHostShared.ts",
     "./endpoints": "./src/stores/endpointStore.ts",

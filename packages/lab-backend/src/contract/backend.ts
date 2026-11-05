@@ -32,7 +32,11 @@ import type {
   CaptureWiresharkVncReadyResponse,
   EdgeSharkStatusResponse,
   ExecResponse,
-  FcliCommandResponse,
+  FclingApiRequest,
+  FclingApiResponse,
+  FclingCommandResponse,
+  FclingEngineStatus,
+  FclingEvent,
   GenerateTopologyRequest,
   GenerateTopologyResponse,
   GraphExportFormat,
@@ -340,7 +344,24 @@ export interface LabBackend {
     lab: LabTarget,
     options?: { nodeFilter?: string; copyDir?: string }
   ): Promise<SaveConfigResponse>;
-  fcli(lab: LabTarget, command: string): Promise<FcliCommandResponse>;
+  fcling(lab: LabTarget, command: string): Promise<FclingCommandResponse>;
+  /** The lab's fcling engine: `stopped` until started, and kept running for its history. */
+  fclingEngine(lab: LabTarget): Promise<FclingEngineStatus>;
+  /** Starts the engine, or finds it running. Pulling its image can take minutes. */
+  startFclingEngine(lab: LabTarget): Promise<FclingEngineStatus>;
+  /** Stops the engine and keeps its history. */
+  stopFclingEngine(lab: LabTarget): Promise<void>;
+  /**
+   * One call to the engine's API, answered with the engine's status and body.
+   * Rejects with 403 for a call the Fabric view does not make, such as the
+   * engine's `chat`, and with 409 when the engine is not running.
+   */
+  fclingApi(lab: LabTarget, request: FclingApiRequest): Promise<FclingApiResponse>;
+  /** The engine's events, after this change if given, until `signal` aborts. */
+  streamFclingEvents(
+    lab: LabTarget,
+    options: { after?: number; signal: AbortSignal }
+  ): Promise<AsyncIterable<FclingEvent>>;
   /** The Tailscale proxy, sidecars and tailscale nodes of a running lab. */
   tailscaleStatus(labName: string): Promise<TailscaleStatus>;
   shareTool(

@@ -83,7 +83,7 @@ export const KUBERNETES_LIMITS = {
   vmSnapshots: unsupported(`Not supported on ${C9S}: containerlab has no VM snapshots there`),
   nodePause: unsupported(`Not supported on ${C9S}: pods cannot be paused`),
   shareTools: unsupported(`Not supported on ${C9S}: containerlab has no tools sshx or gotty there`),
-  fcli: unsupported(`Not supported on ${C9S}`),
+  fcling: unsupported(`Not supported on ${C9S}`),
   edgeshark: unsupported(`Not supported on ${C9S}: clabernetes captures lab links as one stream`),
 
   // Deploy flags (Run with options, Lab settings > Deploy)

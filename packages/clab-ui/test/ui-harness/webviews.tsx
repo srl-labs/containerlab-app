@@ -21,6 +21,8 @@ import { WiresharkVncTabsApp } from "../../src/webviews/wiresharkVnc/wiresharkVn
 import { TopologyTemplatePreview } from "../../src/workspace/components/TopologyTemplatePreview";
 import type { RenderedTopologyPreview } from "../../src/workspace/types";
 import { ClosGeneratorApp } from "../../src/webviews/closGenerator/closGenerator.webview";
+import { FabricApp } from "../../src/webviews/fabric/fabric.webview";
+import { createFixtureFabricClient } from "./fabricFixtures";
 import { LabToolDialogs } from "../../src/workspace/components/LabToolDialogs";
 import * as labToolDialogs from "../../src/workspace/state/labToolDialogs";
 
@@ -114,6 +116,9 @@ Object.assign(window, { __CLAB_UI_HARNESS_MESSAGES__: postedMessages, __LAB_TOOL
 const runtime = createClabUiRuntime({
   host: createWindowClabUiHost({ images, postMessage: (message) => postedMessages.push(message) })
 });
+
+const fabric = createFixtureFabricClient(state);
+Object.assign(window, { __FABRIC__: fabric.controls });
 
 const container = (
   name: string,
@@ -317,6 +322,8 @@ function HarnessView(): React.JSX.Element {
       );
     case "clos-generator":
       return <ClosGeneratorApp />;
+    case "fabric":
+      return <FabricApp client={fabric.client} labName="fabrictest" />;
     case "lab-tool-dialogs":
       return (
         <MuiThemeProvider>

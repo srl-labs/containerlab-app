@@ -58,6 +58,7 @@ import type {
   CaptureStreamOptions,
   CaptureTarget,
   ExecResponse,
+  FclingApiRequest,
   InspectContainerInfo,
   GenerateTopologyRequest,
   GraphExportFormat,
@@ -76,6 +77,8 @@ import { captureLimits, captureNodeTargets, pcapngBlocks } from "../capture.ts";
 import { LabBackendError } from "../contract/errors.ts";
 import { collectHostScript } from "../contract/hostScripts.ts";
 import { containerRuntimeFeatures } from "../contract/support.ts";
+import { isFclingApiCallAllowed, parseFclingEvents } from "@containerlab/clab-ui/fabric/engine";
+
 import { readJsonLines, readLines, withIdleTimeout } from "../ndjson.ts";
 import { gottyOptionsError } from "../shareOptions.ts";
 import { buildWebSocketUrl, ClabApiClient, type ServerHealth, type ServerLabHost } from "./clabApiClient.ts";
@@ -120,6 +123,7 @@ const SERVER_FEATURES = {
   c9sRuntime: "c9s-runtime",
   captureStream: "capture-stream",
   wiresharkVnc: "wireshark-vnc",
+  fcling: "fcling",
   labHostInfo: "lab-host-info",
   lifecycleTimeout: "lab-lifecycle-timeout"
 } as const;
@@ -296,6 +300,8 @@ function featuresFromServerHealth(state: ServerState): LabBackendFeatures {
     // Older servers run containerlab with their own timeouts and take none.
     lifecycleTimeout: listed.has(SERVER_FEATURES.lifecycleTimeout),
     ...containerRuntimeFeatures(containerRuntime),
+    // Older servers run fcli, without an engine.
+    fcling: containerRuntime && listed.has(SERVER_FEATURES.fcling),
     // A c9s server picks namespaces, exposure and persistence itself, and has no manifest export.
     manifestExport: false,
     c9sDeployOptions: false,
@@ -700,8 +706,46 @@ export class ApiLabBackend implements LabBackend {
     return this.client.saveLab(this.token, lab.labName, options);
   }
 
-  fcli(lab: LabTarget, command: string) {
-    return this.client.runFcliCommand(this.token, lab.labName, command);
+  async fcling(lab: LabTarget, command: string) {
+    await this.requireFcling();
+    return this.client.runFclingCommand(this.token, lab.labName, command);
+  }
+
+  private async requireFcling(): Promise<void> {
+    if (!(await this.hasFeature(SERVER_FEATURES.fcling))) throw unsupported("run fcling");
+  }
+
+  async fclingEngine(lab: LabTarget) {
+    await this.requireFcling();
+    return this.client.getFclingEngine(this.token, lab.labName);
+  }
+
+  async startFclingEngine(lab: LabTarget) {
+    await this.requireFcling();
+    return this.client.startFclingEngine(this.token, lab.labName);
+  }
+
+  async stopFclingEngine(lab: LabTarget) {
+    await this.requireFcling();
+    await this.client.stopFclingEngine(this.token, lab.labName);
+  }
+
+  async fclingApi(lab: LabTarget, request: FclingApiRequest) {
+    await this.requireFcling();
+    if (!isFclingApiCallAllowed(request.method, request.path)) {
+      throw new LabBackendError(`The fabric engine does not offer ${request.method} ${request.path}.`, 403);
+    }
+    return this.client.fclingApi(this.token, lab.labName, request);
+  }
+
+  async streamFclingEvents(lab: LabTarget, options: { after?: number; signal: AbortSignal }) {
+    await this.requireFcling();
+    const response = await this.client.openFclingEvents(this.token, lab.labName, options.after, {
+      signal: options.signal
+    });
+    if (!response.body) throw new LabBackendError("clab-api-server sent no event stream", 502);
+    // The engine sends a keep-alive comment every 15 seconds.
+    return parseFclingEvents(withIdleTimeout(response.body, STREAM_IDLE_TIMEOUT_MS));
   }
 
   tailscaleStatus(labName: string) {

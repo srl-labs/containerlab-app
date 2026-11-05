@@ -251,10 +251,17 @@ export interface ShareToolResponse {
   shell?: string;
 }
 
-export interface FcliCommandResponse {
+export interface FclingCommandResponse {
   command: string;
   output: string;
 }
+
+export type {
+  FclingApiRequest,
+  FclingApiResponse,
+  FclingEngineStatus,
+  FclingEvent
+} from "@containerlab/clab-ui/fabric/engine";
 
 export interface CaptureCloseAllResponse {
   message: string;

@@ -41,7 +41,7 @@ const TEST_LAB_HOST_FEATURES: LabBackendFeatures = {
   netem: true,
   snapshots: true,
   nodePause: true,
-  fcli: true,
+  fcling: true,
   interfaceInspect: true,
   edgeshark: true,
   hostMetrics: true,

@@ -22,7 +22,7 @@ import {
   installEdgeShark,
   readFileExplorerFile,
   renameFileExplorerPath,
-  runFcliCommand,
+  runFclingCommand,
   uninstallEdgeShark,
   uploadFileExplorerFile,
   writeFileExplorerFile,
@@ -41,6 +41,7 @@ import {
 } from "./runtimeActionFlows";
 import { endpointDisplayAddress, endpointHostname } from "./endpointAddress";
 import type { WiresharkCaptureRequest } from "./wiresharkCaptureLauncher";
+import { openFabricWindow } from "./fabricClient";
 import { openWiresharkCaptureWindow } from "./wiresharkCaptureWindow";
 import {
   edgesharkCaptureRouteFor,
@@ -645,33 +646,33 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       runtimeUiActions.notify(`${kind.toUpperCase()} link copied to clipboard.`, "success");
     };
 
-    const runFcli = async (command: string): Promise<void> => {
+    const runFcling = async (command: string): Promise<void> => {
       const topologyRef = resolveActionTopologyRef();
       if (!topologyRef) {
-        postExplorerError("fcli actions require a running lab item.");
+        postExplorerError("fcling actions require a running lab item.");
         return;
       }
 
       try {
         runtimeUiActions.notify(
-          `Running fcli "${command}"... image pull may take a while.`,
+          `Running fcling "${command}"... image pull may take a while.`,
           "info"
         );
-        const response = await runFcliCommand({
+        const response = await runFclingCommand({
           endpointId: actionEndpointId,
           topologyRef,
           command
         });
         const content = response.output?.trim() || "(no output)";
-        openCommandOutputTerminal(`fcli: ${command}`, `fcli ${command}`, content, topologyRef);
+        openCommandOutputTerminal(`fcling: ${command}`, `fcling ${command}`, content, topologyRef);
         if (/\bNo data\.\.\./i.test(content)) {
           runtimeUiActions.notify(
-            `fcli "${command}" returned no data. Check lab state/filter and try a different command (for example sys-info).`,
+            `fcling "${command}" returned no data. Check lab state/filter and try a different command (for example sys-info).`,
             "warning"
           );
         } else {
           runtimeUiActions.notify(
-            `fcli "${command}" finished. Output opened in terminal.`,
+            `fcling "${command}" finished. Output opened in terminal.`,
             "success"
           );
         }
@@ -1369,23 +1370,31 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       "containerlab.lab.sshx.copylink": () => copyShareLink("sshx"),
       "containerlab.lab.gotty.copyLink": () => copyShareLink("gotty"),
       "containerlab.lab.gotty.copylink": () => copyShareLink("gotty"),
-      "containerlab.lab.fcli.bgpPeers": () => runFcli("bgp-peers"),
-      "containerlab.lab.fcli.bgpRib": () => runFcli("bgp-rib"),
-      "containerlab.lab.fcli.ipv4Rib": () => runFcli("ipv4-rib"),
-      "containerlab.lab.fcli.lldp": () => runFcli("lldp"),
-      "containerlab.lab.fcli.mac": () => runFcli("mac"),
-      "containerlab.lab.fcli.ni": () => runFcli("ni"),
-      "containerlab.lab.fcli.subif": () => runFcli("subif"),
-      "containerlab.lab.fcli.sysInfo": () => runFcli("sys-info"),
-      "containerlab.lab.fcli.custom": async () => {
+      "containerlab.lab.fabric": () => {
+        const topologyRef = resolveActionTopologyRef();
+        if (!topologyRef) {
+          postExplorerError("The Fabric view requires a running lab item.");
+          return;
+        }
+        openFabricWindow(topologyRef.labName, actionEndpointId, resolveStandaloneTheme());
+      },
+      "containerlab.lab.fcling.bgpPeers": () => runFcling("bgp-peers"),
+      "containerlab.lab.fcling.bgpRib": () => runFcling("bgp-rib"),
+      "containerlab.lab.fcling.ipv4Rib": () => runFcling("ipv4-rib"),
+      "containerlab.lab.fcling.lldp": () => runFcling("lldp"),
+      "containerlab.lab.fcling.mac": () => runFcling("mac"),
+      "containerlab.lab.fcling.ni": () => runFcling("ni"),
+      "containerlab.lab.fcling.subif": () => runFcling("subif"),
+      "containerlab.lab.fcling.sysInfo": () => runFcling("sys-info"),
+      "containerlab.lab.fcling.custom": async () => {
         const customCommand = await promptForTextInput({
-          title: "Custom fcli command",
-          label: "fcli command",
+          title: "Custom fcling command",
+          label: "fcling command",
           defaultValue: "bgp-peers",
           confirmLabel: "Run"
         });
         if (customCommand?.trim()) {
-          await runFcli(customCommand.trim());
+          await runFcling(customCommand.trim());
         }
       },
       "containerlab.capture.killAllWiresharkVNC": async () => {

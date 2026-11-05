@@ -5,6 +5,7 @@ import { registerCaptureStreamProxy, type LocalWiresharkOptions } from "./captur
 import { registerCaptureVncStreamProxy } from "./captureVncStreamProxy.ts";
 import { registerEventChannel } from "./eventChannel.ts";
 import { labEventStreams, registerEventsProxy } from "./eventsProxy.ts";
+import { registerFclingProxy } from "./fclingProxy.ts";
 import { registerFileProxy, workspaceFileEventStreams } from "./fileProxy.ts";
 import { registerFileTransferProxy } from "./fileTransferProxy.ts";
 import { registerLabOperationsProxy } from "./labOperationsProxy.ts";
@@ -38,6 +39,7 @@ export function registerStandaloneProxies(
   registerRuntimeStreamProxy(app, resolveEndpoint, topologySessions);
   registerLabOperationsProxy(app, resolveEndpoint, topologySessions);
   registerCaptureVncStreamProxy(app, resolveEndpoint);
+  registerFclingProxy(app, resolveEndpoint);
   registerCaptureStreamProxy(app, resolveEndpoint, topologySessions, options);
   registerTerminalStreamProxy(app, resolveEndpoint);
 }

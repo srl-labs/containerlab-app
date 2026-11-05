@@ -54,7 +54,7 @@ test("a c9s host turns the container runtime features off and reports its cluste
     "netem",
     "snapshots",
     "nodePause",
-    "fcli",
+    "fcling",
     "edgeshark",
     "edgesharkManagement",
     "wiresharkVnc",
