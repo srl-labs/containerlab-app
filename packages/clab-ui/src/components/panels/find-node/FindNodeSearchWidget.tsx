@@ -25,8 +25,10 @@ export interface FindNodeSearchWidgetProps {
   dense?: boolean;
   showTipsHeader?: boolean;
   variant?: "panel" | "toolbar";
-  /** Toolbar only: a container query below which the empty filter collapses to a search button. */
-  collapseBelow?: string;
+  /** Toolbar only: the empty filter is a search button rather than a field. */
+  collapsed?: boolean;
+  /** Toolbar only: the filter is opened from its button, or holds a term, so it stays a field. */
+  onInUseChange?: (inUse: boolean) => void;
 }
 
 /** The toolbar filter: a slim tinted field that matches the explorer filter. */
@@ -58,11 +60,16 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
   dense = false,
   showTipsHeader = false,
   variant = "panel",
-  collapseBelow
+  collapsed: collapsedProp = false,
+  onInUseChange
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const inUse = expanded || searchTerm !== "";
+  useEffect(() => {
+    onInUseChange?.(inUse);
+  }, [inUse, onInUseChange]);
   const [matchCount, setMatchCount] = useState<number | null>(null);
   const getCurrentNodes = useCallback(
     () => useGraphStore.getState().nodes.filter((node) => isTopoNodeLike(node)),
@@ -154,7 +161,7 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
 
   if (variant === "toolbar") {
     // Expanded or holding a filter, the field stays open whatever the room.
-    const collapsed = collapseBelow !== undefined && !expanded && !searchTerm;
+    const collapsed = collapsedProp && !inUse;
     return (
       <Box
         aria-live="polite"
@@ -166,22 +173,13 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
           // The field's height, so the bar keeps its height when the field collapses.
           minHeight: 28,
           mx: 0.5,
-          "& .find-node-expand": { display: "none" },
-          ...(collapseBelow && collapsed
-            ? {
-                [collapseBelow]: {
-                  mx: 0,
-                  "& .find-node-field": { display: "none" },
-                  "& .find-node-expand": { display: "inline-flex" }
-                }
-              }
-            : {})
+          ...(collapsed ? { mx: 0, "& .find-node-field": { display: "none" } } : {})
         }}
         title={matchCount !== null ? formatMatchCountText(matchCount) : undefined}
       >
-        {collapseBelow !== undefined && (
+        {collapsed && (
           <Tooltip title="Find nodes">
-            <span className="find-node-expand">
+            <span>
               <IconButton
                 aria-label="Find nodes"
                 size="small"

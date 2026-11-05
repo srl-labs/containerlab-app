@@ -73,6 +73,7 @@ import { useLabHostLoader } from "./useLabHostLoader";
 import { useLifecycleDialogState } from "./useLifecycleDialogState";
 
 import { useLockShake } from "./useLockShake";
+import { useToolbarTrim } from "./useToolbarTrim";
 
 const LazyManifestExportDialog = React.lazy(async () => {
   const module = await import("../panels/kubernetes/ManifestExportDialog");
@@ -95,8 +96,11 @@ const FIT_TOOLTIP = withShortcut("Fit to Viewport", "fitView");
 const SUCCESS_MAIN = "success.main";
 /** Below the context panel drawer (1200); menus still portal above. */
 const NAVBAR_Z_INDEX = 1100;
-/** Size container for the room between the side panels; the toolbar filter collapses when it is tight. */
+/** Size container for the room between the side panels; the lab host's name shortens when it is tight. */
 const TOOLBAR_CONTAINER = "topoviewer-toolbar";
+/** What the one-line toolbar gives up as it runs out of room, first to last: the filter folds, the rest moves to More. */
+const TOOLBAR_TRIM_ORDER = ["filter", "capture", "bulkLink", "split", "links", "layout", "history", "settings"] as const;
+type ToolbarTrimStep = (typeof TOOLBAR_TRIM_ORDER)[number];
 /** Inset of the floating bar from the canvas edges (px). */
 const FLOATING_NAVBAR_INSET = 8;
 /** Toolbar glyphs use the 18px icon size. */
@@ -325,6 +329,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   const applyTooltip = getApplyTooltip(isInSync, isDeployed);
 
   const appBarRef = React.useRef<HTMLDivElement>(null);
+  const toolbarRoomRef = React.useRef<HTMLDivElement>(null);
+  const toolbarRef = React.useRef<HTMLDivElement>(null);
+  const [filterInUse, setFilterInUse] = React.useState(false);
   const [linkLabelMenuPosition, setLinkLabelMenuPosition] = React.useState<{
     top: number;
     left: number;
@@ -572,10 +579,33 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const zoomDisabled = !isTopologyActive || rfInstance === null;
 
+  const { trimLevel } = useToolbarTrim(
+    toolbarRoomRef,
+    toolbarRef,
+    TOOLBAR_TRIM_ORDER.length,
+    [isEditMode, lifecycleActionsAvailable, filterInUse, labHostInfo?.host?.label].join("|")
+  );
+  const isTrimmed = (step: ToolbarTrimStep) => TOOLBAR_TRIM_ORDER.indexOf(step) < trimLevel;
+  const showBulkLink = isEditMode && !isTrimmed("bulkLink");
+  const toolsGroupVisible =
+    showBulkLink || !isTrimmed("split") || !isTrimmed("layout") || !isTrimmed("links") || !isTrimmed("capture");
+  /** What no longer fits in the bar, in the bar's order, at the top of More. */
+  const moreMenuTrimmedItems = [
+    { step: "history", id: "undo", label: "Undo", Icon: UndoRoundedIcon, show: isEditMode, disabled: !isTopologyActive || !canUndo, run: () => onUndo?.() },
+    { step: "history", id: "redo", label: "Redo", Icon: RedoRoundedIcon, show: isEditMode, disabled: !isTopologyActive || !canRedo, run: () => onRedo?.() },
+    { step: "bulkLink", id: "bulk-link", label: "Bulk Link Devices", Icon: AddLinkRoundedIcon, show: isEditMode, disabled: !isTopologyActive || isLocked, run: () => onShowBulkLink?.() },
+    { step: "split", id: "split-view", label: "Toggle YAML Split View", Icon: VerticalSplitOutlinedIcon, show: true, disabled: !isTopologyActive, run: () => onToggleSplit?.() },
+    { step: "layout", id: "layout", label: "Layout", Icon: AccountTreeOutlinedIcon, show: true, disabled: !isTopologyActive, run: () => setLayoutMenuPosition(moreMenuPosition) },
+    { step: "links", id: "link-labels", label: "Links", Icon: LabelOutlinedIcon, show: true, disabled: !isTopologyActive, run: () => setLinkLabelMenuPosition(moreMenuPosition) },
+    { step: "capture", id: "capture", label: "Capture Viewport as SVG", Icon: PhotoCameraOutlinedIcon, show: true, disabled: !isTopologyActive, run: () => onCaptureViewport?.() },
+    { step: "settings", id: "lab-settings", label: "Lab Settings", Icon: SettingsOutlinedIcon, show: true, disabled: !isTopologyActive, run: () => onLabSettings?.() }
+  ].filter((item) => item.show && isTrimmed(item.step as ToolbarTrimStep));
+
   return (
     <>
     {/* Spans the canvas between the side panels, so the toolbar can adapt to the room it has. */}
     <Box
+      ref={toolbarRoomRef}
       sx={{
         position: "absolute",
         top: 0,
@@ -606,9 +636,10 @@ export const Navbar: React.FC<NavbarProps> = ({
       }}
     >
       <Toolbar
+        ref={toolbarRef}
         variant="dense"
         disableGutters
-        sx={{ minHeight: 0, p: 0.5, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px", "& > *": { flexShrink: 0 } }}
+        sx={{ minHeight: 0, p: 0.5, display: "flex", flexWrap: "nowrap", alignItems: "center", gap: "2px", "& > *": { flexShrink: 0 } }}
       >
         {labHostInfo?.host ? (
           <>
@@ -878,11 +909,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           isActive={isTopologyActive}
           rfInstance={rfInstance}
           variant="toolbar"
-          collapseBelow={`@container ${TOOLBAR_CONTAINER} (max-width: 640px)`}
+          collapsed={isTrimmed("filter")}
+          onInUseChange={setFilterInUse}
         />
 
         {/* Undo - only show in edit mode */}
-        {isEditMode && (
+        {isEditMode && !isTrimmed("history") && (
           <Tooltip title={UNDO_TOOLTIP}>
             <span>
               <IconButton
@@ -899,7 +931,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         )}
 
         {/* Redo - only show in edit mode */}
-        {isEditMode && (
+        {isEditMode && !isTrimmed("history") && (
           <Tooltip title={REDO_TOOLTIP}>
             <span>
               <IconButton
@@ -915,10 +947,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           </Tooltip>
         )}
 
-        <Divider orientation="vertical" flexItem sx={TOOLBAR_DIVIDER_SX} />
+        {toolsGroupVisible && <Divider orientation="vertical" flexItem sx={TOOLBAR_DIVIDER_SX} />}
 
         {/* Bulk Link - only show in edit mode */}
-        {isEditMode && (
+        {showBulkLink && (
           <Tooltip title="Bulk Link Devices">
             <span>
               <IconButton
@@ -935,35 +967,39 @@ export const Navbar: React.FC<NavbarProps> = ({
         )}
 
         {/* Toggle YAML Split View */}
-        <Tooltip title="Toggle YAML Split View">
-          <span>
-            <IconButton
-              aria-label="Toggle YAML Split View"
-              size="small"
-              onClick={onToggleSplit}
-              disabled={!isTopologyActive}
-              data-testid="navbar-split-view"
-            >
-              <VerticalSplitOutlinedIcon sx={TOOLBAR_ICON_SX} />
-            </IconButton>
-          </span>
-        </Tooltip>
+        {!isTrimmed("split") && (
+          <Tooltip title="Toggle YAML Split View">
+            <span>
+              <IconButton
+                aria-label="Toggle YAML Split View"
+                size="small"
+                onClick={onToggleSplit}
+                disabled={!isTopologyActive}
+                data-testid="navbar-split-view"
+              >
+                <VerticalSplitOutlinedIcon sx={TOOLBAR_ICON_SX} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
 
         {/* Layout Manager */}
-        <Tooltip title="Layout">
-          <span>
-            <IconButton
-              aria-label="Layout"
-              size="small"
-              onClick={handleLayoutClick}
-              disabled={!isTopologyActive}
-              sx={pressedSx(layoutMenuOpen)}
-              data-testid="navbar-layout"
-            >
-              <AccountTreeOutlinedIcon sx={TOOLBAR_ICON_SX} />
-            </IconButton>
-          </span>
-        </Tooltip>
+        {!isTrimmed("layout") && (
+          <Tooltip title="Layout">
+            <span>
+              <IconButton
+                aria-label="Layout"
+                size="small"
+                onClick={handleLayoutClick}
+                disabled={!isTopologyActive}
+                sx={pressedSx(layoutMenuOpen)}
+                data-testid="navbar-layout"
+              >
+                <AccountTreeOutlinedIcon sx={TOOLBAR_ICON_SX} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
         <Menu
           open={layoutMenuOpen}
           onClose={handleLayoutClose}
@@ -1006,23 +1042,25 @@ export const Navbar: React.FC<NavbarProps> = ({
         </Menu>
 
         {/* Links Dropdown */}
-        <Tooltip title="Links">
-          <span>
-            <IconButton
-              size="small"
-              onClick={handleLinkLabelClick}
-              disabled={!isTopologyActive}
-              aria-label="Links"
-              aria-haspopup="menu"
-              aria-controls={linkLabelMenuOpen ? "navbar-links-menu" : undefined}
-              aria-expanded={linkLabelMenuOpen}
-              sx={pressedSx(linkLabelMenuOpen)}
-              data-testid="navbar-link-labels"
-            >
-              <LabelOutlinedIcon sx={TOOLBAR_ICON_SX} />
-            </IconButton>
-          </span>
-        </Tooltip>
+        {!isTrimmed("links") && (
+          <Tooltip title="Links">
+            <span>
+              <IconButton
+                size="small"
+                onClick={handleLinkLabelClick}
+                disabled={!isTopologyActive}
+                aria-label="Links"
+                aria-haspopup="menu"
+                aria-controls={linkLabelMenuOpen ? "navbar-links-menu" : undefined}
+                aria-expanded={linkLabelMenuOpen}
+                sx={pressedSx(linkLabelMenuOpen)}
+                data-testid="navbar-link-labels"
+              >
+                <LabelOutlinedIcon sx={TOOLBAR_ICON_SX} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
         <Menu
           id="navbar-links-menu"
           open={linkLabelMenuOpen}
@@ -1082,35 +1120,39 @@ export const Navbar: React.FC<NavbarProps> = ({
         </Menu>
 
         {/* Capture Viewport */}
-        <Tooltip title="Capture Viewport as SVG">
-          <span>
-            <IconButton
-              aria-label="Capture Viewport as SVG"
-              size="small"
-              onClick={onCaptureViewport}
-              disabled={!isTopologyActive}
-              data-testid="navbar-capture"
-            >
-              <PhotoCameraOutlinedIcon sx={TOOLBAR_ICON_SX} />
-            </IconButton>
-          </span>
-        </Tooltip>
+        {!isTrimmed("capture") && (
+          <Tooltip title="Capture Viewport as SVG">
+            <span>
+              <IconButton
+                aria-label="Capture Viewport as SVG"
+                size="small"
+                onClick={onCaptureViewport}
+                disabled={!isTopologyActive}
+                data-testid="navbar-capture"
+              >
+                <PhotoCameraOutlinedIcon sx={TOOLBAR_ICON_SX} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
 
         <Divider orientation="vertical" flexItem sx={TOOLBAR_DIVIDER_SX} />
 
-        <Tooltip title="Lab Settings">
-          <span>
-            <IconButton
-              aria-label="Lab Settings"
-              size="small"
-              onClick={onLabSettings}
-              disabled={!isTopologyActive}
-              data-testid="navbar-lab-settings"
-            >
-              <SettingsOutlinedIcon sx={TOOLBAR_ICON_SX} />
-            </IconButton>
-          </span>
-        </Tooltip>
+        {!isTrimmed("settings") && (
+          <Tooltip title="Lab Settings">
+            <span>
+              <IconButton
+                aria-label="Lab Settings"
+                size="small"
+                onClick={onLabSettings}
+                disabled={!isTopologyActive}
+                data-testid="navbar-lab-settings"
+              >
+                <SettingsOutlinedIcon sx={TOOLBAR_ICON_SX} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
 
         <Tooltip title="More">
           <IconButton
@@ -1133,6 +1175,23 @@ export const Navbar: React.FC<NavbarProps> = ({
           transformOrigin={{ vertical: "top", horizontal: "center" }}
           slotProps={{ paper: { sx: { minWidth: 200 } } }}
         >
+          {moreMenuTrimmedItems.map(({ id, label, Icon, disabled, run }) => (
+            <MenuItem
+              key={id}
+              disabled={disabled}
+              data-testid={`navbar-more-${id}`}
+              onClick={() => {
+                handleMoreMenuClose();
+                run();
+              }}
+            >
+              <ListItemIcon>
+                <Icon />
+              </ListItemIcon>
+              <ListItemText>{label}</ListItemText>
+            </MenuItem>
+          ))}
+          {moreMenuTrimmedItems.length > 0 && <Divider />}
           <MenuItem onClick={handleShortcuts} data-testid="navbar-shortcuts">
             <ListItemIcon>
               <KeyboardOutlinedIcon />
