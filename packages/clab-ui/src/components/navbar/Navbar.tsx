@@ -597,7 +597,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { step: "split", id: "split-view", label: "Toggle YAML Split View", Icon: VerticalSplitOutlinedIcon, show: true, disabled: !isTopologyActive, run: () => onToggleSplit?.() },
     { step: "layout", id: "layout", label: "Layout", Icon: AccountTreeOutlinedIcon, show: true, disabled: !isTopologyActive, run: () => setLayoutMenuPosition(moreMenuPosition) },
     { step: "links", id: "link-labels", label: "Links", Icon: LabelOutlinedIcon, show: true, disabled: !isTopologyActive, run: () => setLinkLabelMenuPosition(moreMenuPosition) },
-    { step: "capture", id: "capture", label: "Capture Viewport as SVG", Icon: PhotoCameraOutlinedIcon, show: true, disabled: !isTopologyActive, run: () => onCaptureViewport?.() },
+    { step: "capture", id: "capture", label: "Export SVG or Draw.io", Icon: PhotoCameraOutlinedIcon, show: true, disabled: !isTopologyActive, run: () => onCaptureViewport?.() },
     { step: "settings", id: "lab-settings", label: "Lab Settings", Icon: SettingsOutlinedIcon, show: true, disabled: !isTopologyActive, run: () => onLabSettings?.() }
   ].filter((item) => item.show && isTrimmed(item.step as ToolbarTrimStep));
 
@@ -1121,10 +1121,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Capture Viewport */}
         {!isTrimmed("capture") && (
-          <Tooltip title="Capture Viewport as SVG">
+          <Tooltip title="Export SVG or Draw.io">
             <span>
               <IconButton
-                aria-label="Capture Viewport as SVG"
+                aria-label="Export SVG or Draw.io"
                 size="small"
                 onClick={onCaptureViewport}
                 disabled={!isTopologyActive}

@@ -79,7 +79,7 @@ interface ShapeStyle {
   dashArray: string;
 }
 
-function getShapeStyle(shape: FreeShapeAnnotation): ShapeStyle {
+export function getShapeStyle(shape: FreeShapeAnnotation): ShapeStyle {
   return {
     fillColor: applyAlphaToColor(
       shape.fillColor ?? SHAPE_DEFAULT_FILL_COLOR,
@@ -200,6 +200,25 @@ function getGroupBackgroundWithOpacity(color: string, opacity: number | undefine
   return applyAlphaToColor(color, opacity / 100);
 }
 
+/** How a group looks on the canvas, with its defaults applied. */
+export function resolveGroupPaint(group: GroupStyleAnnotation) {
+  const bgColor =
+    group.backgroundColor ??
+    resolveCssColor(GROUP_DEFAULT_BACKGROUND_CSS, GROUP_DEFAULT_BACKGROUND_FALLBACK);
+  const themeForeground = resolveCssColor(THEME_FOREGROUND_CSS, THEME_FOREGROUND_FALLBACK);
+  return {
+    fillColor:
+      bgColor === "transparent"
+        ? "none"
+        : getGroupBackgroundWithOpacity(bgColor, group.backgroundOpacity),
+    borderColor: group.borderColor ?? themeForeground,
+    borderWidth: group.borderWidth ?? GROUP_DEFAULT_BORDER_WIDTH,
+    borderRadius: group.borderRadius ?? GROUP_DEFAULT_BORDER_RADIUS,
+    dashArray: getGroupBorderDashArray(group.borderStyle ?? GROUP_DEFAULT_BORDER_STYLE),
+    labelColor: group.labelColor ?? themeForeground
+  };
+}
+
 /**
  * Convert a GroupStyleAnnotation to an SVG string.
  * Groups are rendered as rectangles with optional label.
@@ -211,20 +230,8 @@ function groupToSvgString(group: GroupStyleAnnotation): string {
   const height = group.height;
   const x = group.position.x;
   const y = group.position.y;
-
-  const bgColor =
-    group.backgroundColor ??
-    resolveCssColor(GROUP_DEFAULT_BACKGROUND_CSS, GROUP_DEFAULT_BACKGROUND_FALLBACK);
-  const fillColor =
-    bgColor === "transparent"
-      ? "none"
-      : getGroupBackgroundWithOpacity(bgColor, group.backgroundOpacity);
-
-  const themeForeground = resolveCssColor(THEME_FOREGROUND_CSS, THEME_FOREGROUND_FALLBACK);
-  const borderColor = group.borderColor ?? themeForeground;
-  const borderWidth = group.borderWidth ?? GROUP_DEFAULT_BORDER_WIDTH;
-  const borderRadius = group.borderRadius ?? GROUP_DEFAULT_BORDER_RADIUS;
-  const dashArray = getGroupBorderDashArray(group.borderStyle ?? GROUP_DEFAULT_BORDER_STYLE);
+  const { fillColor, borderColor, borderWidth, borderRadius, dashArray, labelColor } =
+    resolveGroupPaint(group);
 
   let svg = `<g class="annotation-group" data-id="${escapeXml(group.id)}">`;
   svg += `<rect x="${x}" y="${y}" width="${width}" height="${height}" `;
@@ -241,12 +248,7 @@ function groupToSvgString(group: GroupStyleAnnotation): string {
       group.labelPosition ?? "top-left",
       labelFontSize
     );
-    svg += buildGroupLabelSvg(
-      group.name,
-      labelPos,
-      group.labelColor ?? themeForeground,
-      labelFontSize
-    );
+    svg += buildGroupLabelSvg(group.name, labelPos, labelColor, labelFontSize);
   }
 
   svg += `</g>`;
@@ -402,7 +404,7 @@ function resolveInheritedFontFamily(): string {
   return canvasFontFamily(DEFAULT_FONT_FAMILY);
 }
 
-function getTextStyle(text: FreeTextAnnotation): TextStyle {
+export function getTextStyle(text: FreeTextAnnotation): TextStyle {
   // Match FreeTextNode.tsx buildTextStyle() defaults
   const backgroundColor = isNoFillBackground(text.backgroundColor)
     ? "transparent"
@@ -729,7 +731,7 @@ function addShapeBounds(bounds: BoundingBox, shapes: FreeShapeAnnotation[]): voi
   }
 }
 
-function getTextDimensions(text: FreeTextAnnotation): { w: number; h: number } {
+export function getTextDimensions(text: FreeTextAnnotation): { w: number; h: number } {
   if (text.width !== undefined && text.height !== undefined) {
     return { w: text.width, h: text.height };
   }
