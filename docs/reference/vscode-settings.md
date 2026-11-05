@@ -126,6 +126,5 @@ Earlier versions applied `deploy.extraArgs`, `destroy.extraArgs`, `capture.prefe
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `drawioDefaultTheme` | `nokia_modern` | Draw.io theme: `nokia_modern`, `nokia`, or `grafana`. |
 | `gotty.port` | `8080` | Port for GoTTY terminal sharing. |
 | `extras.fcli.extraDockerArgs` | empty | Extra Docker or Podman flags for fcli. |

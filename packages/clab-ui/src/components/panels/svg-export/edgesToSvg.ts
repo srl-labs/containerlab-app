@@ -567,6 +567,28 @@ function buildTelemetryEndpointLabelSvg(
   return svg;
 }
 
+/** Default-style pill metrics. Matches the canvas EndpointLabel default variant. */
+function getDefaultLabelMetrics(
+  text: string,
+  renderOptions: ResolvedEdgeRenderOptions
+): { fontSize: number; fontFamily: string; bgWidth: number; bgHeight: number } {
+  const { interfaceScale } = renderOptions;
+  const fontSize = Math.max(8, EDGE_LABEL.fontSize * interfaceScale);
+  const paddingX = Math.max(2, EDGE_LABEL.paddingX * interfaceScale);
+  const fontFamily = canvasFontFamily(EDGE_LABEL.fontFamily);
+  const textWidth = measureTextWidth(text, {
+    fontFamily,
+    fontSizePx: fontSize,
+    fontWeight: "400"
+  });
+  return {
+    fontSize,
+    fontFamily,
+    bgWidth: textWidth + paddingX * 2,
+    bgHeight: fontSize * EDGE_LABEL.lineHeight
+  };
+}
+
 /**
  * Build SVG for a default-style endpoint label (rounded pill + full text).
  * Matches the canvas EndpointLabel default variant (TopologyEdge.tsx).
@@ -579,17 +601,7 @@ function buildDefaultEndpointLabelSvg(
 ): string {
   if (!text) return "";
 
-  const { interfaceScale } = renderOptions;
-  const fontSize = Math.max(8, EDGE_LABEL.fontSize * interfaceScale);
-  const paddingX = Math.max(2, EDGE_LABEL.paddingX * interfaceScale);
-  const fontFamily = canvasFontFamily(EDGE_LABEL.fontFamily);
-  const textWidth = measureTextWidth(text, {
-    fontFamily,
-    fontSizePx: fontSize,
-    fontWeight: "400"
-  });
-  const bgWidth = textWidth + paddingX * 2;
-  const bgHeight = fontSize * EDGE_LABEL.lineHeight;
+  const { fontSize, fontFamily, bgWidth, bgHeight } = getDefaultLabelMetrics(text, renderOptions);
 
   let svg = `<g class="edge-label">`;
 
@@ -719,6 +731,9 @@ function buildLoopEdgePath(
   labelOffset: number
 ): {
   path: string;
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  controlPoints: [{ x: number; y: number }, { x: number; y: number }];
   sourceLabelPos: { x: number; y: number };
   targetLabelPos: { x: number; y: number };
 } {
@@ -741,6 +756,12 @@ function buildLoopEdgePath(
 
   return {
     path,
+    start: { x: startX, y: startY },
+    end: { x: endX, y: endY },
+    controlPoints: [
+      { x: cp1X, y: cp1Y },
+      { x: cp2X, y: cp2Y }
+    ],
     sourceLabelPos: { x: labelX, y: centerY - labelOffset },
     targetLabelPos: { x: labelX, y: centerY + labelOffset }
   };
@@ -857,15 +878,13 @@ function buildRegularEdgePath(
   return { path, controlPoint };
 }
 
-/**
- * Render a regular edge (between two different nodes) to SVG
- */
-function renderRegularEdge(
+/** Path and label positions of a regular edge, in flow coordinates. */
+function resolveRegularEdgeGeometry(
   ctx: EdgeRenderContext,
   sourceNode: Node,
   targetNode: Node,
   parallelInfo: { index: number; total: number; isCanonicalDirection: boolean } | undefined
-): string {
+) {
   const sourceRect = getNodeLinkRect(sourceNode, ctx.renderOptions);
   const targetRect = getNodeLinkRect(targetNode, ctx.renderOptions);
   const { sourceAnchor, targetAnchor } = resolveRegularEdgeAnchors(ctx, sourceNode, targetNode);
@@ -882,10 +901,6 @@ function renderRegularEdge(
       sourceAnchor !== undefined &&
       targetAnchor !== undefined
   );
-
-  let svg = `<g class="export-edge" data-id="${escapeXml(ctx.edgeId)}">`;
-  svg += `<path d="${path}" fill="none" stroke="${ctx.strokeColor}" `;
-  svg += `stroke-width="${EDGE_STYLE.strokeWidth}" opacity="${EDGE_STYLE.opacity}"/>`;
   const { sourceLabelPos, targetLabelPos } = getRegularEdgeLabelPositions(
     ctx,
     points,
@@ -893,6 +908,28 @@ function renderRegularEdge(
     sourceAnchor,
     targetAnchor
   );
+  return { points, path, controlPoint, sourceAnchor, targetAnchor, sourceLabelPos, targetLabelPos };
+}
+
+/**
+ * Render a regular edge (between two different nodes) to SVG
+ */
+function renderRegularEdge(
+  ctx: EdgeRenderContext,
+  sourceNode: Node,
+  targetNode: Node,
+  parallelInfo: { index: number; total: number; isCanonicalDirection: boolean } | undefined
+): string {
+  const { path, sourceLabelPos, targetLabelPos } = resolveRegularEdgeGeometry(
+    ctx,
+    sourceNode,
+    targetNode,
+    parallelInfo
+  );
+
+  let svg = `<g class="export-edge" data-id="${escapeXml(ctx.edgeId)}">`;
+  svg += `<path d="${path}" fill="none" stroke="${ctx.strokeColor}" `;
+  svg += `stroke-width="${EDGE_STYLE.strokeWidth}" opacity="${EDGE_STYLE.opacity}"/>`;
   svg += buildEdgeLabels(ctx, sourceLabelPos, targetLabelPos);
   svg += `</g>`;
   return svg;
@@ -940,18 +977,13 @@ function edgeToSvg(
 // Batch Renderer
 // ============================================================================
 
-/**
- * Render all edges to SVG
- * Filters out edges connected to annotation nodes
- */
-export function renderEdgesToSvg(
+/** Edges to draw, with what their geometry needs. Edges of annotation nodes are left out. */
+function prepareEdges(
   edges: Edge[],
   nodes: Node[],
-  includeLabels: boolean,
-  annotationNodeTypes?: Set<string>,
-  renderOptions?: EdgeSvgRenderOptions
-): string {
-  const resolvedRenderOptions = resolveEdgeRenderOptions(renderOptions);
+  annotationNodeTypes: Set<string> | undefined,
+  resolvedRenderOptions: ResolvedEdgeRenderOptions
+) {
   const skipTypes =
     annotationNodeTypes ??
     new Set(["free-text-annotation", "free-shape-annotation", "group-annotation"]);
@@ -978,6 +1010,28 @@ export function renderEdgesToSvg(
     ? buildInterfaceAnchorMap(validEdges, nodeMap, resolvedRenderOptions)
     : undefined;
 
+  return { validEdges, nodeMap, edgeInfo, interfaceAnchors };
+}
+
+/**
+ * Render all edges to SVG
+ * Filters out edges connected to annotation nodes
+ */
+export function renderEdgesToSvg(
+  edges: Edge[],
+  nodes: Node[],
+  includeLabels: boolean,
+  annotationNodeTypes?: Set<string>,
+  renderOptions?: EdgeSvgRenderOptions
+): string {
+  const resolvedRenderOptions = resolveEdgeRenderOptions(renderOptions);
+  const { validEdges, nodeMap, edgeInfo, interfaceAnchors } = prepareEdges(
+    edges,
+    nodes,
+    annotationNodeTypes,
+    resolvedRenderOptions
+  );
+
   let svg = "";
   for (const edge of validEdges) {
     svg += edgeToSvg(
@@ -991,4 +1045,182 @@ export function renderEdgesToSvg(
   }
 
   return svg;
+}
+
+// ============================================================================
+// Edge Layout
+// ============================================================================
+
+/** An endpoint label: where it sits and how it looks. */
+export interface EndpointLabelLayout {
+  text: string;
+  /** Center, in flow coordinates. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** A rounded pill with the full name, or a telemetry-style bubble. */
+  shape: "pill" | "bubble";
+  fontSize: number;
+  bold: boolean;
+  color: string;
+  background: string;
+  outline?: string;
+  outlineWidth?: number;
+}
+
+/** An edge in flow coordinates, for exports that draw edges themselves. */
+export interface EdgeLayout {
+  id: string;
+  source: string;
+  target: string;
+  strokeColor: string;
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  /** Points the path bends around: none for a straight link. */
+  bends: { x: number; y: number }[];
+  /** Whether an end sits at a fixed point, instead of wherever it meets the node outline. */
+  startPinned: boolean;
+  endPinned: boolean;
+  labels: EndpointLabelLayout[];
+}
+
+function layoutEndpointLabel(
+  endpoint: unknown,
+  position: { x: number; y: number },
+  renderOptions: ResolvedEdgeRenderOptions
+): EndpointLabelLayout | null {
+  const normalized = normalizeEndpoint(endpoint);
+  if (normalized === null) return null;
+  const text = resolveDisplayInterfaceLabel(normalized, renderOptions);
+  if (renderOptions.telemetryStyleLabels) {
+    const metrics = getTelemetryLabelMetrics(text, renderOptions.interfaceScale);
+    if (!metrics.text) return null;
+    return {
+      text: metrics.text,
+      ...position,
+      width: metrics.radius * 2,
+      height: metrics.radius * 2,
+      shape: "bubble",
+      fontSize: metrics.fontSize,
+      bold: true,
+      // The canvas outlines white text. Without outlines, the outline color is what stays readable.
+      color: TELEMETRY_EDGE_LABEL.textStrokeColor,
+      background: TELEMETRY_EDGE_LABEL.backgroundColor,
+      outline: TELEMETRY_EDGE_LABEL.outlineColor,
+      outlineWidth: TELEMETRY_EDGE_LABEL.bubbleStrokeWidth
+    };
+  }
+  if (!text) return null;
+  const { fontSize, bgWidth, bgHeight } = getDefaultLabelMetrics(text, renderOptions);
+  return {
+    text,
+    ...position,
+    width: bgWidth,
+    height: bgHeight,
+    shape: "pill",
+    fontSize,
+    bold: false,
+    color: renderOptions.defaultLabelForeground,
+    background: renderOptions.defaultLabelBackground
+  };
+}
+
+function layoutEdge(
+  edge: Edge,
+  sourceNode: Node,
+  nodeMap: Map<string, Node>,
+  edgeInfo: EdgeInfo,
+  ctx: EdgeRenderContext
+): Omit<EdgeLayout, "id" | "source" | "target" | "strokeColor" | "labels"> & {
+  sourceLabelPos: { x: number; y: number };
+  targetLabelPos: { x: number; y: number };
+} | null {
+  if (edge.source === edge.target) {
+    const rect = getNodeLinkRect(sourceNode, ctx.renderOptions);
+    const loop = buildLoopEdgePath(
+      rect.x,
+      rect.y,
+      rect.width,
+      rect.height,
+      edgeInfo.getLoopInfo(edge.id)?.loopIndex ?? 0,
+      resolveEdgeLabelOffsets(ctx.edgeData, ctx.renderOptions).loop
+    );
+    return {
+      start: loop.start,
+      end: loop.end,
+      bends: loop.controlPoints,
+      startPinned: true,
+      endPinned: true,
+      sourceLabelPos: loop.sourceLabelPos,
+      targetLabelPos: loop.targetLabelPos
+    };
+  }
+
+  const targetNode = nodeMap.get(edge.target);
+  if (!targetNode) return null;
+  const geometry = resolveRegularEdgeGeometry(
+    ctx,
+    sourceNode,
+    targetNode,
+    edgeInfo.getParallelInfo(edge.id) ?? undefined
+  );
+  return {
+    start: { x: geometry.points.sx, y: geometry.points.sy },
+    end: { x: geometry.points.tx, y: geometry.points.ty },
+    bends: geometry.controlPoint ? [geometry.controlPoint] : [],
+    startPinned: geometry.sourceAnchor !== undefined,
+    endPinned: geometry.targetAnchor !== undefined,
+    sourceLabelPos: geometry.sourceLabelPos,
+    targetLabelPos: geometry.targetLabelPos
+  };
+}
+
+/** The same paths and labels as renderEdgesToSvg, as data. */
+export function layoutEdges(
+  edges: Edge[],
+  nodes: Node[],
+  includeLabels: boolean,
+  annotationNodeTypes?: Set<string>,
+  renderOptions?: EdgeSvgRenderOptions
+): EdgeLayout[] {
+  const resolved = resolveEdgeRenderOptions(renderOptions);
+  const { validEdges, nodeMap, edgeInfo, interfaceAnchors } = prepareEdges(
+    edges,
+    nodes,
+    annotationNodeTypes,
+    resolved
+  );
+
+  const layouts: EdgeLayout[] = [];
+  for (const edge of validEdges) {
+    const sourceNode = nodeMap.get(edge.source);
+    if (!sourceNode) continue;
+    const edgeData = edge.data as TopologyEdgeData | undefined;
+    const geometry = layoutEdge(edge, sourceNode, nodeMap, edgeInfo, {
+      edgeId: edge.id,
+      strokeColor: getEdgeColor(edgeData?.linkStatus),
+      edgeData,
+      includeLabels,
+      renderOptions: resolved,
+      interfaceAnchors
+    });
+    if (!geometry) continue;
+    const { sourceLabelPos, targetLabelPos, ...path } = geometry;
+    const labels = includeLabels
+      ? [
+          layoutEndpointLabel(edgeData?.sourceEndpoint, sourceLabelPos, resolved),
+          layoutEndpointLabel(edgeData?.targetEndpoint, targetLabelPos, resolved)
+        ].filter((label) => label !== null)
+      : [];
+    layouts.push({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      strokeColor: getEdgeColor(edgeData?.linkStatus),
+      labels,
+      ...path
+    });
+  }
+  return layouts;
 }

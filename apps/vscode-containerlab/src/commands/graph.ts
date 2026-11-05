@@ -1,5 +1,3 @@
-import * as fs from "fs";
-
 import * as vscode from "vscode";
 
 import type { ClabLabTreeNode } from "../treeView/common";
@@ -13,105 +11,9 @@ import {
   topologyFileStem
 } from "@containerlab/clab-ui/host";
 
-import {
-  getLocalBackend,
-  isRemote,
-  isUriString,
-  labNameForPath,
-  labPathOf,
-  labUri,
-  rememberHostOf,
-  resolveLab
-} from "../backend/labBackends";
+import { isUriString, labNameForPath, labPathOf, rememberHostOf } from "../backend/labBackends";
 
-import { execCommandInTerminal, runWithProgress } from "./command";
 import { showRenderedTopology } from "./renderedTopology";
-
-/**
- * Core routine for generating draw.io graphs.
- */
-async function runGraphDrawIO(
-  node: ClabLabTreeNode | undefined,
-  layout: "horizontal" | "vertical"
-) {
-  node = await getSelectedLabNode(node);
-  if (!node) {
-    return;
-  }
-  if (!node.labPath.absolute) {
-    vscode.window.showErrorMessage("No lab path found. Cannot open .drawio file.");
-    return;
-  }
-  const labPath = node.labPath.absolute;
-  const labName = node.name ?? labNameForPath(labPath);
-  const drawioTheme = vscode.workspace
-    .getConfiguration("containerlab")
-    .get<string>("drawioDefaultTheme", "nokia_modern");
-
-  let drawioUri = labUri(labPath);
-  await runWithProgress(
-    async ({ output }) => {
-      const lab = await resolveLab(labPath, labName, node.connectionId);
-      const result = await lab.backend.graphDrawio(lab.target, { layout, theme: drawioTheme });
-      for (const line of (result.output ?? "").split("\n")) output(line, "stdout");
-      const topologyUri = labUri(labPath);
-      drawioUri = vscode.Uri.joinPath(topologyUri, "..", result.fileName);
-      if (topologyUri.scheme !== "file" || !fs.existsSync(drawioUri.fsPath)) {
-        // A lab host returns the file instead of writing it next to the topology.
-        await vscode.workspace.fs.writeFile(drawioUri, Buffer.from(result.content, "utf8"));
-      }
-    },
-    {
-      spinnerMsg: {
-        progressMsg: `Generating the draw.io graph of ${labName}...`,
-        successMsg: ""
-      },
-      actionName: "graph",
-      onSuccess: async () => {
-        await vscode.commands.executeCommand("vscode.open", drawioUri);
-      }
-    }
-  );
-}
-
-export async function graphDrawIOHorizontal(node?: ClabLabTreeNode) {
-  await runGraphDrawIO(node, "horizontal");
-}
-
-export async function graphDrawIOVertical(node?: ClabLabTreeNode) {
-  await runGraphDrawIO(node, "vertical");
-}
-
-/**
- * Graph Lab (draw.io, Interactive) => always run in Terminal
- */
-export async function graphDrawIOInteractive(node?: ClabLabTreeNode) {
-  node = await getSelectedLabNode(node);
-  if (!node) {
-    return;
-  }
-  if (isRemote(node)) {
-    vscode.window.showInformationMessage(
-      "The interactive draw.io graph runs on this machine only. Use the horizontal or vertical layout for labs on a lab host."
-    );
-    return;
-  }
-
-  const backend = getLocalBackend();
-  execCommandInTerminal(
-    backend.commandLine([
-      "graph",
-      "-r",
-      backend.options.runtime,
-      "--drawio",
-      "--drawio-args",
-      "-I",
-      "-t",
-      node.labPath.absolute
-    ]),
-    "Containerlab Graph"
-  );
-}
 
 /**
  * Graph Lab (TopoViewer)

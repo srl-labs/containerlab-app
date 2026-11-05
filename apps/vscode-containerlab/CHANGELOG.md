@@ -20,6 +20,7 @@
   - TopoViewer loads about 1.4 MB less script before it draws: the auto layout engine, the syntax highlighting of text annotations, and the geo map worker load when they are used. The topology is read while the view loads, and the code editor is preloaded only once the lab has settled.
 - Editing a topology on a lab host no longer makes nodes jump or the file blink in the explorer: saves replace the files in place instead of moving them aside first, and the TopoViewer ignores late reports of its own saves.
 - A deleted node's name is free again for the next node (deleting `srl1`–`srl3` and adding one gives `srl1`, not `srl4`).
+- The TopoViewer exports a lab as an editable Draw.io file with your layout, groups, shapes, and text, without containerlab or Docker: **Export SVG or Draw.io** in the toolbar (formerly **Capture Viewport as SVG**), then **Draw.io**. It replaces the **Graph (draw.io)** commands and their clab-io-draw container, so those commands and the `containerlab.drawioDefaultTheme` setting are gone.
 - Annotations of nodes that no longer exist are removed, so a node added in the YAML no longer takes over a deleted node's position.
 
 ## [0.26.0] - 2026-07-07

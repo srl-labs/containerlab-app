@@ -57,6 +57,7 @@ import { DialogTitleWithClose } from "../ui/dialog/DialogChrome";
 
 import {
   applyPadding,
+  buildDrawioXml,
   buildGraphSvg,
   collectGrafanaEdgeCellMappings,
   collectGrafanaTrafficRateLabelPlacements,
@@ -72,7 +73,8 @@ import {
   DEFAULT_GRAFANA_TRAFFIC_THRESHOLDS,
   getViewportSize,
   compositeAnnotationsIntoSvg,
-  addBackgroundRect
+  addBackgroundRect,
+  resolveCanvasBackground
 } from "./svg-export";
 import type {
   CustomIconMap,
@@ -101,8 +103,8 @@ const ANNOTATION_NODE_TYPES: Set<string> = new Set([
   GROUP_NODE_TYPE
 ]);
 
-function downloadSvg(content: string, filename: string): void {
-  const blob = new Blob([content], { type: "image/svg+xml;charset=utf-8" });
+function downloadFile(content: string, filename: string, type: string): void {
+  const blob = new Blob([content], { type: `${type};charset=utf-8` });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -111,6 +113,7 @@ function downloadSvg(content: string, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
+type ExportFormat = "svg" | "drawio";
 type BackgroundOption = "transparent" | "custom";
 const DEFAULT_GRAFANA_NODE_SIZE_PX = 40;
 const DEFAULT_GRAFANA_INTERFACE_SIZE_PERCENT = 100;
@@ -283,6 +286,10 @@ function getInterfaceSelectionValue(
   return `${INTERFACE_SELECT_TOKEN_PREFIX}${override}`;
 }
 
+function parseExportFormat(value: unknown): ExportFormat {
+  return value === "drawio" ? "drawio" : "svg";
+}
+
 function parseBackgroundOption(value: string): BackgroundOption {
   return value === "custom" ? "custom" : "transparent";
 }
@@ -403,6 +410,8 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
   const telemetryLabelSettings = useTelemetryLabelSettings();
   const nodeStyle = useNodeStyle();
   const nodeBoxSpacing = useNodeBoxSpacing();
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("svg");
+  const isDrawio = exportFormat === "drawio";
   const [borderZoom, setBorderZoom] = useState(100);
   const [borderPadding, setBorderPadding] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
@@ -444,7 +453,8 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
   const [backgroundOption, setBackgroundOption] = useState<BackgroundOption>("transparent");
   const [customBackgroundColor, setCustomBackgroundColor] = useState("#1e1e1e");
   // Icon frames follow the export background, or the canvas when it stays transparent
-  const canvasIconInk = useCanvasIconInk(useTopoViewerStore((state) => state.gridBgColor));
+  const gridBgColor = useTopoViewerStore((state) => state.gridBgColor);
+  const canvasIconInk = useCanvasIconInk(gridBgColor);
   const iconInk =
     backgroundOption === "custom" ? getIconInk(customBackgroundColor) : canvasIconInk;
   const defaultBaseName = useMemo(() => resolveDefaultExportBaseName(labName), [labName]);
@@ -535,6 +545,22 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
     });
   }, []);
 
+  // Mirror the live canvas settings so the export matches the screen 1:1
+  const canvasRenderOptions: GraphSvgRenderOptions = useMemo(
+    () => ({
+      nodeIconSize: clampTelemetryNodeSizePx(telemetryLabelSettings.nodeSizePx),
+      interfaceScale:
+        clampTelemetryInterfaceSizePercent(telemetryLabelSettings.interfaceSizePercent) / 100,
+      interfaceLabelOverrides: telemetryLabelSettings.interfaceLabelOverrides,
+      globalInterfaceOverrideSelection: telemetryLabelSettings.globalInterfaceOverrideSelection,
+      telemetryStyleLabels: linkLabelMode === "telemetry-style",
+      nodeStyle,
+      nodeBoxSpacing,
+      iconInk
+    }),
+    [telemetryLabelSettings, linkLabelMode, nodeStyle, nodeBoxSpacing, iconInk]
+  );
+
   const prepareSvgExport = useCallback((): PreparedSvgExport => {
     if (!rfInstance) {
       throw new Error("SVG export is not yet available");
@@ -548,18 +574,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
           telemetryStyleLabels: true,
           iconInk
         }
-      : {
-          // Mirror the live canvas settings so the export matches the screen 1:1
-          nodeIconSize: clampTelemetryNodeSizePx(telemetryLabelSettings.nodeSizePx),
-          interfaceScale:
-            clampTelemetryInterfaceSizePercent(telemetryLabelSettings.interfaceSizePercent) / 100,
-          interfaceLabelOverrides: telemetryLabelSettings.interfaceLabelOverrides,
-          globalInterfaceOverrideSelection: telemetryLabelSettings.globalInterfaceOverrideSelection,
-          telemetryStyleLabels: linkLabelMode === "telemetry-style",
-          nodeStyle,
-          nodeBoxSpacing,
-          iconInk
-        };
+      : canvasRenderOptions;
     const graphSvg = buildGraphSvg(
       rfInstance,
       borderZoom,
@@ -592,10 +607,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
     grafanaNodeSizePx,
     grafanaInterfaceSizePercent,
     effectiveInterfaceLabelOverrides,
-    linkLabelMode,
-    telemetryLabelSettings,
-    nodeStyle,
-    nodeBoxSpacing,
+    canvasRenderOptions,
     iconInk,
     rfInstance,
     borderZoom,
@@ -614,12 +626,55 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
   ]);
 
   const exportPlainSvg = useCallback((prepared: PreparedSvgExport): void => {
-    downloadSvg(prepared.finalSvg, `${prepared.baseName}.svg`);
+    downloadFile(prepared.finalSvg, `${prepared.baseName}.svg`, "image/svg+xml");
     setExportStatus({
       type: "success",
       message: "SVG exported successfully"
     });
   }, []);
+
+  const exportDrawioFile = useCallback(
+    (instance: ReactFlowInstance): void => {
+      const baseName = filename.trim() || defaultBaseName;
+      const xml = buildDrawioXml({
+        name: baseName,
+        nodes: instance.getNodes(),
+        edges: instance.getEdges(),
+        annotations:
+          includeAnnotations && totalAnnotations > 0
+            ? { groups, textAnnotations, shapeAnnotations }
+            : undefined,
+        annotationNodeTypes: ANNOTATION_NODE_TYPES,
+        customIcons,
+        includeEdgeLabels,
+        renderOptions: canvasRenderOptions,
+        background:
+          backgroundOption === "custom"
+            ? customBackgroundColor
+            : resolveCanvasBackground(gridBgColor)
+      });
+      downloadFile(xml, `${baseName}.drawio`, "application/xml");
+      setExportStatus({
+        type: "success",
+        message: "Draw.io file exported successfully"
+      });
+    },
+    [
+      filename,
+      defaultBaseName,
+      includeAnnotations,
+      totalAnnotations,
+      groups,
+      textAnnotations,
+      shapeAnnotations,
+      customIcons,
+      includeEdgeLabels,
+      canvasRenderOptions,
+      backgroundOption,
+      customBackgroundColor,
+      gridBgColor
+    ]
+  );
 
   const exportGrafanaBundleFiles = useCallback(
     async (prepared: PreparedSvgExport): Promise<void> => {
@@ -703,6 +758,10 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
     setIsExporting(true);
     setExportStatus(null);
     try {
+      if (isDrawio) {
+        exportDrawioFile(rfInstance);
+        return;
+      }
       log.info(`[SvgExport] Export requested: zoom=${borderZoom}%, padding=${borderPadding}px`);
       const prepared = prepareSvgExport();
       if (!exportGrafanaBundle) {
@@ -726,6 +785,8 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
     borderPadding,
     exportGrafanaBundle,
     rfInstance,
+    isDrawio,
+    exportDrawioFile,
     prepareSvgExport,
     exportPlainSvg,
     exportGrafanaBundleFiles
@@ -743,10 +804,11 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
     return { backgroundColor: customBackgroundColor } as const;
   })();
 
-  let exportButtonLabel = "Export SVG";
+  const dialogTitle = isDrawio ? "Export Draw.io" : "Export SVG";
+  let exportButtonLabel = dialogTitle;
   if (isExporting) {
     exportButtonLabel = "Exporting…";
-  } else if (exportGrafanaBundle) {
+  } else if (!isDrawio && exportGrafanaBundle) {
     exportButtonLabel = "Export Grafana bundle";
   }
 
@@ -759,8 +821,21 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
         fullWidth
         data-testid="svg-export-modal"
       >
-        <DialogTitleWithClose title="Export SVG" onClose={onClose} />
+        <DialogTitleWithClose title={dialogTitle} onClose={onClose} />
         <DialogContent dividers sx={{ p: 0 }}>
+          <Tabs
+            value={exportFormat}
+            onChange={(_event, value) => {
+              setExportFormat(parseExportFormat(value));
+              setExportStatus(null);
+            }}
+            variant="fullWidth"
+            data-testid="svg-export-format"
+          >
+            <Tab label="SVG" value="svg" data-testid="svg-export-format-svg" />
+            <Tab label="Draw.io" value="drawio" data-testid="svg-export-format-drawio" />
+          </Tabs>
+          <Divider />
           <Box sx={{ p: 2 }}>
             <TextField
               label="Filename"
@@ -780,50 +855,64 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                           color: "text.secondary"
                         }}
                       >
-                        .svg
+                        {isDrawio ? ".drawio" : ".svg"}
                       </Typography>
                     </InputAdornment>
                   )
                 }
               }}
             />
+            {isDrawio && (
+              <Typography
+                variant="caption"
+                component="p"
+                sx={{ color: "text.secondary", mt: 1, mb: 0 }}
+              >
+                The whole lab as editable shapes and connectors, not only what you see. Traffic rate
+                labels and script buttons are left out.
+              </Typography>
+            )}
           </Box>
 
-          <Divider />
-          <Box sx={{ px: 2, py: 1 }}>
-            <Typography variant="subtitle2">Quality & size</Typography>
-          </Box>
-          <Divider />
-          <Box sx={{ p: 2 }}>
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-              <NumberTextField
-                label="Zoom"
-                size="small"
-                value={borderZoom}
-                onChange={(e) =>
-                  setBorderZoom(Math.max(10, Math.min(300, parseFloat(e.target.value) || 0)))
-                }
-                slotProps={{
-                  htmlInput: { min: 10, max: 300, step: 1 },
-                  input: {
-                    endAdornment: <InputAdornment position="end">%</InputAdornment>
-                  }
-                }}
-              />
-              <NumberTextField
-                label="Padding"
-                size="small"
-                value={borderPadding}
-                onChange={(e) => setBorderPadding(Math.max(0, parseFloat(e.target.value) || 0))}
-                slotProps={{
-                  htmlInput: { min: 0, max: 500, step: 1 },
-                  input: {
-                    endAdornment: <InputAdornment position="end">px</InputAdornment>
-                  }
-                }}
-              />
-            </Box>
-          </Box>
+          {!isDrawio && (
+            <>
+              <Divider />
+              <Box sx={{ px: 2, py: 1 }}>
+                <Typography variant="subtitle2">Quality & size</Typography>
+              </Box>
+              <Divider />
+              <Box sx={{ p: 2 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                  <NumberTextField
+                    label="Zoom"
+                    size="small"
+                    value={borderZoom}
+                    onChange={(e) =>
+                      setBorderZoom(Math.max(10, Math.min(300, parseFloat(e.target.value) || 0)))
+                    }
+                    slotProps={{
+                      htmlInput: { min: 10, max: 300, step: 1 },
+                      input: {
+                        endAdornment: <InputAdornment position="end">%</InputAdornment>
+                      }
+                    }}
+                  />
+                  <NumberTextField
+                    label="Padding"
+                    size="small"
+                    value={borderPadding}
+                    onChange={(e) => setBorderPadding(Math.max(0, parseFloat(e.target.value) || 0))}
+                    slotProps={{
+                      htmlInput: { min: 0, max: 500, step: 1 },
+                      input: {
+                        endAdornment: <InputAdornment position="end">px</InputAdornment>
+                      }
+                    }}
+                  />
+                </Box>
+              </Box>
+            </>
+          )}
 
           <Divider />
           <Box sx={{ px: 2, py: 1 }}>
@@ -838,7 +927,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
               <FormControlLabel
                 value="transparent"
                 control={<Radio size="small" />}
-                label="Transparent"
+                label={isDrawio ? "Canvas color" : "Transparent"}
               />
               <FormControlLabel value="custom" control={<Radio size="small" />} label="Custom" />
             </RadioGroup>
@@ -879,124 +968,130 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
               }
               label="Edge labels"
             />
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 1
-              }}
-            >
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    size="small"
-                    checked={exportGrafanaBundle}
-                    onChange={(e) => setExportGrafanaBundle(e.target.checked)}
-                  />
-                }
-                label="Grafana bundle"
-                data-testid="svg-export-grafana-bundle"
-              />
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<SettingsIcon />}
-                disabled={!exportGrafanaBundle}
-                onClick={() => setIsGrafanaSettingsOpen(true)}
-                data-testid="svg-export-grafana-advanced-btn"
-              >
-                Advanced Grafana settings
-              </Button>
-            </Box>
-          </Box>
-
-          <Divider />
-          <Box sx={{ px: 2, py: 1 }}>
-            <Typography variant="subtitle2">Preview</Typography>
-          </Box>
-          <Divider />
-          <Box sx={{ p: 2 }}>
-            <Box
-              sx={{
-                position: "relative",
-                p: 2,
-                borderRadius: 1,
-                overflow: "hidden",
-                border: 1,
-                borderColor: "divider"
-              }}
-            >
+            {!isDrawio && (
               <Box
                 sx={{
-                  position: "absolute",
-                  inset: 0,
-                  opacity: 0.3,
-                  ...PREVIEW_GRID_BG_SX
-                }}
-              />
-              <Box
-                sx={{
-                  position: "relative",
-                  zIndex: 10,
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center"
+                  justifyContent: "space-between",
+                  gap: 1
                 }}
               >
-                <Box
-                  sx={{
-                    width: 96,
-                    height: 64,
-                    borderRadius: 1,
-                    boxShadow: 3,
-                    border: 1,
-                    borderColor: "divider",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    transition: "all 200ms",
-                    ...previewBackgroundSx,
-                    padding: `${Math.min(borderPadding / 20, 8)}px`,
-                    transform: `scale(${0.8 + borderZoom / 500})`
-                  }}
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={exportGrafanaBundle}
+                      onChange={(e) => setExportGrafanaBundle(e.target.checked)}
+                    />
+                  }
+                  label="Grafana bundle"
+                  data-testid="svg-export-grafana-bundle"
+                />
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<SettingsIcon />}
+                  disabled={!exportGrafanaBundle}
+                  onClick={() => setIsGrafanaSettingsOpen(true)}
+                  data-testid="svg-export-grafana-advanced-btn"
                 >
-                  <AccountTreeIcon sx={{ fontSize: 24, color: "primary.main", opacity: 0.8 }} />
-                </Box>
+                  Advanced Grafana settings
+                </Button>
               </Box>
-            </Box>
+            )}
           </Box>
 
-          <Divider />
-          <Box sx={{ p: 2 }}>
-            <Paper variant="outlined" sx={{ p: 1.5 }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
-                <LightbulbIcon sx={{ fontSize: 14, color: "warning.main" }} />
-                <Typography
-                  variant="caption"
+          {!isDrawio && (
+            <>
+              <Divider />
+              <Box sx={{ px: 2, py: 1 }}>
+                <Typography variant="subtitle2">Preview</Typography>
+              </Box>
+              <Divider />
+              <Box sx={{ p: 2 }}>
+                <Box
                   sx={{
-                    color: "text.secondary"
+                    position: "relative",
+                    p: 2,
+                    borderRadius: 1,
+                    overflow: "hidden",
+                    border: 1,
+                    borderColor: "divider"
                   }}
                 >
-                  Tips
-                </Typography>
+                  <Box
+                    sx={{
+                      position: "absolute",
+                      inset: 0,
+                      opacity: 0.3,
+                      ...PREVIEW_GRID_BG_SX
+                    }}
+                  />
+                  <Box
+                    sx={{
+                      position: "relative",
+                      zIndex: 10,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 96,
+                        height: 64,
+                        borderRadius: 1,
+                        boxShadow: 3,
+                        border: 1,
+                        borderColor: "divider",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        transition: "all 200ms",
+                        ...previewBackgroundSx,
+                        padding: `${Math.min(borderPadding / 20, 8)}px`,
+                        transform: `scale(${0.8 + borderZoom / 500})`
+                      }}
+                    >
+                      <AccountTreeIcon sx={{ fontSize: 24, color: "primary.main", opacity: 0.8 }} />
+                    </Box>
+                  </Box>
+                </Box>
               </Box>
-              <Typography
-                variant="caption"
-                component="ul"
-                sx={{
-                  color: "text.secondary",
-                  pl: 2,
-                  m: 0,
-                  "& li": { mb: 0.25 }
-                }}
-              >
-                <li>Higher zoom = better quality, larger file</li>
-                <li>SVG files scale without quality loss</li>
-                <li>Transparent background for layering</li>
-              </Typography>
-            </Paper>
-          </Box>
+
+              <Divider />
+              <Box sx={{ p: 2 }}>
+                <Paper variant="outlined" sx={{ p: 1.5 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                    <LightbulbIcon sx={{ fontSize: 14, color: "warning.main" }} />
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary"
+                      }}
+                    >
+                      Tips
+                    </Typography>
+                  </Box>
+                  <Typography
+                    variant="caption"
+                    component="ul"
+                    sx={{
+                      color: "text.secondary",
+                      pl: 2,
+                      m: 0,
+                      "& li": { mb: 0.25 }
+                    }}
+                  >
+                    <li>Higher zoom = better quality, larger file</li>
+                    <li>SVG files scale without quality loss</li>
+                    <li>Transparent background for layering</li>
+                  </Typography>
+                </Paper>
+              </Box>
+            </>
+          )}
 
           {exportStatus && (
             <Box sx={{ px: 2, pb: 2 }}>

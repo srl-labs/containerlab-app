@@ -10,6 +10,9 @@ export { compositeAnnotationsIntoSvg, addBackgroundRect } from "./annotationsToS
 export { getViewportSize, buildGraphSvg, applyPadding } from "./graphSvg";
 export type { GraphSvgResult, GraphSvgRenderOptions } from "./graphSvg";
 
+// Draw.io export
+export { buildDrawioXml, resolveCanvasBackground } from "./drawioExport";
+
 // Grafana export helpers
 export {
   collectGrafanaEdgeCellMappings,

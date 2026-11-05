@@ -700,13 +700,6 @@ export class ApiLabBackend implements LabBackend {
     return this.client.saveLab(this.token, lab.labName, options);
   }
 
-  graphDrawio(
-    lab: LabTarget,
-    options: { layout: "horizontal" | "vertical" | "interactive"; theme?: string }
-  ) {
-    return this.client.generateDrawioGraph(this.token, lab.labName, options);
-  }
-
   fcli(lab: LabTarget, command: string) {
     return this.client.runFcliCommand(this.token, lab.labName, command);
   }

@@ -21,7 +21,6 @@ import type {
   ShareToolAction,
   ShareToolResponse,
   FcliCommandResponse,
-  DrawioGenerateResponse,
   CaptureCloseAllResponse,
   GenerateTopologyRequest,
   GenerateTopologyResponse,
@@ -56,7 +55,6 @@ export type {
   ShareToolAction,
   ShareToolResponse,
   FcliCommandResponse,
-  DrawioGenerateResponse,
   CaptureCloseAllResponse,
   GraphExportFormat,
   MermaidDirection,
@@ -776,20 +774,6 @@ export async function runFcliCommand(
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<FcliCommandResponse>(
     "/api/runtime/fcli",
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
-export async function generateDrawioGraph(
-  input: RuntimeTargetRequest & {
-    layout: "horizontal" | "vertical" | "interactive";
-    theme?: string;
-  }
-): Promise<DrawioGenerateResponse> {
-  const endpointId = resolveTargetEndpointId(input);
-  return await requestJson<DrawioGenerateResponse>(
-    "/api/runtime/labs/graph/drawio",
     asJsonBody(input, endpointId),
     endpointId
   );

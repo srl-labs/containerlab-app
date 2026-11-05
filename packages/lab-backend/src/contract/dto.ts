@@ -256,14 +256,6 @@ export interface FcliCommandResponse {
   output: string;
 }
 
-export interface DrawioGenerateResponse {
-  fileName: string;
-  content: string;
-  layout: string;
-  message?: string;
-  output?: string;
-}
-
 export interface CaptureCloseAllResponse {
   message: string;
   closed: number;

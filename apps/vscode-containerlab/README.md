@@ -31,9 +31,7 @@ A Visual Studio Code extension that integrates [containerlab](https://containerl
 - **Graphing & Visualization:**
   Generate network graphs in multiple modes, with the UI-first workflow in TopoViewer:
   - **Interactive TopoViewer:** Launches a dynamic, web-based topology UI (view/edit mode depends on lab state).
-  - **Draw.io (Horizontal):** Generates a `.drawio` file in a horizontal layout. (`pos` labels override the layout.)
-  - **Draw.io (Vertical):** Generates a `.drawio` file in a vertical layout. (`pos` labels override the layout.)
-  - **Draw.io (Interactive):** Runs containerlab graph generation in interactive Draw.io mode.
+  - **Draw.io:** **Export SVG or Draw.io** in the TopoViewer toolbar writes an editable `.drawio` file with your layout, groups, shapes, and text.
 
 - **Clone Labs from Git:**
   Easily clone labs from any Git repository or choose from a list of popular labs directly within the extension.
@@ -132,7 +130,6 @@ The Containerlab Explorer listens to the containerlab event stream, so running l
 | `editor.customNodes`                     | array   | See below\*    | Custom node templates for TopoViewer                       |
 | `editor.updateLinkEndpointsOnKindChange` | boolean | `true`         | Auto-update link endpoints on kind change                  |
 | `editor.lockLabByDefault`                | boolean | `true`         | Lock the lab canvas by default to prevent accidental edits |
-| `drawioDefaultTheme`                     | string  | `nokia_modern` | Draw.io theme (`nokia_modern`, `nokia`, `grafana`)         |
 
 \*Default custom nodes include SRLinux and Network Multitool templates. They ship with sensible interface naming patterns (for example `nokia_srlinux: "e1-{n}"`, `cisco_xrd: "Gi0-0-0-{n:0}"`). Patterns accept optional start indices (`{n:0}`), finite ranges (`{n:1-6}`), and comma-separated fallbacks (`1/1/c{n:1-6}/1, 2/1/c{n:1-12}/1`). Existing custom nodes without an Interface Pattern are automatically upgraded to use the defaults.
 

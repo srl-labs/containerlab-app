@@ -421,13 +421,6 @@ export class LocalLabBackend implements LabBackend {
       : this.resolveTopology(lab.labName, `${lab.labName}/${lab.labName}.clab.yml`);
   }
 
-  async graphDrawio(
-    lab: LabTarget,
-    options: { layout: "horizontal" | "vertical" | "interactive"; theme?: string }
-  ) {
-    return tools.drawioGraph(this.options, await this.topologyFile(lab), options.layout, options.theme);
-  }
-
   async graphExport(lab: LabTarget, format: GraphExportFormat, options: { direction?: MermaidDirection } = {}) {
     return tools.graphExport(this.options, await this.topologyFile(lab), format, options.direction);
   }
@@ -495,10 +488,7 @@ export class LocalLabBackend implements LabBackend {
     return tools.fcli(this.options, await this.labTopology(lab), network, command);
   }
 
-  /**
-   * A containerlab command line for a terminal, for interactive commands such
-   * as `graph --drawio-args -I`. Arguments are quoted for a POSIX shell.
-   */
+  /** A containerlab command line for a terminal. Arguments are quoted for a POSIX shell. */
   commandLine(args: string[]): string {
     const [file, commandArgs] = containerlabCommand(this.options, args);
     return [file, ...commandArgs].map(shellQuote).join(" ");

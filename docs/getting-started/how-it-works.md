@@ -52,7 +52,6 @@ Both ways run the same lab actions. A few depend on the API Server:
 | Several users on one lab host, each with their own labs | | :lucide-check: |
 | [Shared labs](../guides/shared-labs.md) in `@shared` | | :lucide-check: |
 | SSH to a node through a port the lab host forwards | | :lucide-check: |
-| Interactive Draw.io editing (VS Code) | :lucide-check: | |
 | Sign-in | none, runs as you | Linux account in `clab_api` or `clab_admins` |
 
 ## Two files per lab

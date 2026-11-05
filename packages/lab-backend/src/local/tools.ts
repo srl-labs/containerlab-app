@@ -6,7 +6,6 @@ import type Docker from "dockerode";
 import YAML from "yaml";
 
 import type {
-  DrawioGenerateResponse,
   FcliCommandResponse,
   GenerateTopologyRequest,
   GenerateTopologyResponse,
@@ -207,31 +206,6 @@ export async function saveLab(
     message: `Configuration save command executed successfully for lab '${labName}'.`,
     output: stripAnsi(`${result.stderr}${result.stdout}`).trim() || "Configuration saved",
     ...(copyDir ? { copyDir: path.resolve(path.dirname(topology), copyDir) } : {})
-  };
-}
-
-export async function drawioGraph(
-  options: ResolvedLocalOptions,
-  topology: string,
-  layout: "horizontal" | "vertical" | "interactive",
-  theme = "nokia_modern"
-): Promise<DrawioGenerateResponse> {
-  const effectiveLayout = layout === "interactive" ? "horizontal" : layout;
-  const result = await clab(
-    options,
-    ["graph", "-r", options.runtime, "--drawio", "--drawio-args", `--theme ${theme} --layout ${effectiveLayout}`, "-t", topology],
-    5 * 60_000
-  );
-  const drawioFile = topology.replace(/\.ya?ml$/i, "") + ".drawio";
-  const output = stripAnsi(`${result.stderr}${result.stdout}`).trim();
-  return {
-    fileName: path.basename(drawioFile),
-    content: await fs.readFile(drawioFile, "utf8"),
-    layout: effectiveLayout,
-    ...(layout === "interactive"
-      ? { message: "Interactive draw.io mode needs a terminal; generated horizontal layout." }
-      : {}),
-    ...(output ? { output } : {})
   };
 }
 

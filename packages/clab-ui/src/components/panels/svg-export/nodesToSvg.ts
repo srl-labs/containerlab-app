@@ -92,7 +92,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function resolveNodeIconSize(nodeIconSize: number | undefined): number {
+export function resolveNodeIconSize(nodeIconSize: number | undefined): number {
   if (typeof nodeIconSize !== "number" || !Number.isFinite(nodeIconSize)) return NODE_ICON_SIZE;
   return clamp(nodeIconSize, 12, 240);
 }
@@ -101,7 +101,7 @@ function resolveNodeIconSize(nodeIconSize: number | undefined): number {
  * Icon top-left in flow coordinates. Matches the canvas: the icon is
  * horizontally centered within the measured node width.
  */
-function getIconTopLeft(node: Node, iconSize: number): { x: number; y: number } {
+export function getIconTopLeft(node: Node, iconSize: number): { x: number; y: number } {
   let measuredWidth = iconSize;
   if (typeof node.measured?.width === "number") {
     measuredWidth = node.measured.width;
@@ -140,7 +140,7 @@ function embedBuiltInIcon(svgString: string, x: number, y: number, size: number)
   return `<svg class="${EXPORT_NODE_ICON_CLASS}" x="${x}" y="${y}" width="${size}" height="${size}" viewBox="${viewBox}">${inner}</svg>`;
 }
 
-function normalizeNodeLabelPosition(value: unknown): "top" | "right" | "bottom" | "left" {
+export function normalizeNodeLabelPosition(value: unknown): "top" | "right" | "bottom" | "left" {
   switch (value) {
     case "top":
     case "right":
@@ -151,7 +151,7 @@ function normalizeNodeLabelPosition(value: unknown): "top" | "right" | "bottom" 
   }
 }
 
-function getNodeDirectionRotation(value: unknown): number {
+export function getNodeDirectionRotation(value: unknown): number {
   switch (value) {
     case "up":
       return 270;
@@ -281,14 +281,27 @@ const NODE_BOX_FALLBACK_COLORS = {
   foreground: "#cccccc"
 } as const;
 
+/** Colors of a box that follows the theme. */
+export function resolveNodeBoxThemeColors(): {
+  background: string;
+  border: string;
+  foreground: string;
+} {
+  const resolveVar = (name: string, fallback: string) =>
+    resolveCssColor(`var(${name}, ${fallback})`, fallback);
+  return {
+    background: resolveVar("--topoviewer-node-box-background", NODE_BOX_FALLBACK_COLORS.background),
+    border: resolveVar("--topoviewer-node-box-border", NODE_BOX_FALLBACK_COLORS.border),
+    foreground: resolveVar("--topoviewer-node-box-foreground", NODE_BOX_FALLBACK_COLORS.foreground)
+  };
+}
+
 function resolveNodeBoxStyle(
   iconSize: number,
   spacing: NodeBoxSpacing | undefined,
   labelFont: SampledFontMetrics
 ): NodeBoxStyle {
   const sampled = sampleFontMetrics(".topology-node-box-label");
-  const resolveVar = (name: string, fallback: string) =>
-    resolveCssColor(`var(${name}, ${fallback})`, fallback);
   return {
     spacing,
     metrics: getNodeBoxMetrics(iconSize, spacing),
@@ -298,9 +311,7 @@ function resolveNodeBoxStyle(
       fontWeight: String(NODE_BOX_LABEL_FONT_WEIGHT),
       lineHeightPx: NODE_BOX_LABEL_LINE_HEIGHT_PX
     },
-    background: resolveVar("--topoviewer-node-box-background", NODE_BOX_FALLBACK_COLORS.background),
-    border: resolveVar("--topoviewer-node-box-border", NODE_BOX_FALLBACK_COLORS.border),
-    foreground: resolveVar("--topoviewer-node-box-foreground", NODE_BOX_FALLBACK_COLORS.foreground)
+    ...resolveNodeBoxThemeColors()
   };
 }
 
@@ -400,6 +411,29 @@ function buildNodeNameSvg(
 }
 
 // ============================================================================
+// Node Icons
+// ============================================================================
+
+/** The icon a node draws, as a data URI: its custom icon, or a built-in one. */
+export function resolveNodeIconDataUri(
+  node: Node,
+  iconInk: string,
+  customIconMap?: CustomIconMap
+): string {
+  if (node.type === "network-node") {
+    const nodeType = (node.data as NetworkNodeData).nodeType ?? "host";
+    return generateEncodedSVG("cloud", getNetworkTypeColor(nodeType), iconInk);
+  }
+  const data = node.data as TopologyNodeData;
+  const role = data.role ?? "pe";
+  const customDataUri = customIconMap?.get(role);
+  if (customDataUri !== undefined && customDataUri.length > 0) {
+    return getCustomIconUrl(customDataUri, data.iconColor);
+  }
+  return generateEncodedSVG(getRoleIcon(role), data.iconColor ?? DEFAULT_ICON_COLOR, iconInk);
+}
+
+// ============================================================================
 // Topology Node Builder
 // ============================================================================
 
@@ -417,22 +451,16 @@ function topologyNodeToSvg(
   const iconSize = resolveNodeIconSize(nodeIconSize);
   const { x, y } = getIconTopLeft(node, iconSize);
   const label = data.label ?? node.id;
-  const role = data.role ?? "pe";
-  const iconColor = data.iconColor ?? DEFAULT_ICON_COLOR;
   // Boxed nodes keep the icon upright, like the canvas.
   const directionRotation = labelStyle.box ? 0 : getNodeDirectionRotation(data.direction);
 
-  // Check for custom icon first
-  let iconSvg = "";
-  const customDataUri = customIconMap?.get(role);
-  if (customDataUri !== undefined && customDataUri.length > 0) {
-    // Preserve custom styles, transparency and viewBox, including base64 SVGs and PNGs.
-    const iconUrl = getCustomIconUrl(customDataUri, data.iconColor);
-    iconSvg = `<image class="${EXPORT_NODE_ICON_CLASS}" x="${x}" y="${y}" width="${iconSize}" height="${iconSize}" preserveAspectRatio="xMidYMid slice" href="${escapeXml(iconUrl)}"/>`;
-  } else {
-    const dataUri = generateEncodedSVG(getRoleIcon(role), iconColor, iconInk);
-    iconSvg = embedBuiltInIcon(decodeSvgDataUri(dataUri), x, y, iconSize);
-  }
+  const iconUrl = resolveNodeIconDataUri(node, iconInk, customIconMap);
+  const customDataUri = customIconMap?.get(data.role ?? "pe");
+  const iconSvg =
+    customDataUri !== undefined && customDataUri.length > 0
+      ? // Preserve custom styles, transparency and viewBox, including base64 SVGs and PNGs.
+        `<image class="${EXPORT_NODE_ICON_CLASS}" x="${x}" y="${y}" width="${iconSize}" height="${iconSize}" preserveAspectRatio="xMidYMid slice" href="${escapeXml(iconUrl)}"/>`
+      : embedBuiltInIcon(decodeSvgDataUri(iconUrl), x, y, iconSize);
 
   let svg = `<g class="export-node topology-node" data-id="${escapeXml(node.id)}">`;
   if (labelStyle.box) svg += buildNodeBoxSvg(x, y, labelStyle.box, data.box);
@@ -467,13 +495,10 @@ function networkNodeToSvg(
   const iconSize = resolveNodeIconSize(nodeIconSize);
   const { x, y } = getIconTopLeft(node, iconSize);
   const label = data.label ?? node.id;
-  const nodeType = data.nodeType ?? "host";
-  const iconColor = getNetworkTypeColor(nodeType);
   // Boxed nodes keep the icon upright, like the canvas.
   const directionRotation = labelStyle.box ? 0 : getNodeDirectionRotation(data.direction);
 
-  // Generate cloud icon
-  const dataUri = generateEncodedSVG("cloud", iconColor, iconInk);
+  const dataUri = resolveNodeIconDataUri(node, iconInk);
   const iconSvg = embedBuiltInIcon(decodeSvgDataUri(dataUri), x, y, iconSize);
 
   let svg = `<g class="export-node network-node" data-id="${escapeXml(node.id)}">`;
