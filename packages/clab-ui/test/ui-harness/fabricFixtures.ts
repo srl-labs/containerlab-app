@@ -23,7 +23,9 @@ import type {
 import { FABRIC_CATALOG } from "./fabricCatalog";
 
 const now = () => Date.now() / 1000;
-const started = now() - 3 * 3600;
+/** One clock reading for what must line up: an incident and the changes just before it. */
+const loadedAt = now();
+const started = loadedAt - 3 * 3600;
 
 const LEAVES = ["leaf1", "leaf2", "leaf3", "leaf4"];
 const NODE_NAMES = ["spine1", "spine2", ...LEAVES];
@@ -125,7 +127,7 @@ const TOPOLOGY: FabricTopology = {
 const EMPTY_TOPOLOGY: FabricTopology = { nodes: [], links: [], clients: [], segments: [], outside: [], components: [] };
 
 function initialIncidents(): FabricIncident[] {
-  const firstSeen = now() - 24 * 60;
+  const firstSeen = loadedAt - 24 * 60;
   return [
     {
       id: "link|leaf1:ethernet-1/49+spine1:ethernet-1/1",
@@ -190,7 +192,7 @@ function historyChanges(): FabricChange[] {
   let seq = 100;
   const change = (minutesAgo: number, fields: Partial<FabricChange> & Pick<FabricChange, "node" | "report" | "key" | "op">): FabricChange => ({
     seq: (seq += 1),
-    ts: now() - minutesAgo * 60,
+    ts: loadedAt - minutesAgo * 60,
     before: null,
     after: null,
     ...fields
