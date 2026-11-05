@@ -26,18 +26,6 @@ export type NodeEditorTabId =
   | "other";
 
 /**
- * Integrated SROS types (simpler chassis with just MDA slots)
- */
-export const INTEGRATED_SROS_TYPES = new Set([
-  "sr-1",
-  "sr-1s",
-  "ixr-r6",
-  "ixr-ec",
-  "ixr-e2",
-  "ixr-e2c"
-]);
-
-/**
  * Scalar value of an env, label or sysctl entry. YAML keeps numbers and
  * booleans unquoted, so the editor keeps their type until the value is edited.
  */

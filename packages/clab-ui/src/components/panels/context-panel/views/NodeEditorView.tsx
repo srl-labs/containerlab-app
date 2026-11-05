@@ -239,7 +239,8 @@ export const NodeEditorView: React.FC<NodeEditorViewProps> = ({
     onChange: handleChangeWithInheritance,
     onPreview: previewChange,
     inheritedProps: effectiveInheritedProps,
-    inheritance
+    inheritance,
+    readOnly
   };
 
   return (
