@@ -24,6 +24,7 @@ export function toContextMenuItem(
     label: action.label,
     icon: <ActionIcon fontSize="small" />,
     danger: Boolean(action.destructive),
+    success: action.commandId.toLowerCase() === "containerlab.lab.apply",
     disabled: action.disabled,
     ...(action.disabledReason !== undefined ? { disabledReason: action.disabledReason } : {}),
     onClick: () => onInvokeAction(action)

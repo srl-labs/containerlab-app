@@ -154,6 +154,7 @@ const ACTION_ICON_BY_COMMAND: Record<string, SvgIconComponent> = {
   "containerlab.lab.clonerepo": SourceOutlinedIcon,
   "containerlab.lab.generate": HubOutlinedIcon,
   "containerlab.lab.validate": FactCheckOutlinedIcon,
+  "containerlab.lab.apply": PlayArrowRoundedIcon,
   "containerlab.lab.togglefavorite": StarBorderRoundedIcon,
   "containerlab.lab.addtoworkspace": FolderOpenOutlinedIcon,
   "containerlab.lab.save": SaveOutlinedIcon,
@@ -291,6 +292,7 @@ const ACTION_GROUP_RULES: ReadonlyArray<CommandActionGroupRule> = [
   },
   {
     match: (command) =>
+      command.includes(".apply") ||
       command.includes("deploy") ||
       command.includes("destroy") ||
       command.includes("redeploy") ||
