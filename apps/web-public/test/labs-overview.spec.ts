@@ -60,7 +60,7 @@ test("labs overview lists topology files as cards and opens them", async ({ page
   await expect(section.getByRole("article")).toHaveCount(2);
   const card = overview.getByTestId(FABRIC_CARD);
   await expect(card).toHaveAttribute("data-state", "undeployed");
-  await expect(card.getByTestId("lab-card-state")).toHaveText("Not deployed");
+  await expect(card.getByTestId("lab-card-state")).toHaveAttribute("aria-label", "Not deployed");
   await expect(card.getByRole("button", { name: "Deploy fabric", exact: true })).toHaveCount(0);
   await expect(page.getByTestId("connection-banner")).toHaveCount(0);
 

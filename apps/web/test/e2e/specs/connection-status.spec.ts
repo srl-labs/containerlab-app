@@ -176,10 +176,9 @@ test("running labs show their state, readiness and uptime in the overview", asyn
   const overview = page.getByTestId("labs-overview");
   const running = overview.getByTestId(`lab-card-${HOST_A.id}::fabric/fabric.clab.yml`);
   await expect(running).toHaveAttribute("data-state", "running");
-  await expect(running.getByTestId("lab-card-state")).toContainText("Running");
-  await expect(running.getByTestId("lab-card-state")).toContainText("up 2 h");
+  await expect(running.getByTestId("lab-card-state")).toHaveAttribute("aria-label", "Running");
   await expect(running).toContainText("1 of 2 nodes ready");
-  await expect(running).toContainText("admin · Lab host A");
+  await expect(running).toContainText("up 2 h · admin · Lab host A");
   await expect(running.locator("[data-node] image")).toHaveCount(2);
   await expect(running.getByRole("button", { name: "Destroy fabric", exact: true })).toBeVisible();
   const spare = overview.getByTestId(`lab-card-${HOST_B.id}::spare/spare.clab.yml`);

@@ -30,6 +30,7 @@ import {
 import { canWatchLabUsage, type LabUsageUpdate, type WatchLabUsage } from "../state/labUsage";
 import type { FetchLabHostMetrics, LabOverviewHost } from "../state/labHostResources";
 import { controlRadius, floatingRadius, headerBarHeight } from "../../theme/surfaces";
+import { CAP_CENTERED_TEXT_SX } from "../../theme/typography";
 import { useNow } from "../useNow";
 import { LabHostsStrip } from "./LabHostsStrip";
 import { LabThumbnailView } from "./LabThumbnailView";
@@ -94,11 +95,11 @@ function persistCollapsed(collapsed: ReadonlySet<SectionId>): void {
   }
 }
 
+/** Green when healthy, grey when not deployed, orange for anything in between. */
 function stateColor(theme: Theme, state: LabRunState): string {
   if (state === "running") return theme.palette.success.main;
-  if (state === "partial") return theme.palette.warning.main;
   if (state === "undeployed") return theme.palette.text.secondary;
-  return theme.palette.error.main;
+  return theme.palette.warning.main;
 }
 
 function matchesState(card: LabOverviewCard, filter: StateFilter): boolean {
@@ -139,11 +140,11 @@ function useLabUsage(card: LabOverviewCard, watch: WatchLabUsage | undefined, in
 }
 
 /** Name and summary, then the lab's usage while the lab host reports it. */
-function CardText({ card, usage, tight }: { card: LabOverviewCard; usage: LabUsageUpdate | undefined; tight: boolean }) {
+function CardText({ card, usage }: { card: LabOverviewCard; usage: LabUsageUpdate | undefined }) {
   const showUsage = usage !== undefined && usage.status !== "unavailable";
   return (
     <>
-      <Box sx={{ px: 1.25, pt: 1, pb: tight && !showUsage ? 0.25 : 1, borderTop: 1, borderColor: "divider", minWidth: 0 }}>
+      <Box sx={{ px: 1.25, pt: 1, pb: showUsage ? 1 : 0.25, borderTop: 1, borderColor: "divider", minWidth: 0 }}>
         <Typography variant="subtitle2" noWrap title={card.name}>{card.name}</Typography>
         <Typography variant="caption" component="p" noWrap title={card.path} sx={{ color: "text.secondary" }}>
           {cardSummary(card)}
@@ -167,7 +168,8 @@ function LabCard({ card, now, showEndpoint, lifecycleAvailable, loadSources, sou
   const uptime = card.startedAt === undefined
     ? undefined
     : `up ${formatLabUptime(Math.max(0, now - card.startedAt), card.uptimePrecisionMs)}`;
-  const details = [ownerLabel(card), showEndpoint ? card.endpointLabel : undefined].filter(Boolean).join(" · ");
+  const details = [uptime, ownerLabel(card), showEndpoint ? card.endpointLabel : undefined].filter(Boolean).join(" · ");
+  const stateLabel = LAB_RUN_STATE_LABELS[card.state];
   return (
     <Box
       ref={ref}
@@ -192,29 +194,19 @@ function LabCard({ card, now, showEndpoint, lifecycleAvailable, loadSources, sou
           "&.Mui-focusVisible": { outline: "1px solid var(--clab-ui-focus-border, var(--vscode-focusBorder))", outlineOffset: -1 }
         }}
       >
-        <Box
-          data-testid="lab-card-state"
-          sx={(theme) => ({
-            display: "flex", alignItems: "center", gap: 0.75, height: 28, px: 1.25,
-            bgcolor: `color-mix(in srgb, ${stateColor(theme, card.state)} 16%, ${theme.palette.background.paper})`,
-            borderBottom: 1, borderColor: "divider"
-          })}
-        >
-          <Box sx={(theme) => ({ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, bgcolor: stateColor(theme, card.state) })} />
-          <Typography component="span" variant="caption" noWrap sx={{ fontWeight: 600, flex: 1, minWidth: 0 }}>
-            {LAB_RUN_STATE_LABELS[card.state]}
-          </Typography>
-          {uptime ? (
-            <Typography component="span" variant="caption" noWrap sx={{ color: "text.secondary", flexShrink: 0 }}>
-              {uptime}
-            </Typography>
-          ) : null}
-        </Box>
         <LabThumbnailView card={card} loadSources={loadSources} revision={sourcesRevision} seen={seen} usage={live?.nodes} />
-        <CardText card={card} usage={usage} tight={details !== ""} />
+        <CardText card={card} usage={usage} />
       </ButtonBase>
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.25, minHeight: 32, pl: 1.25, pr: 0.5, pb: 0.25 }}>
-        <Typography variant="caption" noWrap sx={{ flex: 1, minWidth: 0, color: "text.secondary" }} title={details}>
+        <Tooltip title={stateLabel}>
+          <Box
+            role="img"
+            aria-label={stateLabel}
+            data-testid="lab-card-state"
+            sx={(theme) => ({ width: 8, height: 8, mr: 0.75, borderRadius: "50%", flexShrink: 0, bgcolor: stateColor(theme, card.state) })}
+          />
+        </Tooltip>
+        <Typography variant="caption" noWrap sx={{ ...CAP_CENTERED_TEXT_SX, flex: 1, minWidth: 0, color: "text.secondary" }} title={details}>
           {details}
         </Typography>
         {lifecycleAvailable && card.canDeploy ? (
@@ -268,7 +260,7 @@ function Section({ id, label, count, collapsed, onToggle, children }: {
           transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform 120ms ease",
           "@media (prefers-reduced-motion: reduce)": { transition: "none" }
         }} />
-        <Typography component="h2" variant="subtitle2">{label}</Typography>
+        <Typography component="h2" variant="overline" sx={{ color: "text.secondary" }}>{label}</Typography>
         <Typography component="span" variant="caption" sx={{ color: "text.secondary" }}>{count}</Typography>
       </ButtonBase>
       {collapsed ? null : <Box id={`${regionId}-cards`}>{children}</Box>}
