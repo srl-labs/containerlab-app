@@ -163,19 +163,23 @@ interface ExplorerNodePrimaryLabelProps {
   emphasis: "endpoint" | "strong" | "normal" | "muted";
   isDisconnectedPlaceholder: boolean;
   color: string | undefined;
+  /** A name cut short by a narrow pane still reads in full; rows with their own tooltip already say it. */
+  fullNameOnHover: boolean;
 }
 
 function ExplorerNodePrimaryLabel({
   label,
   emphasis,
   isDisconnectedPlaceholder,
-  color
+  color,
+  fullNameOnHover
 }: Readonly<ExplorerNodePrimaryLabelProps>) {
   return (
     <Typography
       className="explorer-node-label"
       variant="body2"
       noWrap
+      title={fullNameOnHover ? label : undefined}
       sx={{
         flex: "0 1 auto",
         minWidth: "6ch",
@@ -460,6 +464,7 @@ function ExplorerNodeTextBlock({
             label={node.label}
             emphasis={emphasis}
             isDisconnectedPlaceholder={isDisconnectedPlaceholder}
+            fullNameOnHover={!hasEntryTooltip}
             color={explorerNodeLabelColor({
               isEndpointRoot,
               isEndpointSection,

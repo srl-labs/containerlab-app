@@ -67,6 +67,30 @@ test("the VS Code layout keeps titled sections with plain counts", async ({ page
   await expect(page.getByText("Help & Feedback", { exact: true })).toBeVisible();
 });
 
+test("a section title is only cut short while its actions show", async ({ page }) => {
+  await page.goto("/explorer.html?mode=vscode&theme=dark&width=190");
+
+  const title = page.getByText("Undeployed Local Labs", { exact: true });
+  const isCutShort = () => title.evaluate((element) => element.scrollWidth > element.clientWidth);
+  await expect(title).toBeVisible();
+  expect(await isCutShort()).toBe(false);
+
+  await title.hover();
+  await expect(page.getByRole("button", { name: "New Topology File" }).nth(1)).toBeVisible();
+  await expect.poll(isCutShort).toBe(true);
+
+  await page.getByPlaceholder("Filter labs, nodes, interfaces").hover();
+  await expect.poll(isCutShort).toBe(false);
+});
+
+test("a lab name cut short by a narrow pane reads in full on hover", async ({ page }) => {
+  await page.goto("/explorer.html?mode=vscode&theme=dark&width=190");
+
+  const name = page.locator(".explorer-node-label", { hasText: "datacenter.clab.yml" });
+  await expect(name).toHaveAttribute("title", "datacenter.clab.yml");
+  expect(await name.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+});
+
 test("an embedded single section drops its own header", async ({ page }) => {
   await page.goto("/explorer.html?mode=files&theme=dark");
 
