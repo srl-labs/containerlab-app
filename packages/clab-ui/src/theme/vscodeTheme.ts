@@ -39,8 +39,6 @@ const WIDGET_BORDER = `var(--vscode-editorWidget-border, ${vscodePalette.divider
 const CONTROL_TRANSITION =
   "background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease, opacity 120ms ease";
 
-const EXPLORER_FONT_FAMILY =
-  "var(--clab-ui-font-family, var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif))";
 const EXPLORER_FONT_SIZE = "var(--clab-ui-font-size, var(--vscode-font-size, 13px))";
 const EXPLORER_SCOPE_SELECTORS = [
   "body[data-webview-kind='containerlab-explorer']",
@@ -83,12 +81,12 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
         "--topoviewer-node-box-foreground": vscodePalette.text.primary
       },
       body: { fontFamily: UI_FONT_FAMILY },
-      // The topology canvas keeps the text styles it was designed with, independent of the UI type scale.
+      // The topology canvas keeps its own sizes, independent of the UI type scale, in the UI font.
       ".react-flow": {
-        fontFamily: "'Roboto', sans-serif",
+        fontFamily: UI_FONT_FAMILY,
         fontSize: "1rem",
         lineHeight: 1.5,
-        letterSpacing: "0.00938em"
+        letterSpacing: 0
       },
       "*::-webkit-scrollbar": { width: 10, height: 10 },
       "*::-webkit-scrollbar-track": { background: "transparent" },
@@ -107,16 +105,16 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
       },
       "*::-webkit-scrollbar-corner": { background: "transparent" },
       [explorerScopedSelector("")]: {
-        fontFamily: EXPLORER_FONT_FAMILY
+        fontFamily: UI_FONT_FAMILY
       },
       [explorerScopedSelector(" .MuiTypography-root")]: {
-        fontFamily: EXPLORER_FONT_FAMILY
+        fontFamily: UI_FONT_FAMILY
       },
       [explorerScopedSelector(" .MuiInputBase-root")]: {
-        fontFamily: EXPLORER_FONT_FAMILY
+        fontFamily: UI_FONT_FAMILY
       },
       [explorerScopedSelector(" .MuiInputBase-input")]: {
-        fontFamily: EXPLORER_FONT_FAMILY,
+        fontFamily: UI_FONT_FAMILY,
         fontSize: EXPLORER_FONT_SIZE
       },
       [explorerScopedSelector(" .explorer-node-label")]: {
@@ -133,10 +131,6 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
         color: "var(--vscode-icon-foreground, var(--vscode-foreground))"
       },
       [explorerScopedSelector(" .explorer-section-title")]: {
-        fontSize: "12px",
-        fontWeight: 600,
-        lineHeight: 1.2,
-        letterSpacing: "0.01em",
         color: "var(--vscode-descriptionForeground)"
       },
       // Traffic flow dashes on links advance one dash and gap per animation run; the gap varies.
@@ -610,11 +604,10 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
       groupLabel: {
         backgroundColor: vscodePalette.background.paper,
         color: MUTED,
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: 600,
-        lineHeight: "28px",
-        letterSpacing: "0.04em",
-        textTransform: "uppercase"
+        letterSpacing: 0,
+        lineHeight: "28px"
       },
       tag: { margin: 2 },
       endAdornment: { "& .MuiIconButton-root": { padding: 2 } }
@@ -803,11 +796,10 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
       root: {
         backgroundColor: "transparent",
         color: MUTED,
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: 600,
-        letterSpacing: "0.04em",
-        lineHeight: "28px",
-        textTransform: "uppercase"
+        letterSpacing: 0,
+        lineHeight: "28px"
       }
     }
   },

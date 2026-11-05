@@ -3,7 +3,8 @@ import React from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 
-const MONO = "var(--vscode-editor-font-family, monospace)";
+import { MONO_FONT_FAMILY } from "../../../theme/typography";
+
 
 export function CardTitle({ title, state, stateColor, stateTestId, stateValue }: {
   title: string;
@@ -49,7 +50,7 @@ export function Value({ value, mono, testId }: { value: string; mono?: boolean; 
       noWrap
       title={value}
       data-testid={testId}
-      sx={{ m: 0, minWidth: 0, fontVariantNumeric: "tabular-nums", fontFamily: mono === true ? MONO : undefined }}
+      sx={{ m: 0, minWidth: 0, fontVariantNumeric: "tabular-nums", fontFamily: mono === true ? MONO_FONT_FAMILY : undefined }}
     >
       {value}
     </Typography>

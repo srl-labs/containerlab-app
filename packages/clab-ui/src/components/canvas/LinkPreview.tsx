@@ -3,6 +3,7 @@ import { useStore } from "@xyflow/react";
 import type { ConnectionLineComponentProps, Edge, Node } from "@xyflow/react";
 
 import { useEdges } from "../../stores/graphStore";
+import { UI_FONT_FAMILY } from "../../theme/typography";
 import {
   useNodeBoxSpacing,
   useNodeStyle,
@@ -78,7 +79,7 @@ function buildLinkLabelStyle(zoom: number): React.CSSProperties {
     top: 0,
     left: 0,
     fontSize: `${scaledFont}px`,
-    fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+    fontFamily: UI_FONT_FAMILY,
     color: LINK_LABEL_TEXT_COLOR,
     backgroundColor: LINK_LABEL_BG_COLOR,
     padding: `${padY}px ${padX}px`,
