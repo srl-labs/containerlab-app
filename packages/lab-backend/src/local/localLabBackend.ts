@@ -421,13 +421,6 @@ export class LocalLabBackend implements LabBackend {
       : this.resolveTopology(lab.labName, `${lab.labName}/${lab.labName}.clab.yml`);
   }
 
-  async graphDrawio(
-    lab: LabTarget,
-    options: { layout: "horizontal" | "vertical"; theme?: string }
-  ) {
-    return tools.drawioGraph(this.options, await this.topologyFile(lab), options.layout, options.theme);
-  }
-
   async graphExport(lab: LabTarget, format: GraphExportFormat, options: { direction?: MermaidDirection } = {}) {
     return tools.graphExport(this.options, await this.topologyFile(lab), format, options.direction);
   }

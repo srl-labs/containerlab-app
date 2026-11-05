@@ -95,11 +95,6 @@ interface FcliBody extends RuntimeTargetBody {
   command: string;
 }
 
-interface DrawioBody extends RuntimeTargetBody {
-  layout?: "horizontal" | "vertical";
-  theme?: string;
-}
-
 interface GraphExportBody extends RuntimeTargetBody {
   direction?: string;
 }
@@ -1095,33 +1090,6 @@ export function registerRuntimeProxy(
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         return reply.send(await backend.fcli({ labName: target.labName }, command));
-      } catch (error) {
-        return handleRouteError(reply, error);
-      }
-    }
-  );
-
-  app.post<{ Body: DrawioBody }>(
-    "/api/runtime/labs/graph/drawio",
-    async (request: FastifyRequest<{ Body: DrawioBody }>, reply: FastifyReply) => {
-      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
-      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
-
-      try {
-        const rawLayout = normalizeOptionalString(request.body.layout)?.toLowerCase();
-        const layout = rawLayout ?? "horizontal";
-        if (layout !== "horizontal" && layout !== "vertical") {
-          throw new RequestError("Invalid drawio layout.", 400);
-        }
-
-        const { backend, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
-        return reply.send(
-          await backend.graphDrawio({ labName: target.labName }, {
-            layout,
-            theme: normalizeOptionalString(request.body.theme)
-          })
-        );
       } catch (error) {
         return handleRouteError(reply, error);
       }

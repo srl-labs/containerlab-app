@@ -436,10 +436,8 @@ const ACTION_GROUP_ICONS: Record<ActionGroupId, SvgIconComponent> = {
 
 const GRAPH_COMMAND_ORDER = new Map<string, number>([
   ["containerlab.lab.graph.topoviewer", 1],
-  ["containerlab.lab.graph.drawio.horizontal", 2],
-  ["containerlab.lab.graph.drawio.vertical", 3],
-  ["containerlab.lab.graph.mermaid", 4],
-  ["containerlab.lab.graph.dot", 5]
+  ["containerlab.lab.graph.mermaid", 2],
+  ["containerlab.lab.graph.dot", 3]
 ]);
 
 function actionGroupLabel(groupId: ActionGroupId): string {

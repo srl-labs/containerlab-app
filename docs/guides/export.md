@@ -17,10 +17,10 @@ Take the topology somewhere else: a slide, a Grafana dashboard, a wiki page, or 
 
 ## SVG
 
-**Capture Viewport as SVG** in the toolbar opens **Export SVG**. It exports what you see, including your styles, groups, and text. Choose the zoom, padding, background, and whether to include annotations and interface labels.
+**Export SVG or Draw.io** in the toolbar opens **Export SVG**. It exports what you see, including your styles, groups, and text. Choose the zoom, padding, background, and whether to include annotations and interface labels.
 
-![Capture Viewport as SVG](../images/app/svg-export-dark.webp#only-dark){ .shot .narrow }
-![Capture Viewport as SVG](../images/app/svg-export-light.webp#only-light){ .shot .narrow }
+![Export SVG or Draw.io](../images/app/svg-export-dark.webp#only-dark){ .shot .narrow }
+![Export SVG or Draw.io](../images/app/svg-export-light.webp#only-light){ .shot .narrow }
 
 VS Code asks where to save the file. The desktop and web apps download it.
 
@@ -40,11 +40,25 @@ The bundle is only the picture and the mapping. It expects a Grafana with matchi
 
 ## Draw.io
 
-The graph actions generate a Draw.io file, laid out horizontally or vertically, for quick documentation. Use SVG when the diagram should look exactly like your canvas.
+Open **Export SVG or Draw.io** in the toolbar and choose **Draw.io**. The file holds the whole lab with your layout and colors, as shapes you can edit:
+
+| On the canvas | In Draw.io |
+| --- | --- |
+| Nodes | Shapes with their icon. **Edit Data** shows the kind, type, and image. |
+| Links | Connectors that follow when you move a node. |
+| Interface labels | Labels attached to their link. |
+| Groups | Containers that move with their members. |
+| Shapes and text | Shapes and text boxes. |
+
+The page takes the canvas color unless you choose your own. Traffic rate labels and script buttons are left out, and editing the file does not change the lab.
+
+Parallel links curve around a fixed point. If you move only one end of such a link, drag that point to a new place or use **Clear Waypoints** in Draw.io.
+
+VS Code asks where to save the file. The desktop and web apps download it. Use SVG when the diagram should look exactly like your canvas.
 
 ## Mermaid and Graphviz
 
-**Export Graph (Mermaid)** and **Export Graph (Graphviz)**, next to the Draw.io actions of a lab, run `containerlab graph --mermaid` or `--dot` on the topology file. The lab does not need to run. Mermaid asks for the direction of the flowchart first.
+**Export Graph (Mermaid)** and **Export Graph (Graphviz)**, in the actions of a lab, run `containerlab graph --mermaid` or `--dot` on the topology file. The lab does not need to run. Mermaid asks for the direction of the flowchart first.
 
 VS Code saves the file next to the topology and opens it. The desktop and web apps download it.
 

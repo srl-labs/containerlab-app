@@ -30,7 +30,6 @@ import type {
   CaptureTarget,
   CaptureWiresharkVncCreateResponse,
   CaptureWiresharkVncReadyResponse,
-  DrawioGenerateResponse,
   EdgeSharkStatusResponse,
   ExecResponse,
   FcliCommandResponse,
@@ -341,10 +340,6 @@ export interface LabBackend {
     lab: LabTarget,
     options?: { nodeFilter?: string; copyDir?: string }
   ): Promise<SaveConfigResponse>;
-  graphDrawio(
-    lab: LabTarget,
-    options: { layout: "horizontal" | "vertical"; theme?: string }
-  ): Promise<DrawioGenerateResponse>;
   fcli(lab: LabTarget, command: string): Promise<FcliCommandResponse>;
   /** The Tailscale proxy, sidecars and tailscale nodes of a running lab. */
   tailscaleStatus(labName: string): Promise<TailscaleStatus>;

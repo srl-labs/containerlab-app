@@ -18,7 +18,6 @@ import type {
   CaptureWiresharkVncCreateResponse,
   CaptureWiresharkVncReadyResponse,
   CustomNodesResponse,
-  DrawioGenerateResponse,
   EdgeSharkStatusResponse,
   ExecResponse,
   FcliCommandResponse,
@@ -1131,24 +1130,6 @@ export class ClabApiClient {
       "application/json",
     );
     return (await res.json()) as FcliCommandResponse;
-  }
-
-  async generateDrawioGraph(
-    token: string,
-    labName: string,
-    input: {
-      layout: "horizontal" | "vertical";
-      theme?: string;
-    },
-  ): Promise<DrawioGenerateResponse> {
-    const res = await this.request(
-      "POST",
-      `/api/v1/labs/${enc(labName)}/graph/drawio`,
-      token,
-      JSON.stringify(input),
-      "application/json",
-    );
-    return (await res.json()) as DrawioGenerateResponse;
   }
 
   async validateTopology(

@@ -42,7 +42,7 @@ Along the top of the canvas:
 | Bulk Link Devices | Connect many nodes by name pattern. |
 | Layout | Arrange the nodes automatically. |
 | Links | Show interface names always, on select, or never. |
-| Capture Viewport as SVG | Export what you see. |
+| Export SVG or Draw.io | Export what you see, or the lab as an editable diagram. |
 | Lab Settings | **General**, **Deploy**, **Management**, **Certificates**, **Defaults & Groups**, **Appearance**, and **Grid** settings for this lab. |
 | Toggle YAML Split View | Edit the file next to the canvas. |
 
@@ -62,7 +62,7 @@ Panels open on the side of the canvas and stay out of the way otherwise.
 | Terminals | VS Code terminals | Terminal windows in the app |
 | Exports | Saved through a VS Code dialog | Downloaded |
 | Node templates | VS Code settings | Per user, per lab host |
-| Extras | Draw.io, SSHX, GoTTY, fcli | Shared labs, lab host profiles to export |
+| Extras | SSHX, GoTTY, fcli | Shared labs, lab host profiles to export |
 
 <div class="next" markdown>
 [:lucide-arrow-right: Build a topology](topologies.md)

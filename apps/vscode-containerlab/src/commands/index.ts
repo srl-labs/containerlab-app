@@ -82,8 +82,6 @@ export {
 export { manageImages } from "./images";
 
 export {
-  graphDrawIOHorizontal,
-  graphDrawIOVertical,
   graphTopoviewer,
   graphMermaid,
   graphDot,

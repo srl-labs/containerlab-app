@@ -200,16 +200,6 @@
         "icon": "$(info)"
       },
       {
-        "command": "containerlab.lab.graph.drawio.horizontal",
-        "title": "Graph (draw.io, Horizontal)",
-        "category": "Containerlab"
-      },
-      {
-        "command": "containerlab.lab.graph.drawio.vertical",
-        "title": "Graph (draw.io, Vertical)",
-        "category": "Containerlab"
-      },
-      {
         "command": "containerlab.lab.graph.mermaid",
         "title": "Export Graph (Mermaid)",
         "category": "Containerlab"
@@ -550,12 +540,6 @@
         "category": "Containerlab"
       }
     ],
-    "submenus": [
-      {
-        "id": "containerlab.submenu.lab.graph.drawio",
-        "label": "Graph (draw.io)"
-      }
-    ],
     "menus": {
       "editor/title": [
         {
@@ -668,11 +652,6 @@
           "group": "clabLabActions@9"
         },
         {
-          "submenu": "containerlab.submenu.lab.graph.drawio",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
-          "group": "graph@0"
-        },
-        {
           "command": "containerlab.lab.graph.topoViewer",
           "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "group": "graph@1"
@@ -745,11 +724,6 @@
           "group": "clabLabActions@9"
         },
         {
-          "submenu": "containerlab.submenu.lab.graph.drawio",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
-          "group": "graph@0"
-        },
-        {
           "command": "containerlab.lab.graph.topoViewer",
           "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "group": "graph@1"
@@ -812,14 +786,6 @@
           "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
         },
         {
-          "command": "containerlab.lab.graph.drawio.horizontal",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
-        },
-        {
-          "command": "containerlab.lab.graph.drawio.vertical",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
-        },
-        {
           "command": "containerlab.lab.graph.mermaid",
           "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
         },
@@ -846,16 +812,6 @@
         {
           "command": "containerlab.connection.openWorkspace",
           "when": "containerlab:hasLabHosts"
-        }
-      ],
-      "containerlab.submenu.lab.graph.drawio": [
-        {
-          "command": "containerlab.lab.graph.drawio.horizontal",
-          "group": "graph@0"
-        },
-        {
-          "command": "containerlab.lab.graph.drawio.vertical",
-          "group": "graph@0"
         }
       ],
       "view/title": [
@@ -943,16 +899,6 @@
             "type": "string",
             "default": "",
             "markdownDescription": "**This computer**: arguments added to every `containerlab destroy`. A Kubernetes lab host has its own, in Settings → its lab host page."
-          },
-          "containerlab.drawioDefaultTheme": {
-            "type": "string",
-            "enum": [
-              "nokia_modern",
-              "nokia",
-              "grafana"
-            ],
-            "default": "nokia_modern",
-            "description": "Default theme to use when generating DrawIO graphs."
           },
           "containerlab.gotty.port": {
             "type": "number",

@@ -19,7 +19,6 @@ import {
   downloadLabArchive,
   importTopologyFromUrl,
   fetchNodeBrowserPorts,
-  generateDrawioGraph,
   installEdgeShark,
   readFileExplorerFile,
   renameFileExplorerPath,
@@ -88,7 +87,6 @@ import {
   nodeAccessTitlePrefix,
   fetchPopularRepos,
   pickPopularRepo,
-  triggerTextDownload,
   triggerBlobDownload,
   pickTransferFiles,
   promptArchiveFormat,
@@ -677,36 +675,6 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
             "success"
           );
         }
-      } catch (error) {
-        runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
-      }
-    };
-
-    const runDrawio = async (layout: "horizontal" | "vertical"): Promise<void> => {
-      const topologyRef = resolveActionTopologyRef();
-      if (!topologyRef) {
-        postExplorerError("Graph actions require a lab item.");
-        return;
-      }
-
-      try {
-        runtimeUiActions.notify(`Generating draw.io (${layout})…`, "info");
-        const response = await generateDrawioGraph({
-          endpointId: actionEndpointId,
-          topologyRef,
-          layout
-        });
-
-        triggerTextDownload(
-          safeFilename(response.fileName || `${topologyRef.labName}.drawio`),
-          response.content,
-          "application/xml"
-        );
-
-        runtimeUiActions.notify(
-          response.message || `Generated draw.io (${layout}) for ${topologyRef.labName}.`,
-          "success"
-        );
       } catch (error) {
         runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
       }
@@ -1317,8 +1285,6 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       "containerlab.lab.graph.topoViewer": openTopologyFile,
       "containerlab.lab.openFile": openTopologyFile,
       "containerlab.editor.topoViewerEditor.open": openTopologyFile,
-      "containerlab.lab.graph.drawio.horizontal": () => runDrawio("horizontal"),
-      "containerlab.lab.graph.drawio.vertical": () => runDrawio("vertical"),
       "containerlab.lab.graph.mermaid": () => runLabTool((target) => exportGraphFlow(target, "mermaid")),
       "containerlab.lab.graph.dot": () => runLabTool((target) => exportGraphFlow(target, "dot")),
       "containerlab.lab.validate": () => runLabTool(validateTopologyFlow),

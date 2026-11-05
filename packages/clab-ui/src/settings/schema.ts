@@ -97,7 +97,6 @@ const TITLES: Record<string, string> = {
   "deploy.extraArgs": "Deploy arguments",
   "deploy.timeout": "Deploy timeout",
   "destroy.extraArgs": "Destroy arguments",
-  drawioDefaultTheme: "Draw.io theme",
   "gotty.port": "GoTTY port",
   runtime: "Container runtime (this computer)",
   dockerSocketPath: "Container socket",
@@ -162,8 +161,7 @@ function categoryFor(key: string): SettingsCategory {
   if (key === "connections" || key === "localConnection" || THIS_COMPUTER_SETTING_KEYS.has(key)) return "labHosts";
   if (key.startsWith("appearance.")) return "appearance";
   if (key.startsWith("capture.")) return "capture";
-  if (key.startsWith("editor.") || key === "drawioDefaultTheme")
-    return "topology";
+  if (key.startsWith("editor.")) return "topology";
   if (
     key.startsWith("node.") ||
     key.startsWith("extras.") ||
