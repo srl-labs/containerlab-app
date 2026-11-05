@@ -189,7 +189,7 @@ export function describeLabBackendContract(name: string, options: LabBackendCont
           "netem",
           "snapshots",
           "nodePause",
-          "fcli",
+          "fcling",
           "edgeshark",
           "edgesharkManagement",
           "hostCapture",

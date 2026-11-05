@@ -1,16 +1,23 @@
 import { KUBERNETES_LIMITS, type KubernetesLimitKey } from "../host/kubernetesLimits";
 import type { LabHostInfo, LabHostSupport } from "../host/labHostSupport";
 
-const FCLI_COMMANDS = [
-  "containerlab.lab.fcli.bgpPeers",
-  "containerlab.lab.fcli.bgpRib",
-  "containerlab.lab.fcli.custom",
-  "containerlab.lab.fcli.lldp",
-  "containerlab.lab.fcli.mac",
-  "containerlab.lab.fcli.ni",
-  "containerlab.lab.fcli.subif",
-  "containerlab.lab.fcli.sysInfo"
+const FCLING_COMMANDS = [
+  "containerlab.lab.fabric",
+  "containerlab.lab.fcling.bgpPeers",
+  "containerlab.lab.fcling.bgpRib",
+  "containerlab.lab.fcling.custom",
+  "containerlab.lab.fcling.ipv4Rib",
+  "containerlab.lab.fcling.lldp",
+  "containerlab.lab.fcling.mac",
+  "containerlab.lab.fcling.ni",
+  "containerlab.lab.fcling.subif",
+  "containerlab.lab.fcling.sysInfo"
 ];
+
+/** Whether a lab's explorer command runs fcling, which only reads SR Linux nodes. */
+export function isFclingCommand(commandId: string): boolean {
+  return FCLING_COMMANDS.includes(commandId);
+}
 
 const SHARE_COMMANDS = [
   "containerlab.lab.sshx.attach",
@@ -37,7 +44,7 @@ const COMMANDS_BY_SUPPORT: ReadonlyArray<readonly [keyof LabHostSupport, readonl
   ["imageManagement", ["containerlab.images.manage"]],
   ["netem", NETEM_COMMANDS],
   ["nodePause", ["containerlab.node.pause", "containerlab.node.unpause"]],
-  ["fcli", FCLI_COMMANDS],
+  ["fcling", FCLING_COMMANDS],
   ["shareTools", SHARE_COMMANDS],
   ["edgesharkManagement", ["containerlab.install.edgeshark", "containerlab.uninstall.edgeshark"]],
   ["edgeshark", ["containerlab.interface.captureWithEdgeshark"]],
@@ -64,7 +71,7 @@ export function hiddenExplorerCommandsForSupport(support: LabHostSupport): strin
 const KUBERNETES_GREYED_COMMANDS: ReadonlyArray<readonly [KubernetesLimitKey, readonly string[]]> = [
   ["linkImpairments", NETEM_COMMANDS],
   ["nodePause", ["containerlab.node.pause", "containerlab.node.unpause"]],
-  ["fcli", FCLI_COMMANDS],
+  ["fcling", FCLING_COMMANDS],
   ["shareTools", SHARE_COMMANDS],
   [
     "edgeshark",

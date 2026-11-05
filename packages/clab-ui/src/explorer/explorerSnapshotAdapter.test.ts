@@ -489,3 +489,65 @@ test("This computer is hidden, a cluster used from it is removed", async () => {
   assert.equal(removeLabel(local), "Hide");
   assert.equal(removeLabel(cluster), "Remove");
 });
+
+async function labActionIds(nodes: Array<{ kind?: string; image?: string }>): Promise<string[]> {
+  const lab = {
+    label: "lab1",
+    contextValue: "containerlabLabDeployed",
+    collapsibleState: TREE_ITEM_COLLAPSED,
+    children: nodes.map((node, index) => ({
+      label: `node${index}`,
+      contextValue: "containerlabContainer",
+      collapsibleState: 0,
+      ...node
+    }))
+  };
+  const providers = {
+    runningProvider: provider([lab]),
+    localProvider: provider([]),
+    helpProvider: provider([])
+  } as ExplorerSnapshotProviders;
+  const { snapshot } = await buildExplorerSnapshot(providers, "", {
+    hideNonOwnedLabs: false,
+    isLocalCaptureAllowed: true
+  });
+  const running = snapshot.sections.find((section) => section.id === "runningLabs");
+  return (running?.nodes[0]?.actions ?? []).map((action) => action.commandId);
+}
+
+const FABRIC = "containerlab.lab.fabric";
+const REPORT = "containerlab.lab.fcling.bgpPeers";
+
+test("a lab with an SR Linux node offers the Fabric view and fcling reports", async () => {
+  for (const nodes of [
+    [{ kind: "nokia_srlinux", image: "ghcr.io/nokia/srlinux:26.7.2" }],
+    [{ kind: "srl", image: "registry.example.com/custom:1" }],
+    // A kind fcling does not reserve still counts by its image, as fcling goes by.
+    [{ kind: "linux", image: "ghcr.io/nokia/srlinux:latest" }],
+    // One SR Linux node is enough.
+    [
+      { kind: "linux", image: "alpine:3" },
+      { kind: "nokia_srlinux", image: "ghcr.io/nokia/srlinux:latest" }
+    ]
+  ]) {
+    const actions = await labActionIds(nodes);
+    assert.ok(actions.includes(FABRIC), JSON.stringify(nodes));
+    assert.ok(actions.includes(REPORT), JSON.stringify(nodes));
+  }
+});
+
+test("a lab without SR Linux nodes does not offer what cannot read it", async () => {
+  const actions = await labActionIds([
+    { kind: "linux", image: "alpine:3" },
+    { kind: "nokia_srsim", image: "registry.example.com/srsim:26" }
+  ]);
+  assert.ok(!actions.some((action) => action === FABRIC || action.startsWith("containerlab.lab.fcling.")));
+  // The lab's other tools stay.
+  assert.ok(actions.includes("containerlab.lab.destroy"));
+});
+
+test("a lab whose nodes do not say what they are keeps the actions", async () => {
+  const actions = await labActionIds([{}]);
+  assert.ok(actions.includes(FABRIC));
+  assert.ok(actions.includes(REPORT));
+});

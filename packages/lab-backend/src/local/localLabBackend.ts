@@ -37,6 +37,7 @@ import type {
   CaptureInterface,
   CaptureStreamOptions,
   CaptureTarget,
+  FclingApiRequest,
   GenerateTopologyRequest,
   GraphExportFormat,
   ImportTopologyFromUrlResponse,
@@ -73,6 +74,7 @@ import {
   localSaveSnapshots,
   type LocalLabRef
 } from "./labOperations.ts";
+import { LocalFcling } from "./fcling.ts";
 import { LocalLifecycle } from "./lifecycle.ts";
 import {
   containerRuntimeCli,
@@ -97,6 +99,7 @@ import {
   createLocalTopologyFiles,
   discoverTopologies,
   isValidLabName,
+  readTopologyName,
   resolveTopologyPath,
   watchTopologyDocument
 } from "./topologyFiles.ts";
@@ -169,6 +172,7 @@ export class LocalLabBackend implements LabBackend {
   private readonly access: NodeAccess;
   private kubeClient: KubeClient | undefined;
   private readonly capture: LocalCapture;
+  private readonly fclingEngines: LocalFcling;
   private support: Promise<LabOperationSupport> | undefined;
   /** Running `containerlab events` commands; they must not outlive the app. */
   private readonly eventCommands = new Set<StreamingCommand>();
@@ -184,6 +188,7 @@ export class LocalLabBackend implements LabBackend {
         : createDockerNodeAccess(this.options, docker);
     this.terminals = new LocalTerminals(this.access, this.options.username);
     this.capture = new LocalCapture(this.options, docker);
+    this.fclingEngines = new LocalFcling(this.options);
     this.lifecycle = new LocalLifecycle({
       options: this.options,
       resolveTopology: (labName, rawPath) => this.resolveTopology(labName, rawPath),
@@ -292,12 +297,43 @@ export class LocalLabBackend implements LabBackend {
     return ((await this.access.inspectLabs(labName))[labName]?.length ?? 0) > 0;
   }
 
-  runLifecycle(action: LabLifecycleAction, lab: LabTarget, options?: LifecycleRunOptions) {
+  async runLifecycle(action: LabLifecycleAction, lab: LabTarget, options?: LifecycleRunOptions) {
+    await this.settleFclingEngine(action, lab, options);
     return this.lifecycle.run(action, lab, options);
   }
 
-  streamLifecycle(action: LabLifecycleAction, lab: LabTarget, options?: LifecycleRunOptions) {
+  async streamLifecycle(action: LabLifecycleAction, lab: LabTarget, options?: LifecycleRunOptions) {
+    await this.settleFclingEngine(action, lab, options);
     return this.lifecycle.stream(action, lab, options);
+  }
+
+  /**
+   * An engine holds the lab's management network open and read the topology
+   * when it started: it goes before whatever replaces the lab's nodes, and with
+   * its history before a destroy.
+   */
+  private async settleFclingEngine(
+    action: LabLifecycleAction,
+    lab: LabTarget,
+    options: LifecycleRunOptions = {}
+  ): Promise<void> {
+    if (this.options.runtime === "c9s") return;
+    const replacesNodes =
+      action === "redeploy" ||
+      (action === "deploy" && options.cleanup === true) ||
+      (action === "apply" && options.dryRun !== true);
+    if (action !== "destroy" && !replacesNodes) return;
+    // A lab that cannot be named has no engine; the action says what is wrong with it.
+    const labName = await this.fclingLabName(lab).catch(() => undefined);
+    if (labName) await this.fclingEngines.stop(labName, { deleteHistory: action === "destroy" });
+  }
+
+  /** The name a lab runs under; a caller on this machine may only name its topology file. */
+  private async fclingLabName(lab: LabTarget): Promise<string> {
+    if (lab.labName) return lab.labName;
+    const declared = await readTopologyName(await this.labTopology(lab));
+    if (!declared) throw new LabBackendError("The topology file does not name its lab.", 400);
+    return declared;
   }
 
   async deployFromUrl(source: { url: string; labName?: string }): Promise<InspectAllLabsResponse> {
@@ -482,10 +518,34 @@ export class LocalLabBackend implements LabBackend {
     return { yaml: result.stdout };
   }
 
-  async fcli(lab: LabTarget, command: string) {
-    const containers = await this.inspectLab(lab.labName);
+  async fcling(lab: LabTarget, command: string) {
+    const containers = await this.inspectLab(await this.fclingLabName(lab));
     const network = inspectField(containers[0], "mgmt_network") || "clab";
-    return tools.fcli(this.options, await this.labTopology(lab), network, command);
+    return tools.fcling(this.options, await this.labTopology(lab), network, command);
+  }
+
+  async fclingEngine(lab: LabTarget) {
+    return this.fclingEngines.status(await this.fclingLabName(lab));
+  }
+
+  async startFclingEngine(lab: LabTarget) {
+    const labName = await this.fclingLabName(lab);
+    const containers = await this.inspectLab(labName);
+    if (containers.length === 0) throw new LabBackendError(`Lab '${labName}' is not running.`, 409);
+    const network = inspectField(containers[0], "mgmt_network") || "clab";
+    return this.fclingEngines.start(labName, await this.labTopology(lab), network);
+  }
+
+  async stopFclingEngine(lab: LabTarget) {
+    await this.fclingEngines.stop(await this.fclingLabName(lab));
+  }
+
+  async fclingApi(lab: LabTarget, request: FclingApiRequest) {
+    return this.fclingEngines.api(await this.fclingLabName(lab), request);
+  }
+
+  async streamFclingEvents(lab: LabTarget, options: { after?: number; signal: AbortSignal }) {
+    return this.fclingEngines.events(await this.fclingLabName(lab), options);
   }
 
   /** A containerlab command line for a terminal. Arguments are quoted for a POSIX shell. */

@@ -127,4 +127,4 @@ Earlier versions applied `deploy.extraArgs`, `destroy.extraArgs`, `capture.prefe
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `gotty.port` | `8080` | Port for GoTTY terminal sharing. |
-| `extras.fcli.extraDockerArgs` | empty | Extra Docker or Podman flags for fcli. |
+| `extras.fcling.extraDockerArgs` | empty | Extra Docker or Podman flags for fcling. |

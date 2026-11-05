@@ -70,6 +70,10 @@
       "types": "./dist/clos-generator/index.d.ts",
       "import": "./dist/clos-generator/index.js"
     },
+    "./fabric/engine": {
+      "types": "./dist/fabric/engine.d.ts",
+      "import": "./dist/fabric/engine.js"
+    },
     "./labs-overview": {
       "types": "./dist/labs-overview/index.d.ts",
       "import": "./dist/labs-overview/index.js"
@@ -77,6 +81,10 @@
     "./labs-overview/cards": {
       "types": "./dist/labs-overview/cards.d.ts",
       "import": "./dist/labs-overview/cards.js"
+    },
+    "./fabric": {
+      "types": "./dist/fabric/index.d.ts",
+      "import": "./dist/fabric/index.js"
     },
     "./wireshark-vnc": {
       "types": "./dist/wireshark-vnc/index.d.ts",

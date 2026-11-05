@@ -32,7 +32,7 @@ describeLabBackendContract("Local (temporary workspace)", {
 describeLabBackendContract("API (fake clab-api-server)", {
   async createFixture() {
     const workspace = await temporaryWorkspace();
-    const server = await startFakeClabApiServer(workspace.root);
+    const server = await startFakeClabApiServer(workspace.root, { features: ["fcling"] });
     return {
       backend: new ApiLabBackend({ baseUrl: server.url, token: server.token }),
       runsLabs: false,
@@ -71,7 +71,7 @@ describeLabBackendContract("API (fake Docker clab-api-server with lab-host-info)
     const workspace = await temporaryWorkspace();
     const server = await startFakeClabApiServer(workspace.root, {
       runtime: "docker",
-      features: ["lab-host-info", "lab-lifecycle-timeout"]
+      features: ["fcling", "lab-host-info", "lab-lifecycle-timeout"]
     });
     return {
       backend: new ApiLabBackend({ baseUrl: server.url, token: server.token }),

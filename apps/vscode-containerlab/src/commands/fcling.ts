@@ -2,6 +2,7 @@ import * as fs from "fs";
 
 import * as vscode from "vscode";
 import * as YAML from "yaml";
+import { FCLING_IMAGE } from "@containerlab/clab-ui/fabric/engine";
 
 import type { ClabLabTreeNode } from "../treeView/common";
 import { connectionOf, isRemote, resolveLab } from "../backend/labBackends";
@@ -34,12 +35,12 @@ function buildNetworkFromYaml(topoPath: string): string {
   return "clab";
 }
 
-async function runFcli(node: ClabLabTreeNode | undefined, cmd: string): Promise<void> {
+async function runFcling(node: ClabLabTreeNode | undefined, cmd: string): Promise<void> {
   if (!node) {
     vscode.window.showErrorMessage("No lab node selected.");
     return;
   }
-  if (!(await ensureHostSupports(connectionOf(node), "fcli", "fcli"))) return;
+  if (!(await ensureHostSupports(connectionOf(node), "fcling", "fcling"))) return;
 
   const topo = node.labPath.absolute;
   if (topo.length === 0) {
@@ -48,23 +49,23 @@ async function runFcli(node: ClabLabTreeNode | undefined, cmd: string): Promise<
   }
 
   if (isRemote(node)) {
-    void runRemoteFcli(node, cmd);
+    void runRemoteFcling(node, cmd);
     return;
   }
 
   const config = vscode.workspace.getConfiguration("containerlab");
   const runtime = config.get<string>("runtime", "docker");
-  const extraArgs = config.get<string>("extras.fcli.extraDockerArgs", "");
+  const extraArgs = config.get<string>("extras.fcling.extraDockerArgs", "");
 
   const network = buildNetworkFromYaml(topo);
 
-  const command = `${runtime} run --pull always -it --network ${network} --rm -v /etc/hosts:/etc/hosts:ro -v "${topo}":/topo.yml ${extraArgs} ghcr.io/srl-labs/nornir-srl:latest -t /topo.yml ${cmd}`;
+  const command = `${runtime} run --pull missing -it --network ${network} --rm -v /etc/hosts:/etc/hosts:ro -v "${topo}":/topo.yml ${extraArgs} ${FCLING_IMAGE} -t /topo.yml ${cmd}`;
 
-  execCommandInTerminal(command, `fcli - ${node.label}`);
+  execCommandInTerminal(command, `fcling - ${node.label}`);
 }
 
-/** fcli on the lab host; its report opens in an editor. */
-async function runRemoteFcli(node: ClabLabTreeNode, cmd: string): Promise<void> {
+/** fcling on the lab host; its report opens in an editor. */
+async function runRemoteFcling(node: ClabLabTreeNode, cmd: string): Promise<void> {
   try {
     const { backend, target } = await resolveLab(
       node.labPath.absolute,
@@ -72,33 +73,33 @@ async function runRemoteFcli(node: ClabLabTreeNode, cmd: string): Promise<void> 
       node.connectionId
     );
     const result = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `fcli ${cmd}` },
-      () => backend.fcli(target, cmd)
+      { location: vscode.ProgressLocation.Notification, title: `fcling ${cmd}` },
+      () => backend.fcling(target, cmd)
     );
     const document = await vscode.workspace.openTextDocument({ content: result.output });
     await vscode.window.showTextDocument(document, { preview: false });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    vscode.window.showErrorMessage(`fcli ${cmd} failed: ${message}`);
+    vscode.window.showErrorMessage(`fcling ${cmd} failed: ${message}`);
   }
 }
 
-export const fcliBgpPeers = (node: ClabLabTreeNode) => runFcli(node, "bgp-peers");
-export const fcliBgpRib = (node: ClabLabTreeNode) => runFcli(node, "bgp-rib");
-export const fcliIpv4Rib = (node: ClabLabTreeNode) => runFcli(node, "ipv4-rib");
-export const fcliLldp = (node: ClabLabTreeNode) => runFcli(node, "lldp");
-export const fcliMac = (node: ClabLabTreeNode) => runFcli(node, "mac");
-export const fcliNi = (node: ClabLabTreeNode) => runFcli(node, "ni");
-export const fcliSubif = (node: ClabLabTreeNode) => runFcli(node, "subif");
-export const fcliSysInfo = (node: ClabLabTreeNode) => runFcli(node, "sys-info");
+export const fclingBgpPeers = (node: ClabLabTreeNode) => runFcling(node, "bgp-peers");
+export const fclingBgpRib = (node: ClabLabTreeNode) => runFcling(node, "bgp-rib");
+export const fclingIpv4Rib = (node: ClabLabTreeNode) => runFcling(node, "ipv4-rib");
+export const fclingLldp = (node: ClabLabTreeNode) => runFcling(node, "lldp");
+export const fclingMac = (node: ClabLabTreeNode) => runFcling(node, "mac");
+export const fclingNi = (node: ClabLabTreeNode) => runFcling(node, "ni");
+export const fclingSubif = (node: ClabLabTreeNode) => runFcling(node, "subif");
+export const fclingSysInfo = (node: ClabLabTreeNode) => runFcling(node, "sys-info");
 
-export async function fcliCustom(node: ClabLabTreeNode) {
+export async function fclingCustom(node: ClabLabTreeNode) {
   const val = await vscode.window.showInputBox({
-    title: "Custom fcli command",
+    title: "Custom fcling command",
     placeHolder: "Enter command, e.g. bgp-peers"
   });
   if (val === undefined || val.trim().length === 0) {
     return;
   }
-  await runFcli(node, val.trim());
+  await runFcling(node, val.trim());
 }

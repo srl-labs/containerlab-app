@@ -3,6 +3,7 @@ import type { ContextMenuParams } from "electron";
 const EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 const TERMINAL_PATH = "/terminal.html";
 const WIRESHARK_PATH = "/wireshark.html";
+const FABRIC_PATH = "/fabric.html";
 
 export function parsePortEnv(value: string | undefined, defaultValue: number): number {
   const trimmed = value?.trim() ?? "";
@@ -34,7 +35,7 @@ export function decideNavigation(rawUrl: string, serverOrigin: string): Navigati
   return EXTERNAL_PROTOCOLS.has(url.protocol) ? "external" : "block";
 }
 
-export type WindowOpenDecision = "terminal" | "wireshark" | "external" | "block";
+export type WindowOpenDecision = "terminal" | "wireshark" | "fabric" | "external" | "block";
 
 export function decideWindowOpen(rawUrl: string, serverOrigin: string): WindowOpenDecision {
   const url = URL.parse(rawUrl);
@@ -47,6 +48,9 @@ export function decideWindowOpen(rawUrl: string, serverOrigin: string): WindowOp
     }
     if (url.pathname === WIRESHARK_PATH) {
       return "wireshark";
+    }
+    if (url.pathname === FABRIC_PATH) {
+      return "fabric";
     }
   }
   return EXTERNAL_PROTOCOLS.has(url.protocol) ? "external" : "block";

@@ -48,7 +48,7 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
     ignoreBinaries: ["wslpath"]
   },
   "apps/web": {
-    entry: ["src/terminalMain.tsx", "src/wiresharkVncMain.tsx"]
+    entry: ["src/terminalMain.tsx", "src/wiresharkVncMain.tsx", "src/fabricMain.tsx"]
   },
   "apps/web-public": {},
   "apps/vscode-containerlab": {

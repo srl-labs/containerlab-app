@@ -94,16 +94,19 @@ export {
   deployPopularLab,
   clonePopularRepo,
   openLink,
-  fcliBgpPeers,
-  fcliBgpRib,
-  fcliIpv4Rib,
-  fcliLldp,
-  fcliMac,
-  fcliNi,
-  fcliSubif,
-  fcliSysInfo,
-  fcliCustom
+  fclingBgpPeers,
+  fclingBgpRib,
+  fclingIpv4Rib,
+  fclingLldp,
+  fclingMac,
+  fclingNi,
+  fclingSubif,
+  fclingSysInfo,
+  fclingCustom
 } from "./external";
+
+// The Fabric view of a lab
+export { openFabricView } from "./fabric";
 
 // Lab server connections
 export {

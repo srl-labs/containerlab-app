@@ -6,7 +6,7 @@ import type Docker from "dockerode";
 import YAML from "yaml";
 
 import type {
-  FcliCommandResponse,
+  FclingCommandResponse,
   GenerateTopologyRequest,
   GenerateTopologyResponse,
   GraphExportFormat,
@@ -28,6 +28,8 @@ import type {
   VersionCheckResponse,
   VersionResponse
 } from "../contract/dto.ts";
+import { FCLING_IMAGE, FCLING_REPORT_COLUMNS } from "@containerlab/clab-ui/fabric/engine";
+
 import { LabBackendError } from "../contract/errors.ts";
 import { gottyOptionsError, sshxReadOnlyLink } from "../shareOptions.ts";
 import { containerRuntimeCli, imageRuntimeCli, type ResolvedLocalOptions } from "./options.ts";
@@ -209,29 +211,32 @@ export async function saveLab(
   };
 }
 
-export async function fcli(
+export async function fcling(
   options: ResolvedLocalOptions,
   topology: string,
   mgmtNetwork: string,
   command: string
-): Promise<FcliCommandResponse> {
+): Promise<FclingCommandResponse> {
   const args = [
     "run",
     "--pull",
-    "always",
+    "missing",
     "--rm",
     "--network",
     mgmtNetwork,
+    // Without a terminal, fcling squeezes its tables into 80 columns.
+    "-e",
+    `COLUMNS=${FCLING_REPORT_COLUMNS}`,
     "-v",
     "/etc/hosts:/etc/hosts:ro",
     "-v",
     `${topology}:/topo.yml`,
-    "ghcr.io/srl-labs/nornir-srl:latest",
+    FCLING_IMAGE,
     "-t",
     "/topo.yml",
     ...command.split(/\s+/).filter(Boolean)
   ];
-  const cli = containerRuntimeCli(options, "fcli reports need Docker or Podman; a Kubernetes lab host has none.");
+  const cli = containerRuntimeCli(options, "fcling reports need Docker or Podman; a Kubernetes lab host has none.");
   const result = await runCommand(cli, args, { env: options.env, timeoutMs: 10 * 60_000 });
   const output = `${result.stdout}${result.stderr}`.trim();
   if (result.code !== 0) {

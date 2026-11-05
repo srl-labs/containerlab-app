@@ -72,7 +72,7 @@ export function declaredTopologyName(content: string, fileName: string): string 
   }
 }
 
-async function readTopologyName(filePath: string): Promise<string | undefined> {
+export async function readTopologyName(filePath: string): Promise<string | undefined> {
   try {
     return declaredTopologyName(await fs.readFile(filePath, "utf8"), filePath);
   } catch {

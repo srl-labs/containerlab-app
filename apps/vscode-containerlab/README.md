@@ -113,7 +113,7 @@ The Containerlab Explorer listens to the containerlab event stream, so running l
 | ----------------------------- | ------ | ------- | -------------------------------------------- |
 | `deploy.extraArgs`            | string | `""`    | Additional args for deploy/redeploy commands |
 | `destroy.extraArgs`           | string | `""`    | Additional args for destroy commands         |
-| `extras.fcli.extraDockerArgs` | string | `""`    | Additional docker args for fcli commands     |
+| `extras.fcling.extraDockerArgs` | string | `""`    | Additional docker args for fcling reports     |
 
 ### 🖥️ Node Configuration
 

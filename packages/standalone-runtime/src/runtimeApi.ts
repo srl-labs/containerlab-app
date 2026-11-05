@@ -20,7 +20,7 @@ import type {
   NodeBrowserPortsResponse,
   ShareToolAction,
   ShareToolResponse,
-  FcliCommandResponse,
+  FclingCommandResponse,
   CaptureCloseAllResponse,
   GenerateTopologyRequest,
   GenerateTopologyResponse,
@@ -54,7 +54,7 @@ export type {
   NodeBrowserPortsResponse,
   ShareToolAction,
   ShareToolResponse,
-  FcliCommandResponse,
+  FclingCommandResponse,
   CaptureCloseAllResponse,
   GraphExportFormat,
   MermaidDirection,
@@ -766,14 +766,14 @@ export async function runGottyShareAction(
   );
 }
 
-export async function runFcliCommand(
+export async function runFclingCommand(
   input: RuntimeTargetRequest & {
     command: string;
   }
-): Promise<FcliCommandResponse> {
+): Promise<FclingCommandResponse> {
   const endpointId = resolveTargetEndpointId(input);
-  return await requestJson<FcliCommandResponse>(
-    "/api/runtime/fcli",
+  return await requestJson<FclingCommandResponse>(
+    "/api/runtime/fcling",
     asJsonBody(input, endpointId),
     endpointId
   );

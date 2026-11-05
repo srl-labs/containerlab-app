@@ -91,7 +91,7 @@ interface ShareActionBody extends RuntimeTargetBody {
   shell?: string;
 }
 
-interface FcliBody extends RuntimeTargetBody {
+interface FclingBody extends RuntimeTargetBody {
   command: string;
 }
 
@@ -1075,21 +1075,21 @@ export function registerRuntimeProxy(
     }
   );
 
-  app.post<{ Body: FcliBody }>(
-    "/api/runtime/fcli",
-    async (request: FastifyRequest<{ Body: FcliBody }>, reply: FastifyReply) => {
+  app.post<{ Body: FclingBody }>(
+    "/api/runtime/fcling",
+    async (request: FastifyRequest<{ Body: FclingBody }>, reply: FastifyReply) => {
       const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
         const command = normalizeOptionalString(request.body.command);
         if (!command) {
-          throw new RequestError("Missing fcli command.", 400);
+          throw new RequestError("Missing fcling command.", 400);
         }
 
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
-        return reply.send(await backend.fcli({ labName: target.labName }, command));
+        return reply.send(await backend.fcling({ labName: target.labName }, command));
       } catch (error) {
         return handleRouteError(reply, error);
       }

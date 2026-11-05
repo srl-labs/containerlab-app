@@ -2456,7 +2456,7 @@ async function createStaticAppContext(
   basePath?: string
 ): Promise<Awaited<ReturnType<typeof createStandaloneApp>>> {
   const clientRoot = mkdtempSync(join(tmpdir(), "clab-web-static-"));
-  for (const name of ["index.html", "terminal.html", "wireshark.html"]) {
+  for (const name of ["index.html", "terminal.html", "wireshark.html", "fabric.html"]) {
     writeFileSync(
       join(clientRoot, name),
       '<!doctype html><html><head><title>app</title></head><body></body></html>'
@@ -2542,7 +2542,7 @@ test("a configured base path moves the API and declares the document base", asyn
 
 test("all HTML entrypoints and assets work under a nested base", async (t) => {
   const app = await createStaticAppContext(t, "/tools/clab");
-  for (const path of ["", "index.html", "terminal.html", "wireshark.html", "deep/link"]) {
+  for (const path of ["", "index.html", "terminal.html", "wireshark.html", "fabric.html", "deep/link"]) {
     const response = await app.inject(`/tools/clab/${path}`);
     assert.equal(response.statusCode, 200, path);
     assert.match(response.body, /<base href="\/tools\/clab\/">/);
@@ -2842,7 +2842,7 @@ test("/api/runtime/features reports what an older clab-api-server lacks", async 
     netem: true,
     snapshots: true,
     nodePause: true,
-    fcli: true,
+    fcling: false,
     interfaceInspect: true,
     edgeshark: true,
     hostMetrics: true,

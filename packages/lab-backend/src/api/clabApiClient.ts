@@ -20,7 +20,10 @@ import type {
   CustomNodesResponse,
   EdgeSharkStatusResponse,
   ExecResponse,
-  FcliCommandResponse,
+  FclingApiRequest,
+  FclingApiResponse,
+  FclingCommandResponse,
+  FclingEngineStatus,
   GenerateTopologyRequest,
   GenerateTopologyResponse,
   GraphExportFormat,
@@ -63,6 +66,7 @@ import { parseCaptureInterfaces, type CaptureNodeTarget } from "../capture.ts";
 import { isNotFoundError, LabBackendError } from "../contract/errors.ts";
 
 import { apiFetch } from "./upstreamRequest.ts";
+import { fclingQueryString } from "@containerlab/clab-ui/fabric/engine";
 
 /**
  * Typed HTTP client for clab-api-server REST endpoints.
@@ -1117,19 +1121,74 @@ export class ClabApiClient {
     return (await res.json()) as ShareToolResponse;
   }
 
-  async runFcliCommand(
+  async runFclingCommand(
     token: string,
     labName: string,
     command: string,
-  ): Promise<FcliCommandResponse> {
+  ): Promise<FclingCommandResponse> {
     const res = await this.request(
       "POST",
-      `/api/v1/labs/${enc(labName)}/fcli`,
+      `/api/v1/labs/${enc(labName)}/fcling`,
       token,
       JSON.stringify({ command }),
       "application/json",
     );
-    return (await res.json()) as FcliCommandResponse;
+    return (await res.json()) as FclingCommandResponse;
+  }
+
+  async getFclingEngine(token: string, labName: string): Promise<FclingEngineStatus> {
+    const res = await this.request("GET", `/api/v1/labs/${enc(labName)}/fcling/engine`, token);
+    return (await res.json()) as FclingEngineStatus;
+  }
+
+  /** The server pulls the engine's image first, which can take minutes. */
+  async startFclingEngine(token: string, labName: string): Promise<FclingEngineStatus> {
+    const res = await this.request("POST", `/api/v1/labs/${enc(labName)}/fcling/engine`, token);
+    return (await res.json()) as FclingEngineStatus;
+  }
+
+  async stopFclingEngine(token: string, labName: string): Promise<void> {
+    await this.request("DELETE", `/api/v1/labs/${enc(labName)}/fcling/engine`, token);
+  }
+
+  /** The engine's answer, an error status too: the Fabric view tells a stopped engine from others. */
+  async fclingApi(
+    token: string,
+    labName: string,
+    request: FclingApiRequest,
+  ): Promise<FclingApiResponse> {
+    const hasBody = request.body !== undefined;
+    const res = await apiFetch(
+      `${this.baseUrl}/api/v1/labs/${enc(labName)}/fcling/api/${request.path}${fclingQueryString(request.query)}`,
+      {
+        method: request.method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(hasBody ? { "Content-Type": "application/json" } : {}),
+        },
+        ...(hasBody ? { body: JSON.stringify(request.body) } : {}),
+      },
+    );
+    const text = await res.text();
+    try {
+      return { status: res.status, body: text ? (JSON.parse(text) as unknown) : null };
+    } catch {
+      return { status: res.status, body: { error: text || res.statusText } };
+    }
+  }
+
+  openFclingEvents(
+    token: string,
+    labName: string,
+    after: number | undefined,
+    requestOptions: StreamRequestOptions,
+  ): Promise<Response> {
+    const query = fclingQueryString(after === undefined ? {} : { after: String(after) });
+    return this.openStream(
+      `/api/v1/labs/${enc(labName)}/fcling/api/events${query}`,
+      token,
+      requestOptions,
+    );
   }
 
   async validateTopology(

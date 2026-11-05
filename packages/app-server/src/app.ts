@@ -566,7 +566,7 @@ export async function createStandaloneApp(
       index: false,
     });
 
-    for (const name of ["index.html", "terminal.html", "wireshark.html"]) {
+    for (const name of ["index.html", "terminal.html", "wireshark.html", "fabric.html"]) {
       app.get(`${basePath}/${name}`, async (_request, reply) => {
         return sendDocument(name, reply);
       });
