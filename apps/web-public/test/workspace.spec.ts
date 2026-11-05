@@ -41,7 +41,9 @@ test("toolbar and YAML panel stay usable in a narrow workspace", async ({ page }
   await page.getByRole("button", { name: "Lab Settings", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
-  await page.getByTestId("navbar-split-view").click();
+  // The open palette leaves the toolbar little room, so the split view button waits in More.
+  await page.getByTestId("navbar-more").click();
+  await page.getByTestId("navbar-more-split-view").click();
   await expect(page.getByTestId("panel-tab-yaml")).toBeVisible();
   const sidebar = (await page.getByTestId("workspace-sidebar").boundingBox())!;
   const panel = (await page.getByTestId("context-panel").boundingBox())!;
