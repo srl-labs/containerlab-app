@@ -6,6 +6,8 @@ import os from "node:os";
 import path from "node:path";
 import { describe, test, type TestContext } from "node:test";
 
+import { FCLING_IMAGE } from "@containerlab/clab-ui/fabric/engine";
+
 import { LocalFcling, fclingContainerName, parseEngineContainer } from "./fcling.ts";
 import { LocalLabBackend } from "./localLabBackend.ts";
 import type { ResolvedLocalOptions } from "./options.ts";
@@ -16,8 +18,8 @@ interface FakeRuntime {
   commands(): Promise<string[][]>;
   /** What `inspect` answers from now on; nothing means there is no such container. */
   setContainer(container: unknown): Promise<void>;
-  /** Makes `run` fail with this pull policy, and how. */
-  failRun(pull: string): Promise<void>;
+  /** Makes `run` fail. */
+  failRun(): Promise<void>;
 }
 
 /** A `docker` command that records its arguments and answers from files the test writes. */
@@ -34,7 +36,7 @@ async function fakeRuntime(t: TestContext): Promise<FakeRuntime> {
       `printf '\\n' >> "${log}"`,
       'case "$1" in',
       `  inspect) [ -f "${inspected}" ] && cat "${inspected}" && exit 0; echo 'no such container' >&2; exit 1 ;;`,
-      `  run) case " $* " in *" --pull always "*) [ -f "${directory}/fail-always" ] && { echo 'pull refused' >&2; exit 1; } ;; esac; echo abc123 ;;`,
+      `  run) [ -f "${directory}/fail-run" ] && { echo 'pull refused' >&2; exit 1; }; echo abc123 ;;`,
       "  logs) echo 'lists no nodes' ;;",
       "esac",
       "exit 0"
@@ -57,14 +59,14 @@ async function fakeRuntime(t: TestContext): Promise<FakeRuntime> {
       await fs.writeFile(inspected, JSON.stringify([container]));
     },
     async failRun() {
-      await fs.writeFile(path.join(directory, "fail-always"), "");
+      await fs.writeFile(path.join(directory, "fail-run"), "");
     }
   };
 }
 
 function runningContainer(port: number, token = "secret") {
   return {
-    Config: { Image: "ghcr.io/srl-labs/fcling:latest", Env: ["PATH=/bin", `FCLI_API_TOKEN=${token}`] },
+    Config: { Image: "ghcr.io/srl-labs/fcling:0.9.0", Env: ["PATH=/bin", `FCLI_API_TOKEN=${token}`] },
     State: { Running: true, ExitCode: 0, StartedAt: "2026-11-05T14:00:00Z" },
     NetworkSettings: { Ports: { "8765/tcp": [{ HostIp: "127.0.0.1", HostPort: String(port) }] } }
   };
@@ -92,7 +94,7 @@ describe("parseEngineContainer", () => {
     assert.deepEqual(parseEngineContainer(JSON.stringify([runningContainer(49153)])), {
       running: true,
       exitCode: 0,
-      image: "ghcr.io/srl-labs/fcling:latest",
+      image: "ghcr.io/srl-labs/fcling:0.9.0",
       startedAt: "2026-11-05T14:00:00Z",
       url: "http://127.0.0.1:49153",
       token: "secret"
@@ -128,14 +130,22 @@ describe("LocalFcling", () => {
     assert.equal(run.filter((arg) => arg === "-e").length, 1);
   });
 
-  test("uses the image at hand when it cannot pull", async (t) => {
+  test("runs the pinned image, and pulls it only when it is missing", async (t) => {
     const runtime = await fakeRuntime(t);
-    await runtime.failRun("always");
     await runtime.engines.start("lab1", "/labs/lab1.clab.yml", "clab");
-    const runs = (await runtime.commands()).filter((command) => command[0] === "run");
-    assert.deepEqual(
-      runs.map((command) => command[command.indexOf("--pull") + 1]),
-      ["always", "never"]
+    const run = (await runtime.commands()).find((command) => command[0] === "run");
+    assert.ok(run);
+    assert.equal(run[run.indexOf("--pull") + 1], "missing");
+    assert.ok(run.includes(FCLING_IMAGE));
+    assert.match(FCLING_IMAGE, /:\d+\.\d+\.\d+$/);
+  });
+
+  test("says why an engine did not start", async (t) => {
+    const runtime = await fakeRuntime(t);
+    await runtime.failRun();
+    await assert.rejects(
+      runtime.engines.start("lab1", "/labs/lab1.clab.yml", "clab"),
+      /did not start: pull refused/
     );
   });
 

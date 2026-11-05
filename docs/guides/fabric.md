@@ -19,7 +19,7 @@ Type a time in **Go back**, such as `30m`, `2h` or `14:02`, to see the fabric as
 
 ## What runs where
 
-The view starts one container for the lab on the lab host, on the lab's management network. The first time, its image `ghcr.io/srl-labs/fcling` is pulled, which can take a minute.
+The view starts one container for the lab on the lab host, on the lab's management network. The first time, its image is pulled, which can take a minute. Each app release uses one fcling version, `ghcr.io/srl-labs/fcling:0.9.0` in this one, so an fcling release changes nothing until the app moves to it.
 
 - It keeps running when you close the view, so the history goes on. **Stop engine** in the view's menu stops it and keeps the history for the next start.
 - Destroying the lab from the app removes the container and its history. Redeploying removes the container and keeps the history; start it again from the view.

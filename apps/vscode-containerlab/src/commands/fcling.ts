@@ -59,7 +59,7 @@ async function runFcling(node: ClabLabTreeNode | undefined, cmd: string): Promis
 
   const network = buildNetworkFromYaml(topo);
 
-  const command = `${runtime} run --pull always -it --network ${network} --rm -v /etc/hosts:/etc/hosts:ro -v "${topo}":/topo.yml ${extraArgs} ${FCLING_IMAGE} -t /topo.yml ${cmd}`;
+  const command = `${runtime} run --pull missing -it --network ${network} --rm -v /etc/hosts:/etc/hosts:ro -v "${topo}":/topo.yml ${extraArgs} ${FCLING_IMAGE} -t /topo.yml ${cmd}`;
 
   execCommandInTerminal(command, `fcling - ${node.label}`);
 }

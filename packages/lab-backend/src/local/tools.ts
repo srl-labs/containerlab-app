@@ -220,7 +220,7 @@ export async function fcling(
   const args = [
     "run",
     "--pull",
-    "always",
+    "missing",
     "--rm",
     "--network",
     mgmtNetwork,

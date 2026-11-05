@@ -3,8 +3,12 @@
  * backends, the hosts and the Fabric view. No React in here: backends import it.
  */
 
-/** The container image of fcling, for one-shot reports and the engine. */
-export const FCLING_IMAGE = "ghcr.io/srl-labs/fcling:latest";
+/**
+ * The container image of fcling, for one-shot reports and the engine. Pinned:
+ * the Fabric view reads the fields of its API, so a new release is a change to
+ * test and bump here, with clab-api-server's `DefaultImage`.
+ */
+export const FCLING_IMAGE = "ghcr.io/srl-labs/fcling:0.9.0";
 
 /** The port `fcling serve` listens on inside its container. */
 export const FCLING_PORT = 8765;

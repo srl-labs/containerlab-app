@@ -157,44 +157,42 @@ export class LocalFcling {
     // What an earlier run left behind holds the name; the history stays in its volume.
     if (current) await this.run(["rm", "-f", name]);
 
-    const args = (pull: string) => [
-      "run",
-      "-d",
-      "--pull",
-      pull,
-      "--name",
-      name,
-      "--label",
-      `${ENGINE_LAB_LABEL}=${labName}`,
-      "--network",
-      mgmtNetwork,
-      // The runtime picks a free port, on this machine only.
-      "-p",
-      `127.0.0.1::${FCLING_PORT}`,
-      "-v",
-      `${topology}:/topo.yml:ro`,
-      "-v",
-      `${name}:/state`,
-      "-e",
-      `${TOKEN_ENV}=${randomBytes(24).toString("hex")}`,
-      FCLING_IMAGE,
-      "-t",
-      "/topo.yml",
-      "serve",
-      "--host",
-      "0.0.0.0",
-      "--no-tls",
-      "--persist-acks"
-    ];
-    let result = await this.run(args("always"), START_TIMEOUT_MS);
+    const result = await this.run(
+      [
+        "run",
+        "-d",
+        // The image is pinned, so the one at hand is the right one, also offline.
+        "--pull",
+        "missing",
+        "--name",
+        name,
+        "--label",
+        `${ENGINE_LAB_LABEL}=${labName}`,
+        "--network",
+        mgmtNetwork,
+        // The runtime picks a free port, on this machine only.
+        "-p",
+        `127.0.0.1::${FCLING_PORT}`,
+        "-v",
+        `${topology}:/topo.yml:ro`,
+        "-v",
+        `${name}:/state`,
+        "-e",
+        `${TOKEN_ENV}=${randomBytes(24).toString("hex")}`,
+        FCLING_IMAGE,
+        "-t",
+        "/topo.yml",
+        "serve",
+        "--host",
+        "0.0.0.0",
+        "--no-tls",
+        "--persist-acks"
+      ],
+      START_TIMEOUT_MS
+    );
     if (result.code !== 0) {
-      // Offline, the image at hand still does.
-      const offline = await this.run(args("never"));
-      if (offline.code !== 0) {
-        const output = stripAnsi(`${result.stdout}${result.stderr}`).trim();
-        throw new LabBackendError(`The fabric engine of lab '${labName}' did not start: ${output}`, 500);
-      }
-      result = offline;
+      const output = stripAnsi(`${result.stdout}${result.stderr}`).trim();
+      throw new LabBackendError(`The fabric engine of lab '${labName}' did not start: ${output}`, 500);
     }
     void this.sweepOrphans(labName);
     return this.status(labName);
