@@ -1,5 +1,5 @@
-// The lab host of the open lab in the toolbar: its status dot, name and kind,
-// as the explorer root shows it. A click opens the host's settings.
+// The lab host of the open lab in the toolbar: its status dot, name and runtime.
+// A click opens the host's settings.
 import React from "react";
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
@@ -7,12 +7,14 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 
 import {
-  labHostKindLabel,
-  labHostShortLabel,
+  labHostCompactName,
   labHostStatusWord,
   labHostTagLabel,
   type LabHostIdentity
 } from "../../host/labHostIdentity";
+import { CAP_CENTERED_TEXT_SX } from "../../theme/typography";
+
+import { LabHostRuntimeIcon } from "./LabHostRuntimeIcon";
 
 const STATUS_COLORS: Record<NonNullable<LabHostIdentity["status"]>, string> = {
   connected: "success.main",
@@ -28,9 +30,9 @@ function ChipTooltip(props: { host: LabHostIdentity; clickable: boolean }) {
   return (
     <Box sx={{ display: "grid", gap: 0.25, py: 0.25 }}>
       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-        {host.label}
+        {labHostCompactName(host)}
       </Typography>
-      <Typography variant="caption">{labHostKindLabel(host)}</Typography>
+      <Typography variant="caption">{labHostTagLabel(host)}</Typography>
       {(host.details ?? []).map((line) => (
         <Typography key={line} variant="caption" sx={{ overflowWrap: "anywhere" }}>
           {line}
@@ -47,9 +49,8 @@ function ChipTooltip(props: { host: LabHostIdentity; clickable: boolean }) {
 }
 
 /**
- * `● c9s-dev · API Server · c9s`: where the open lab runs. Narrow toolbars
- * keep the dot, a shortened name and "API · c9s"; the tiniest the dot and
- * "API · c9s". The tooltip has the rest.
+ * `● Local [Docker icon]`: where the open lab runs. Narrow toolbars shorten
+ * the name; the tiniest keep the dot and the icon. The tooltip has the rest.
  */
 export function LabHostChip(props: {
   host: LabHostIdentity;
@@ -61,6 +62,7 @@ export function LabHostChip(props: {
   const narrow = props.container ? `@container ${props.container} (max-width: 640px)` : "@media (max-width: 640px)";
   const tiny = props.container ? `@container ${props.container} (max-width: 420px)` : "@media (max-width: 420px)";
   const status = labHostStatusWord(host);
+  const name = labHostCompactName(host);
   const content = (
     <>
       <Box
@@ -68,8 +70,8 @@ export function LabHostChip(props: {
         data-testid="lab-host-chip-dot"
         data-status={host.status ?? "connected"}
         sx={{
-          width: 7,
-          height: 7,
+          width: 8,
+          height: 8,
           borderRadius: "50%",
           flex: "0 0 auto",
           bgcolor: STATUS_COLORS[host.status ?? "connected"]
@@ -77,36 +79,19 @@ export function LabHostChip(props: {
       />
       <Typography
         component="span"
-        variant="caption"
+        variant="subtitle2"
         noWrap
         sx={{
-          fontWeight: 600,
+          ...CAP_CENTERED_TEXT_SX,
           color: "text.primary",
           maxWidth: 180,
           [narrow]: { maxWidth: 96 },
           [tiny]: { display: "none" }
         }}
       >
-        {host.label}
+        {name}
       </Typography>
-      <Typography
-        component="span"
-        variant="caption"
-        noWrap
-        data-testid="lab-host-chip-kind"
-        sx={{ color: "text.secondary", flex: "0 0 auto", [narrow]: { display: "none" } }}
-      >
-        · {labHostTagLabel(host)}
-      </Typography>
-      <Typography
-        component="span"
-        variant="caption"
-        noWrap
-        data-testid="lab-host-chip-runtime"
-        sx={{ display: "none", color: "text.secondary", flex: "0 0 auto", [narrow]: { display: "inline" } }}
-      >
-        {labHostShortLabel(host)}
-      </Typography>
+      <LabHostRuntimeIcon host={host} />
     </>
   );
   const sx = {
@@ -122,7 +107,7 @@ export function LabHostChip(props: {
     borderColor: "divider",
     "&:hover": onOpen ? { bgcolor: "action.hover" } : undefined
   } as const;
-  const label = `Lab host ${host.label}, ${labHostKindLabel(host)}${status ? `, ${status}` : ""}`;
+  const label = `Lab host ${name}, ${labHostTagLabel(host)}${status ? `, ${status}` : ""}`;
   return (
     <Tooltip title={<ChipTooltip host={host} clickable={onOpen !== undefined} />} placement="bottom-start" enterDelay={300}>
       {onOpen ? (

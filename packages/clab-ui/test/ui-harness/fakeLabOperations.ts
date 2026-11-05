@@ -16,6 +16,7 @@ import {
   effectiveSupport,
   type LabHostInfo
 } from "../../src/host/labHostSupport";
+import { parseLabHostIdentity } from "../../src/host/labHostIdentity";
 
 import { readTopology, type DesiredLab } from "./fakeLab";
 
@@ -43,13 +44,30 @@ function harnessSupport(): LabOperationSupport {
   return ALL_SUPPORTED;
 }
 
+/** Lab hosts to look at by URL, e.g. `/index.html?labHost=k8s`. */
+const LAB_HOST_PRESETS: Record<string, unknown> = {
+  local: { id: "local", label: "This computer", kind: "this-computer", runtime: "docker", status: "connected" },
+  podman: { id: "local", label: "This computer", kind: "this-computer", runtime: "podman", status: "connected" },
+  k8s: { id: "c9s", label: "kind-c9s-app", kind: "cluster", runtime: "c9s", status: "connected" },
+  api: { id: "api", label: "lab-server:8090", kind: "server", runtime: "docker", status: "connected" },
+  "api-k8s": { id: "api", label: "lab-server:8090", kind: "server", runtime: "c9s", status: "connected" },
+  "signed-out": { id: "api", label: "lab-server:8090", kind: "server", status: "saved" }
+};
+
 /**
  * The fake lab host: Docker, unless a spec sets `window.__CLAB_UI_HARNESS_LAB_HOST__`
  * to `"c9s"` (a Kubernetes cluster on this machine) to see what the view hides there.
+ * `window.__CLAB_UI_HARNESS_LAB_HOST_IDENTITY__` names the host in the toolbar,
+ * or the page's `?labHost=` picks one of `LAB_HOST_PRESETS`.
  */
 function harnessLabHost(): LabHostInfo {
   const stub = (window as unknown as { __CLAB_UI_HARNESS_LAB_HOST__?: unknown }).__CLAB_UI_HARNESS_LAB_HOST__;
-  const c9s = stub === "c9s";
+  const preset = new URLSearchParams(window.location.search).get("labHost") ?? "";
+  const c9s = stub === "c9s" || preset === "k8s" || preset === "api-k8s";
+  const identity = parseLabHostIdentity(
+    (window as unknown as { __CLAB_UI_HARNESS_LAB_HOST_IDENTITY__?: unknown }).__CLAB_UI_HARNESS_LAB_HOST_IDENTITY__ ??
+      LAB_HOST_PRESETS[preset]
+  );
   const capabilities = {
     sshAccess: false,
     deployFromUrl: true,
@@ -80,7 +98,8 @@ function harnessLabHost(): LabHostInfo {
     profile: c9s
       ? { runtime: "c9s", kubeContext: "kind-harness", namespaceMode: "per-lab", persistence: true, defaultTimeout: "10m" }
       : { runtime: "docker", defaultTimeout: "2m" },
-    support: effectiveSupport(capabilities, features)
+    support: effectiveSupport(capabilities, features),
+    ...(identity ? { host: identity } : {})
   };
 }
 
