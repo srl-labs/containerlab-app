@@ -39,9 +39,6 @@ function GroupHeading(props: { label: string }) {
         px: 1.25,
         pt: 1.25,
         pb: 0.25,
-        lineHeight: 1.6,
-        fontSize: 10.5,
-        letterSpacing: "0.06em",
         "&:first-of-type": { pt: 0 },
         "@container settings-layout (min-width: 720px)": { display: "block" }
       }}

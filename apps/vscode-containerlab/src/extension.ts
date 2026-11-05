@@ -264,7 +264,7 @@ function registerUnsupportedViews(context: vscode.ExtensionContext) {
     html, body {
       margin: 0;
       padding: 0;
-      font-family: sans-serif;
+      font-family: var(--vscode-font-family, sans-serif);
       color: inherit;
       background: transparent;
     }

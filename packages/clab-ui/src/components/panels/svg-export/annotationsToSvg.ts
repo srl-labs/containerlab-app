@@ -8,6 +8,7 @@ import { DEFAULT_ARROW_SIZE, DEFAULT_LINE_LENGTH } from "../../../annotations/co
 import { applyAlphaToColor } from "../../../utils/color";
 import { renderMarkdown } from "../../../utils/markdownRenderer";
 import { GRAPH_LAYER_CLASS, resolveCssColor } from "./constants";
+import { canvasFontFamily } from "./textMetrics";
 
 // ============================================================================
 // Constants
@@ -398,9 +399,7 @@ function isNoFillBackground(backgroundColor: string | undefined): boolean {
 
 /** Resolve the app font used by the canvas for `fontFamily: inherit` texts. */
 function resolveInheritedFontFamily(): string {
-  if (typeof document === "undefined" || document.body === null) return DEFAULT_FONT_FAMILY;
-  const fontFamily = getComputedStyle(document.body).fontFamily;
-  return fontFamily.length > 0 ? fontFamily : DEFAULT_FONT_FAMILY;
+  return canvasFontFamily(DEFAULT_FONT_FAMILY);
 }
 
 function getTextStyle(text: FreeTextAnnotation): TextStyle {

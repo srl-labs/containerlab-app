@@ -50,12 +50,18 @@ function getSectionHeaderSx(isBeingDragged: boolean) {
     "&:hover": {
       bgcolor: "action.hover"
     },
+    // The actions take no room until they show, so the title is only cut short on hover.
     "& .explorer-section-hover-actions": {
+      display: "flex",
+      flexShrink: 0,
+      overflow: "hidden",
+      maxWidth: isBeingDragged ? "none" : 0,
       opacity: isBeingDragged ? 1 : 0,
       pointerEvents: isBeingDragged ? "auto" : "none",
       transition: "opacity 120ms ease"
     },
     "&:hover .explorer-section-hover-actions, &:focus-within .explorer-section-hover-actions": {
+      maxWidth: "none",
       opacity: 1,
       pointerEvents: "auto"
     }
@@ -171,7 +177,7 @@ export function ExplorerSectionCard({
               gap: 0.5
             }}
           >
-            <Typography className="explorer-section-title" variant="body2" noWrap>
+            <Typography className="explorer-section-title" variant="overline" noWrap title={formatSectionTitle(section)}>
               {formatSectionTitle(section)}
             </Typography>
             {showSectionCount(section) && (
@@ -185,33 +191,34 @@ export function ExplorerSectionCard({
             )}
           </Box>
 
-          <SectionToolbarActions actions={section.toolbarActions} onInvokeAction={onInvokeAction} />
+          <Box className="explorer-section-hover-actions">
+            <SectionToolbarActions actions={section.toolbarActions} onInvokeAction={onInvokeAction} />
 
-          {showExpandAllControl && (
-            <Tooltip title={allExpanded ? "Collapse All" : "Expand All"}>
-              <IconButton
-                size="small"
-                className="explorer-section-hover-actions"
-                sx={TOOLBAR_ICON_BUTTON_SX}
-                aria-label={allExpanded ? "Collapse all" : "Expand all"}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  if (allExpanded) {
-                    onCollapseAllInSection(section.id);
-                  } else {
-                    onExpandAllInSection(section.id, section.nodes);
-                  }
-                }}
-              >
-                {allExpanded ? (
-                  <UnfoldLessRoundedIcon sx={{ fontSize: 17 }} />
-                ) : (
-                  <UnfoldMoreRoundedIcon sx={{ fontSize: 17 }} />
-                )}
-              </IconButton>
-            </Tooltip>
-          )}
+            {showExpandAllControl && (
+              <Tooltip title={allExpanded ? "Collapse All" : "Expand All"}>
+                <IconButton
+                  size="small"
+                  sx={TOOLBAR_ICON_BUTTON_SX}
+                  aria-label={allExpanded ? "Collapse all" : "Expand all"}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (allExpanded) {
+                      onCollapseAllInSection(section.id);
+                    } else {
+                      onExpandAllInSection(section.id, section.nodes);
+                    }
+                  }}
+                >
+                  {allExpanded ? (
+                    <UnfoldLessRoundedIcon sx={{ fontSize: 17 }} />
+                  ) : (
+                    <UnfoldMoreRoundedIcon sx={{ fontSize: 17 }} />
+                  )}
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
         </Box>
       )}
 

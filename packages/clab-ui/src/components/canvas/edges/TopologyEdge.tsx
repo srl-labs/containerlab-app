@@ -50,6 +50,7 @@ import {
   type ElbowLabelPlacement
 } from "./elbowLinkLayout";
 import { DEFAULT_ENDPOINT_LABEL_OFFSET } from "../../../annotations/endpointLabelOffset";
+import { UI_FONT_FAMILY } from "../../../theme/typography";
 import {
   TRAFFIC_FLOW_MIN_BPS,
   TRAFFIC_FLOW_WIDTH,
@@ -82,8 +83,6 @@ const LABEL_BG_COLOR = "var(--topoviewer-edge-label-background)";
 const LABEL_TEXT_COLOR = "var(--topoviewer-edge-label-foreground)";
 const LABEL_OUTLINE_COLOR = "var(--topoviewer-edge-label-outline)";
 const LABEL_PADDING = "0px 2px";
-const LABEL_FONT_FAMILY = '"Helvetica Neue", Helvetica, Arial, sans-serif';
-const TELEMETRY_LABEL_FONT_FAMILY = "Helvetica, Arial, sans-serif";
 
 const TELEMETRY_LABEL_FONT_SIZE_PX = 10;
 const TELEMETRY_LABEL_TEXT_COLOR = "#FFFFFF";
@@ -758,7 +757,7 @@ function calculateLoopEdgeGeometry(
 const LABEL_STYLE_BASE: React.CSSProperties = {
   position: "absolute",
   fontSize: LABEL_FONT_SIZE,
-  fontFamily: LABEL_FONT_FAMILY,
+  fontFamily: UI_FONT_FAMILY,
   color: LABEL_TEXT_COLOR,
   backgroundColor: LABEL_BG_COLOR,
   padding: LABEL_PADDING,
@@ -775,7 +774,7 @@ const TELEMETRY_LABEL_STYLE_BASE: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontFamily: TELEMETRY_LABEL_FONT_FAMILY,
+  fontFamily: UI_FONT_FAMILY,
   fontWeight: 600,
   color: TELEMETRY_LABEL_TEXT_COLOR,
   backgroundColor: TELEMETRY_LABEL_BG_COLOR,

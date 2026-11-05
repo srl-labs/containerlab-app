@@ -16,6 +16,7 @@ function action(commandId: string, label: string, destructive = false): Explorer
 
 const LAB_ACTIONS = [
   action("containerlab.lab.graph.topoViewer", "Open TopoViewer"),
+  action("containerlab.lab.apply", "Apply Topology"),
   action("containerlab.lab.redeploy", "Redeploy"),
   action("containerlab.lab.destroy", "Destroy", true)
 ];

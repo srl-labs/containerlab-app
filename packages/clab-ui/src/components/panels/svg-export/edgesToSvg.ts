@@ -35,7 +35,7 @@ import {
   escapeXml,
   resolveCssColor
 } from "./constants";
-import { measureTextWidth } from "./textMetrics";
+import { canvasFontFamily, measureTextWidth } from "./textMetrics";
 
 // ============================================================================
 // Types
@@ -555,7 +555,7 @@ function buildTelemetryEndpointLabelSvg(
 
   svg += `<text x="${x}" y="${y}" `;
   svg += `font-size="${metrics.fontSize}" font-weight="${TELEMETRY_EDGE_LABEL.fontWeight}" `;
-  svg += `font-family='${TELEMETRY_EDGE_LABEL.fontFamily}' `;
+  svg += `font-family='${escapeXml(canvasFontFamily(TELEMETRY_EDGE_LABEL.fontFamily))}' `;
   svg += `dominant-baseline="central" `;
   svg += `fill="${TELEMETRY_EDGE_LABEL.color}" text-anchor="middle" `;
   svg += `stroke="${TELEMETRY_EDGE_LABEL.textStrokeColor}" stroke-width="${metrics.textStrokeWidth}" `;
@@ -582,8 +582,9 @@ function buildDefaultEndpointLabelSvg(
   const { interfaceScale } = renderOptions;
   const fontSize = Math.max(8, EDGE_LABEL.fontSize * interfaceScale);
   const paddingX = Math.max(2, EDGE_LABEL.paddingX * interfaceScale);
+  const fontFamily = canvasFontFamily(EDGE_LABEL.fontFamily);
   const textWidth = measureTextWidth(text, {
-    fontFamily: EDGE_LABEL.fontFamily,
+    fontFamily,
     fontSizePx: fontSize,
     fontWeight: "400"
   });
@@ -597,7 +598,7 @@ function buildDefaultEndpointLabelSvg(
 
   svg += `<text x="${x}" y="${y}" `;
   svg += `font-size="${fontSize}" `;
-  svg += `font-family='${EDGE_LABEL.fontFamily}' `;
+  svg += `font-family='${escapeXml(fontFamily)}' `;
   svg += `dominant-baseline="central" `;
   svg += `fill="${renderOptions.defaultLabelForeground}" text-anchor="middle">`;
   svg += escapeXml(text);

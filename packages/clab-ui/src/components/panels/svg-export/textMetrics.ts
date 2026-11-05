@@ -66,3 +66,10 @@ export function sampleFontMetrics(selector: string): SampledFontMetrics | null {
     lineHeightPx: Number.isFinite(lineHeightPx) ? lineHeightPx : fontSizePx * 1.4
   };
 }
+
+/** The font the canvas draws in, for labels in an export; the fallback without a DOM. */
+export function canvasFontFamily(fallback: string): string {
+  if (typeof document === "undefined" || document.body === null) return fallback;
+  const fontFamily = getComputedStyle(document.body).fontFamily;
+  return fontFamily.length > 0 ? fontFamily : fallback;
+}

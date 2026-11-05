@@ -18,6 +18,8 @@ export interface ContextMenuItem {
   disabledReason?: string;
   divider?: boolean;
   danger?: boolean;
+  /** The row a lab's state moves forward with, in the deploy green. */
+  success?: boolean;
   onClick?: () => void;
   children?: ContextMenuItem[];
   /** Custom submenu content, such as a checklist; `close` closes the whole menu. */
@@ -279,6 +281,12 @@ function renderMenuItemLabel(item: ContextMenuItem): React.ReactElement {
 
 /** Destructive rows read red as a whole, icon included. */
 const DANGER_ITEM_SX = { color: "error.main", "& .MuiListItemIcon-root": { color: "inherit" } } as const;
+const SUCCESS_ITEM_SX = { color: "success.main", "& .MuiListItemIcon-root": { color: "inherit" } } as const;
+
+function menuItemToneSx(item: ContextMenuItem) {
+  if (item.danger === true) return DANGER_ITEM_SX;
+  return item.success === true ? SUCCESS_ITEM_SX : undefined;
+}
 
 const MenuItemButton: React.FC<MenuItemComponentProps> = ({ item, onClose }) => {
   const handleClick = useMenuItemClick(item, onClose);
@@ -288,7 +296,7 @@ const MenuItemButton: React.FC<MenuItemComponentProps> = ({ item, onClose }) => 
       onClick={handleClick}
       disabled={item.disabled}
       data-testid={`context-menu-item-${item.id}`}
-      sx={item.danger === true ? DANGER_ITEM_SX : undefined}
+      sx={menuItemToneSx(item)}
     >
       {renderMenuItemLabel(item)}
     </MenuItem>

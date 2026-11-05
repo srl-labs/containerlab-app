@@ -33,7 +33,7 @@ export const LAB_RUNTIME_NAMES: Readonly<Record<LabRuntimeKind, string>> = { doc
 type KindAndRuntime = Pick<LabHostIdentity, "kind" | "runtime">;
 
 /** The runtime of a lab host: a cluster's is c9s, This computer's Docker unless it says Podman. */
-function runtimeOf(host: KindAndRuntime): LabRuntimeKind | undefined {
+export function labHostRuntime(host: KindAndRuntime): LabRuntimeKind | undefined {
   if (host.kind === "cluster") return "c9s";
   if (host.kind === "this-computer") return host.runtime === "podman" ? "podman" : "docker";
   return host.runtime;
@@ -45,7 +45,7 @@ function runtimeOf(host: KindAndRuntime): LabRuntimeKind | undefined {
  * An API Server tells its runtime once signed in; until then it is "API Server".
  */
 export function labHostKindLabel(host: KindAndRuntime): string {
-  const runtime = runtimeOf(host);
+  const runtime = labHostRuntime(host);
   const kind = LAB_HOST_KIND_NAMES[host.kind];
   return runtime ? `${kind} · ${LAB_RUNTIME_NAMES[runtime]}` : kind;
 }
@@ -56,9 +56,16 @@ export function labHostKindLabel(host: KindAndRuntime): string {
  */
 export function labHostTagLabel(host: Pick<LabHostIdentity, "kind" | "label" | "runtime">): string {
   const kind = LAB_HOST_KIND_NAMES[host.kind];
-  const runtime = runtimeOf(host);
+  const runtime = labHostRuntime(host);
   if (host.label.trim() === kind && runtime) return LAB_RUNTIME_NAMES[runtime];
   return labHostKindLabel(host);
+}
+
+/** The name in tight places: this machine is "Local" unless the host named it. */
+export function labHostCompactName(host: Pick<LabHostIdentity, "kind" | "label">): string {
+  return host.kind === "this-computer" && host.label.trim() === LAB_HOST_KIND_NAMES["this-computer"]
+    ? "Local"
+    : host.label;
 }
 
 /** Each kind in a few letters, for narrow places. */
@@ -73,7 +80,7 @@ const SHORT_KIND_NAMES: Readonly<Record<LabHostIdentityKind, string>> = {
  * computer's runtime ("Docker"); "API Server" while it has not told its runtime.
  */
 export function labHostShortLabel(host: KindAndRuntime): string {
-  const runtime = runtimeOf(host);
+  const runtime = labHostRuntime(host);
   if (runtime === undefined) return LAB_HOST_KIND_NAMES[host.kind];
   if (host.kind === "this-computer") return LAB_RUNTIME_NAMES[runtime];
   return `${SHORT_KIND_NAMES[host.kind]} · ${LAB_RUNTIME_NAMES[runtime]}`;

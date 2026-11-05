@@ -53,6 +53,7 @@ import {
   useMode,
   useTopoViewerActions
 } from "../../stores";
+import { UI_FONT_FAMILY } from "../../theme/typography";
 import { invertHexColor, resolveComputedColor } from "../../utils/color";
 import { isTopoNodeLike } from "../../utils/graphQueryUtils";
 import { getCombinedMatches } from "../panels/find-node/findNodeSearchUtils";
@@ -980,7 +981,9 @@ function renderGeoMapLayer(
             borderRadius: 6,
             background: "rgba(30, 30, 30, 0.92)",
             color: "#f0f0f0",
-            font: "13px/1.5 sans-serif",
+            fontFamily: UI_FONT_FAMILY,
+            fontSize: 13,
+            lineHeight: 1.5,
             textAlign: "center",
             zIndex: 1,
             pointerEvents: "none"

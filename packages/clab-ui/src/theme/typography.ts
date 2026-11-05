@@ -9,6 +9,17 @@ export const MONO_FONT_FAMILY =
   "var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace)";
 
 /**
+ * Text whose capitals sit in the middle of a row, next to a dot or an icon. Line
+ * boxes center the font's own spacing, which leaves the letters a pixel or two
+ * high, by a different amount per font. The padding keeps descenders from being clipped.
+ */
+export const CAP_CENTERED_TEXT_SX = {
+  textBox: "trim-both cap alphabetic",
+  lineHeight: 1,
+  paddingBlock: "0.4em"
+} as const;
+
+/**
  * One type scale for every surface, derived from the host font size (13px by default)
  * so it follows VS Code's zoom and the appearance font size.
  */
@@ -33,13 +44,8 @@ export function typographyFor(base = 13): TypographyVariantsOptions {
     body1: { fontSize: size(0), lineHeight: 1.5 },
     body2: { fontSize: size(-1), lineHeight: 1.5 },
     caption: { fontSize: size(-2), lineHeight: 1.45 },
-    overline: {
-      fontSize: size(-2),
-      fontWeight: 600,
-      letterSpacing: "0.06em",
-      lineHeight: 1.6,
-      textTransform: "uppercase"
-    },
+    // The one section label: the explorer's sections, the settings menu, panel groups.
+    overline: { fontSize: size(-1), fontWeight: 600, lineHeight: 1.4, textTransform: "none" },
     button: { fontSize: size(0), fontWeight: 500, lineHeight: 1.4, textTransform: "none", letterSpacing: 0 }
   };
 }

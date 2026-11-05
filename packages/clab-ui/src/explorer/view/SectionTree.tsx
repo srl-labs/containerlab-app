@@ -252,7 +252,7 @@ export function SectionTree({
 
 export function SectionToolbarActions({ actions, onInvokeAction }: Readonly<SectionToolbarProps>) {
   return (
-    <Stack direction="row" spacing={0.1} className="explorer-section-hover-actions">
+    <Stack direction="row" spacing={0.1}>
       {actions.map((action) => {
         const IconComponent = actionIcon(action);
         return (
