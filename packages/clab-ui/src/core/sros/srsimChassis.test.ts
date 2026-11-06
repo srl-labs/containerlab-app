@@ -18,6 +18,7 @@ import {
   issueSlotId,
   layoutChassis,
   moveCard,
+  nextXiomSlot,
   nextMdaSlot,
   removeSlot,
   starterHardware,
@@ -453,6 +454,96 @@ test("picks the next free MDA slot around fixed ones", () => {
   assert.equal(nextMdaSlot([]), 1);
   assert.equal(nextMdaSlot([{ slot: 1 }, { slot: 3 }]), 2);
   assert.equal(nextMdaSlot([{ slot: 1 }], { 2: "fixed", 3: "fixed" }), 4);
+});
+
+test("an MDA and a XIOM of an XCM take turns on the same slots", () => {
+  assert.equal(nextMdaSlot([], {}, [{ slot: 1 }]), 2);
+  assert.equal(nextXiomSlot([{ slot: 1 }]), 2);
+  assert.equal(nextXiomSlot([], [{ slot: 1 }]), 2);
+  assert.equal(nextXiomSlot([{ slot: 1 }], [{ slot: 2 }]), 3);
+});
+
+/** The messages for a card on a chassis, leaving out everything else about the build */
+function cardIssues(name: string, card: Partial<SrosComponent>): string[] {
+  const found = chassis(name);
+  const components = [{ slot: "A", type: found.cpm[0] }, { slot: 1, type: found.card[0], ...card }];
+  return checkHardware(found, found.sfm[0], components).map(({ message }) => message);
+}
+
+test("holds an XCM to the slots it has for an MDA or a XIOM", () => {
+  const sr7s = chassis("sr-7s");
+  const sr14s = chassis("sr-14s");
+  const oneSlot = "An XCM on SR-7s has 1 slot, for an MDA or an XIOM";
+
+  assert.deepEqual(cardIssues("sr-7s", { xiom: [{ slot: 1, type: sr7s.xiom[0] }] }), []);
+  assert.deepEqual(cardIssues("sr-7s", { mda: [{ slot: 1, type: sr7s.mda[0] }] }), []);
+  assert.deepEqual(cardIssues("sr-7s", { xiom: [{ slot: 2, type: sr7s.xiom[0] }] }), [oneSlot]);
+  assert.deepEqual(cardIssues("sr-7s", { mda: [{ slot: 2, type: sr7s.mda[0] }] }), [oneSlot]);
+  assert.deepEqual(
+    cardIssues("sr-7s", { mda: [{ slot: 1, type: sr7s.mda[0] }], xiom: [{ slot: 1, type: sr7s.xiom[0] }] }),
+    ["XCM slot 1 holds either an MDA or an XIOM, not both"]
+  );
+
+  assert.deepEqual(
+    cardIssues("sr-14s", { mda: [{ slot: 2, type: sr14s.mda[0] }], xiom: [{ slot: 1, type: sr14s.xiom[0] }] }),
+    []
+  );
+  assert.deepEqual(cardIssues("sr-14s", { xiom: [{ slot: 3, type: sr14s.xiom[0] }] }), [
+    "An XCM on SR-14s has 2 slots, each for an MDA or an XIOM"
+  ]);
+});
+
+test("leaves chassis without a known XCM limit, and CPMs, alone", () => {
+  const sr2se = chassis("sr-2se");
+  assert.equal(sr2se.xcmModuleSlots, undefined);
+  assert.deepEqual(
+    cardIssues("sr-2se", {
+      mda: [{ slot: 1, type: sr2se.mda[0] }],
+      xiom: [{ slot: 1, type: sr2se.xiom[0] }, { slot: 2, type: sr2se.xiom[0] }]
+    }),
+    []
+  );
+
+  const sr7s = chassis("sr-7s");
+  const cpmWithMda = [{ slot: "A", type: sr7s.cpm[0], mda: [{ slot: 2, type: "any" }] }];
+  assert.deepEqual(checkHardware(sr7s, sr7s.sfm[0], cpmWithMda), []);
+});
+
+test("holds an XIOM to two MDAs, on any chassis", () => {
+  const mda = [{ slot: 1, type: "m" }, { slot: 2, type: "m" }, { slot: 3, type: "m" }];
+  const twoSlots = "An XIOM has 2 MDA slots";
+  const sr7s = chassis("sr-7s");
+
+  assert.deepEqual(cardIssues("sr-7s", { xiom: [{ slot: 1, type: sr7s.xiom[0], mda }] }), [twoSlots]);
+  assert.deepEqual(
+    cardIssues("sr-7s", { xiom: [{ slot: 1, type: sr7s.xiom[0], mda: mda.slice(0, 2) }] }),
+    []
+  );
+  const unknown = checkHardware(undefined, "", [{ slot: 1, xiom: [{ slot: 1, type: "x", mda }] }]);
+  assert.deepEqual(unknown.map(({ message }) => message), [twoSlots]);
+});
+
+test("fitting drops what an XCM or a XIOM has no slot for, keeping the XIOM over an MDA", () => {
+  const sr7s = chassis("sr-7s");
+  const xiom = sr7s.xiom[0];
+  const { components } = fitToChassis(sr7s, sr7s.sfm[0], [
+    { slot: "A", type: sr7s.cpm[0] },
+    {
+      slot: 1,
+      type: sr7s.card[0],
+      mda: [{ slot: 1, type: sr7s.mda[0] }, { slot: 2, type: sr7s.mda[0] }],
+      xiom: [
+        { slot: 1, type: xiom, mda: [{ slot: 1, type: "m" }, { slot: 2, type: "m" }, { slot: 3, type: "m" }] },
+        { slot: 2, type: xiom }
+      ]
+    }
+  ]);
+
+  assert.deepEqual(components[1].mda, []);
+  assert.deepEqual(components[1].xiom, [
+    { slot: 1, type: xiom, mda: [{ slot: 1, type: "m" }, { slot: 2, type: "m" }] }
+  ]);
+  assert.deepEqual(checkHardware(sr7s, sr7s.sfm[0], components), []);
 });
 
 test("reads the release from an image reference", () => {

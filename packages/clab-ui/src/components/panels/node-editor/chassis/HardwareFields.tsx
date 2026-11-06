@@ -10,7 +10,13 @@ import InputAdornment from "@mui/material/InputAdornment";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
-import { nextMdaSlot, type HardwareTarget } from "../../../../core/sros/srsimChassis";
+import {
+  nextMdaSlot,
+  nextXiomSlot,
+  XIOM_MDA_NOTE,
+  XIOM_MDA_SLOTS,
+  type HardwareTarget
+} from "../../../../core/sros/srsimChassis";
 import type { SrosMda, SrosXiom } from "../../../../core/types/editors";
 import type { SrosComponentTypes } from "../../../../hooks/editor";
 import { controlRadius } from "../../../../theme/surfaces";
@@ -34,6 +40,8 @@ const HEADER_ROW_SX = {
 } as const;
 
 const SUBSECTION_ADD_SX = { minHeight: 24, py: 0, mr: -1 } as const;
+/** A card without a known limit still has XIOM slots x1 and x2 */
+const DEFAULT_XIOM_SLOTS = 2;
 const MDA_ROW_SX = {
   display: "grid",
   gridTemplateColumns: "92px minmax(0, 1fr) 28px",
@@ -122,17 +130,19 @@ const Subsection: React.FC<{
   <Box>
     <Box sx={HEADER_ROW_SX}>
       <Typography variant="subtitle2">{title}</Typography>
-      <Button
-        variant="text"
-        size="small"
-        startIcon={<AddIcon />}
-        onClick={onAdd}
-        disabled={addDisabled}
-        title={addTitle}
-        sx={SUBSECTION_ADD_SX}
-      >
-        {addLabel}
-      </Button>
+      {/* On the wrapper: a disabled button takes no pointer events, so it could not say why */}
+      <Box component="span" title={addTitle}>
+        <Button
+          variant="text"
+          size="small"
+          startIcon={<AddIcon />}
+          onClick={onAdd}
+          disabled={addDisabled}
+          sx={SUBSECTION_ADD_SX}
+        >
+          {addLabel}
+        </Button>
+      </Box>
     </Box>
     {React.Children.toArray(children).length > 0 && <Box sx={{ ...COLUMN_SX, pt: 1.5 }}>{children}</Box>}
   </Box>
@@ -223,17 +233,28 @@ export const MdaSection: React.FC<{
   onChange: (mdas: SrosMda[]) => void;
   /** New MDAs start on this type, when the list is the chassis' own */
   defaultType?: string;
-}> = ({ idPrefix, mdas, types, fixedMdas = {}, prefix, issueOf, onChange, defaultType }) => {
+  /** The highest slot the hardware has for this list, and how to say so once it is full */
+  limit?: { highest: number; note: string | undefined };
+  /** XIOMs of an XCM: they hold the same slots as its MDAs */
+  xcmXioms?: SrosXiom[];
+}> = ({ idPrefix, mdas, types, fixedMdas = {}, prefix, issueOf, onChange, defaultType, limit, xcmXioms }) => {
   const taken = new Set(mdas.map((mda) => mda.slot));
   const fixedRows = Object.entries(fixedMdas).flatMap(([slot, type]) =>
     type === undefined || taken.has(Number(slot)) ? [] : [{ slot: Number(slot), type }]
   );
+  const slot = nextMdaSlot(mdas, fixedMdas, xcmXioms);
+  const isFull = limit !== undefined && slot > limit.highest;
   const addMda = (): void => {
-    const slot = nextMdaSlot(mdas, fixedMdas);
     onChange([...mdas, defaultType === undefined ? { slot } : { slot, type: defaultType }]);
   };
   return (
-    <Subsection title="MDAs" addLabel="Add MDA" onAdd={addMda}>
+    <Subsection
+      title="MDAs"
+      addLabel="Add MDA"
+      addDisabled={isFull}
+      addTitle={isFull ? limit.note : undefined}
+      onAdd={addMda}
+    >
       {mdas.map((mda, index) => (
         <MdaRow
           key={index}
@@ -287,6 +308,7 @@ const XiomBlock: React.FC<{
         mdas={xiom.mda ?? []}
         types={mdaTypes}
         prefix={`${slotLabel}/x${slot}/`}
+        limit={{ highest: XIOM_MDA_SLOTS, note: XIOM_MDA_NOTE }}
         issueOf={(mda) => issueAt({ kind: "mda", component: componentIndex, xiom: xiomIndex, mda })}
         onChange={(mda) => onUpdate({ mda })}
       />
@@ -304,11 +326,13 @@ export const XiomSection: React.FC<{
   knownTypes: SrosComponentTypes;
   issueAt: IssueAt;
   onChange: (xioms: SrosXiom[]) => void;
-}> = ({ idPrefix, xioms, componentIndex, slotLabel, listedTypes, knownTypes, issueAt, onChange }) => {
-  const used = new Set(xioms.map((xiom) => xiom.slot));
-  const isFull = used.has(1) && used.has(2);
+  /** The slots an XCM has, its MDAs in them, and how to say so; undefined without a known limit */
+  xcm?: { slots: number; mdas: SrosMda[]; note: string | undefined };
+}> = ({ idPrefix, xioms, componentIndex, slotLabel, listedTypes, knownTypes, issueAt, onChange, xcm }) => {
+  const slot = nextXiomSlot(xioms, xcm?.mdas);
+  const isFull = slot > (xcm?.slots ?? DEFAULT_XIOM_SLOTS);
+  const fullNote = xcm === undefined ? "XIOM slots x1 and x2 are in use" : xcm.note;
   const addXiom = (): void => {
-    const slot = used.has(1) ? 2 : 1;
     const type = listedTypes.at(0);
     onChange([...xioms, type === undefined ? { slot } : { slot, type }]);
   };
@@ -317,7 +341,7 @@ export const XiomSection: React.FC<{
       title="XIOMs"
       addLabel="Add XIOM"
       addDisabled={isFull}
-      addTitle={isFull ? "XIOM slots x1 and x2 are in use" : undefined}
+      addTitle={isFull ? fullNote : undefined}
       onAdd={addXiom}
     >
       {xioms.map((xiom, xiomIndex) => (

@@ -1,8 +1,9 @@
 // What sits on a slot's card, below its row: VM resources, MDAs and XIOMs.
 import React from "react";
 import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
 
-import type { ChassisSlot, SrsimChassis } from "../../../../core/sros/srsimChassis";
+import { xcmSlotsNote, type ChassisSlot, type SrsimChassis } from "../../../../core/sros/srsimChassis";
 import type { SrosComponent } from "../../../../core/types/editors";
 import type { SrosComponentTypes } from "../../../../hooks/editor";
 import { InputField } from "../../../ui/form";
@@ -90,7 +91,18 @@ export function slotHasDetails(
   return sections.mda || sections.xiom || resourceKeys.length > 0;
 }
 
-export const SlotDetails: React.FC<{
+/** The limit an XCM puts on a slot's MDAs and XIOMs; undefined where none is known */
+function slotXcm(chassis: SrsimChassis | undefined, slot: ChassisSlot): SlotXcm | undefined {
+  const slots = slot.role === "card" ? chassis?.xcmModuleSlots : undefined;
+  return slots === undefined ? undefined : { slots, note: xcmSlotsNote(chassis) };
+}
+
+interface SlotXcm {
+  slots: number;
+  note: string | undefined;
+}
+
+interface SlotDetailsProps {
   slot: ChassisSlot;
   chassis: SrsimChassis | undefined;
   entry: SrosComponent;
@@ -103,35 +115,76 @@ export const SlotDetails: React.FC<{
   readOnly: boolean;
   issueAt: IssueAt;
   onUpdate: (updates: Partial<SrosComponent>) => void;
-}> = ({ slot, chassis, entry, index, idPrefix, knownTypes, resourceKeys, readOnly, issueAt, onUpdate }) => {
+}
+
+type SlotListProps = Pick<
+  SlotDetailsProps,
+  "slot" | "chassis" | "entry" | "index" | "idPrefix" | "knownTypes" | "issueAt" | "onUpdate"
+> & { xcm: SlotXcm | undefined };
+
+const SlotMdas: React.FC<SlotListProps> = ({
+  slot,
+  chassis,
+  entry,
+  index,
+  idPrefix,
+  knownTypes,
+  issueAt,
+  onUpdate,
+  xcm
+}) => (
+  <MdaSection
+    idPrefix={`${idPrefix}-mda`}
+    mdas={entry.mda ?? []}
+    types={offeredTypes(chassis?.mda, knownTypes.mda)}
+    fixedMdas={chassis?.fixedMdas}
+    prefix={slot.role === "card" ? `${slot.label}/` : ""}
+    defaultType={chassis?.mda.at(0)}
+    limit={xcm && { highest: xcm.slots, note: xcm.note }}
+    xcmXioms={xcm && entry.xiom}
+    issueOf={(mda) => issueAt({ kind: "mda", component: index, mda })}
+    onChange={(mda) => onUpdate({ mda })}
+  />
+);
+
+const SlotXioms: React.FC<SlotListProps> = ({
+  slot,
+  chassis,
+  entry,
+  index,
+  idPrefix,
+  knownTypes,
+  issueAt,
+  onUpdate,
+  xcm
+}) => (
+  <XiomSection
+    idPrefix={`${idPrefix}-xiom`}
+    xioms={entry.xiom ?? []}
+    componentIndex={index}
+    slotLabel={slot.label}
+    listedTypes={chassis?.xiom ?? []}
+    knownTypes={knownTypes}
+    issueAt={issueAt}
+    onChange={(xiom) => onUpdate({ xiom })}
+    xcm={xcm && { slots: xcm.slots, mdas: entry.mda ?? [], note: xcm.note }}
+  />
+);
+
+export const SlotDetails: React.FC<SlotDetailsProps> = ({ resourceKeys, readOnly, ...list }) => {
+  const { slot, chassis, entry, idPrefix, onUpdate } = list;
   const sections = visibleSections(chassis, slot, entry, readOnly);
+  const xcm = slotXcm(chassis, slot);
   return (
     <Box sx={COLUMN_SX} data-testid="slot-details">
       <ResourcesRow idPrefix={idPrefix} component={entry} resourceKeys={resourceKeys} onUpdate={onUpdate} />
-      {sections.mda && (
-        <MdaSection
-          idPrefix={`${idPrefix}-mda`}
-          mdas={entry.mda ?? []}
-          types={offeredTypes(chassis?.mda, knownTypes.mda)}
-          fixedMdas={chassis?.fixedMdas}
-          prefix={slot.role === "card" ? `${slot.label}/` : ""}
-          defaultType={chassis?.mda.at(0)}
-          issueOf={(mda) => issueAt({ kind: "mda", component: index, mda })}
-          onChange={(mda) => onUpdate({ mda })}
-        />
+      {xcm !== undefined && (
+        <Typography variant="caption" sx={{ color: "text.secondary", lineHeight: 1.4 }}>
+          {xcm.note}.
+        </Typography>
       )}
-      {sections.xiom && (
-        <XiomSection
-          idPrefix={`${idPrefix}-xiom`}
-          xioms={entry.xiom ?? []}
-          componentIndex={index}
-          slotLabel={slot.label}
-          listedTypes={chassis?.xiom ?? []}
-          knownTypes={knownTypes}
-          issueAt={issueAt}
-          onChange={(xiom) => onUpdate({ xiom })}
-        />
-      )}
+      {sections.mda && <SlotMdas {...list} xcm={xcm} />}
+      {sections.xiom && <SlotXioms {...list} xcm={xcm} />}
     </Box>
   );
 };
