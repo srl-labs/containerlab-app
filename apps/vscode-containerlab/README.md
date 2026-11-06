@@ -55,7 +55,7 @@ A Visual Studio Code extension that integrates [containerlab](https://containerl
 
 - **containerlab** must be installed for labs on this machine. The extension will offer to install it if not found. Lab hosts need neither containerlab nor Docker locally.
 - You must be in the `clab_admins` (and `docker` group if you're using Docker). Podman is also supported for runtime features.
-- (Optional) **Edgeshark** for packet capture features - can be installed directly from the extension using the "Install Edgeshark" command.
+- (Optional) **Edgeshark** to capture interfaces that are no lab links, such as `eth0`, or with containerlab before 0.83.0 - can be installed directly from the extension using the "Install Edgeshark" command.
 
   ### Edgeshark Integration
   - **Install Edgeshark**: installs Edgeshark using docker compose

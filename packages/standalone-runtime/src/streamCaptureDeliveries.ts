@@ -19,7 +19,7 @@ export interface StreamCaptureDeliveries {
 }
 
 /**
- * Where a capture can go on a lab host with capture streams (c9s), the
+ * Where a capture can go on a lab host with capture streams, the
  * default first: the endpoint's default capture method when the host has it,
  * else Wireshark on this machine in the desktop app, else Wireshark in a
  * window when the lab host runs Wireshark VNC; a download always.

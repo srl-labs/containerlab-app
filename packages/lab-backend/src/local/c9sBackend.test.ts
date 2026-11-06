@@ -352,16 +352,42 @@ test("capture on a c9s host lists lab-link interfaces and streams containerlab c
   assert.deepEqual(env, { CLAB_KUBE_CONTEXT: "kind-c9s-app", CLAB_KUBE_NAMESPACE: "team-a" });
 });
 
-test("capture streams are a c9s feature; Docker hosts keep Edgeshark", async (t) => {
+test("a Docker host without containerlab capture has no capture streams and keeps Edgeshark", async (t) => {
   const host = await fakeC9sHost(t);
-  const docker = new LocalLabBackend({ binaryPath: host.binary, workspaceRoot: host.workspace });
-  assert.equal((await docker.features()).captureStream, false);
-  const notOnDocker = (error: Error & { status?: number }) => error.status === 501;
-  await assert.rejects(docker.captureInterfaces("demo"), notOnDocker);
+  const older = path.join(host.workspace, "containerlab-older");
+  await fs.writeFile(older, '#!/bin/sh\necho "Unknown command \\"capture\\"" >&2\nexit 1\n', { mode: 0o755 });
+  const docker = new LocalLabBackend({ binaryPath: older, workspaceRoot: host.workspace });
+  const features = await docker.features();
+  assert.equal(features.captureStream, false);
+  assert.equal(features.captureVnc, false);
+  assert.equal(features.edgeshark, true);
+  const notSupported = (error: Error & { status?: number }) => error.status === 501;
+  await assert.rejects(docker.captureInterfaces("demo"), notSupported);
   await assert.rejects(
     docker.openCaptureStream("demo", { targets: [], signal: new AbortController().signal }),
-    notOnDocker
+    notSupported
   );
+});
+
+test("a Docker host with containerlab capture streams through the Docker runtime, and keeps Edgeshark", async (t) => {
+  const host = await fakeC9sHost(t);
+  const current = path.join(host.workspace, "containerlab-current");
+  const calls = path.join(host.workspace, "calls-docker");
+  await fs.writeFile(
+    current,
+    `#!/bin/sh\necho "$*" >> "${calls}"\ncase "$*" in\n*--list*) echo '[{"node":"n1","interface":"eth1"}]' ;;\nesac\nexit 0\n`,
+    { mode: 0o755 }
+  );
+  const docker = new LocalLabBackend({ binaryPath: current, workspaceRoot: host.workspace });
+  const features = await docker.features();
+  assert.equal(features.captureStream, true);
+  assert.equal(features.edgeshark, true, "still an option");
+  assert.deepEqual(await docker.captureInterfaces("demo"), [
+    { node: "n1", interface: "eth1", peerNode: "", peerInterface: "" }
+  ]);
+  const logged = await fs.readFile(calls, "utf8");
+  assert.match(logged, /^capture --help$/m);
+  assert.match(logged, /^-r docker capture --name demo --list -f json$/m);
 });
 
 test("inspect interfaces on a c9s host asks by lab and node name", async (t) => {

@@ -229,22 +229,25 @@ async function pickOpenMode(
 }
 
 /**
- * On a lab host that captures lab links as one stream (c9s), the capture
- * goes through that stream; resolves false on any other lab host.
+ * On a lab host that captures lab links as one stream, the capture goes
+ * through that stream; resolves false when these interfaces do not, or on any
+ * other lab host.
  */
 async function captureOnStream(
   node: ClabInterfaceTreeNode,
   allSelectedNodes: ClabInterfaceTreeNode[] | undefined,
   delivery?: StreamCaptureDelivery
 ): Promise<boolean> {
-  const host = await streamCaptureHost(node);
-  if (!host) return false;
   const selected = allSelectedNodes && allSelectedNodes.length > 0 ? allSelectedNodes : [node];
+  // The port name in the node; a host-side link end (clab-s-*) carries it as its alias.
+  const portName = (iface: ClabInterfaceTreeNode) =>
+    isHostNetnsInterface(iface.name) && iface.alias ? iface.alias : iface.name;
+  const host = await streamCaptureHost(node, selected.map(portName));
+  if (!host) return false;
   await captureOnStreamHost(host, {
     targets: selected.map((iface) => ({
       name: iface.parentName,
-      // The port name in the node; a host-side link end (clab-s-*) carries it as its alias.
-      interface: isHostNetnsInterface(iface.name) && iface.alias ? iface.alias : iface.name,
+      interface: portName(iface),
       ...(iface.labName ? { labName: iface.labName } : {})
     })),
     ...(delivery ? { delivery } : {}),
@@ -259,9 +262,9 @@ function labNameOf(node: CaptureNode): { labName?: string } {
 }
 
 /**
- * Wireshark VNC of a c9s lab host: a clab-api-server feeds the session from
- * its own capture stream; for a cluster on this machine the container runs on
- * this machine's Docker and the extension writes the capture into its pipe.
+ * Wireshark VNC of a lab host with capture streams: a clab-api-server feeds the
+ * session from its own stream; on this machine the container runs on this
+ * machine's Docker and the extension writes the capture into its pipe.
  */
 async function openStreamVnc(
   node: unknown,
@@ -389,7 +392,10 @@ export async function captureInterfaceWithPacketflix(
   node: ClabInterfaceTreeNode,
   allSelectedNodes?: ClabInterfaceTreeNode[] // [CHANGED]
 ) {
-  if (await captureOnStream(node, allSelectedNodes, "wireshark")) return;
+  // The Edgeshark command itself: only a lab host without Edgeshark captures on its stream instead.
+  const support = (await labHostInfo(connectionOf(node)))?.support;
+  if (support?.edgeshark !== true && (await captureOnStream(node, allSelectedNodes, "wireshark")))
+    return;
   if (!(await ensureHostSupports(connectionOf(node), "edgeshark", "Edgeshark capture"))) return;
   if (isRemoteNode(node)) {
     return captureRemote(node, allSelectedNodes, "packetflix");
@@ -859,8 +865,8 @@ export async function killAllWiresharkVNCCtrs(target?: unknown) {
       ? connectionOf(target)
       : await pickConnection("Close Wireshark VNC sessions");
   if (!connection) return;
-  // clab-api-server and clusters on this machine know their own sessions.
-  if (connection.kind === "api" || isClusterConnection(connection)) {
+  // The lab host knows the sessions it feeds from its capture stream.
+  const closeBackendSessions = async () => {
     try {
       const result = await backendFor(connection).closeAllWiresharkVnc();
       outputChannel.info(result.message);
@@ -868,8 +874,10 @@ export async function killAllWiresharkVNCCtrs(target?: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       vscode.window.showErrorMessage(`Failed to close Wireshark VNC sessions: ${message}`);
     }
-    return;
-  }
+  };
+  await closeBackendSessions();
+  if (connection.kind === "api" || isClusterConnection(connection)) return;
+  // Docker on this machine: also the containers this extension started through Edgeshark.
   const dockerImage = vscode.workspace
     .getConfiguration("containerlab")
     .get<string>("capture.wireshark.dockerImage", DEFAULT_WIRESHARK_VNC_DOCKER_IMAGE);

@@ -307,8 +307,8 @@ function featuresFromServerHealth(state: ServerState): LabBackendFeatures {
     manifestExport: false,
     c9sDeployOptions: false,
     captureStream: listed.has(SERVER_FEATURES.captureStream),
-    // Docker servers feed Wireshark VNC from Edgeshark; a c9s server from its own stream, while it runs Docker.
-    captureVnc: !containerRuntime && listed.has(SERVER_FEATURES.wiresharkVnc)
+    // Servers with capture streams feed Wireshark VNC from them; older Docker servers from Edgeshark.
+    captureVnc: listed.has(SERVER_FEATURES.captureStream) && listed.has(SERVER_FEATURES.wiresharkVnc)
   };
 }
 
@@ -943,7 +943,7 @@ export class ApiLabBackend implements LabBackend {
 
   private async requireCaptureStream(): Promise<void> {
     if (!(await this.hasFeature(SERVER_FEATURES.captureStream))) {
-      throw unsupported("stream packet captures (it needs the c9s lab runtime)");
+      throw unsupported("stream packet captures");
     }
   }
 

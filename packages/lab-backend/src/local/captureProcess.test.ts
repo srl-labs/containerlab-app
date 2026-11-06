@@ -5,7 +5,7 @@ import path from "node:path";
 import test, { type TestContext } from "node:test";
 
 import type { CaptureGap } from "../contract/dto.ts";
-import { c9sCaptureArgs, listC9sCaptureInterfaces, spawnC9sCapture } from "./c9sCapture.ts";
+import { captureCommandArgs, listCaptureInterfaces, spawnCapture } from "./captureProcess.ts";
 
 /**
  * A containerlab whose `capture` writes pcapng like the real one: an SHB and
@@ -79,7 +79,7 @@ async function fakeContainerlab(t: TestContext) {
   await fs.writeFile(binary, `#!${process.execPath}\n${FAKE}`, { mode: 0o755 });
   const logFile = path.join(directory, "log");
   return {
-    options: { binaryPath: binary, sudo: false },
+    options: { binaryPath: binary, sudo: false, runtime: "c9s" as const },
     env: (mode: string) => ({ PATH: process.env.PATH, FAKE_MODE: mode, FAKE_LOG: logFile }),
     log: async () => (await fs.readFile(logFile, "utf8").catch(() => "")).trim().split("\n")
   };
@@ -113,7 +113,8 @@ async function waitFor(check: () => Promise<boolean>, timeoutMs = 5000): Promise
 
 test("capture arguments name the lab, the targets per node and the limits, and write to stdout", () => {
   assert.deepEqual(
-    c9sCaptureArgs({
+    captureCommandArgs({
+      runtime: "c9s",
       labName: "demo",
       targets: [
         { node: "n1", interface: "eth1" },
@@ -131,15 +132,15 @@ test("capture arguments name the lab, the targets per node and the limits, and w
       "-w", "-"
     ]
   );
-  assert.deepEqual(c9sCaptureArgs({ labName: "demo", targets: [{ node: "n1", interface: "eth1" }] }), [
-    "-r", "c9s", "capture", "--name", "demo", "--target", "n1:eth1", "-w", "-"
+  assert.deepEqual(captureCommandArgs({ runtime: "docker", labName: "demo", targets: [{ node: "n1", interface: "eth1" }] }), [
+    "-r", "docker", "capture", "--name", "demo", "--target", "n1:eth1", "-w", "-"
   ]);
-  assert.throws(() => c9sCaptureArgs({ labName: "demo", targets: [], duration: "forever" }), /Invalid capture duration/);
+  assert.throws(() => captureCommandArgs({ runtime: "c9s", labName: "demo", targets: [], duration: "forever" }), /Invalid capture duration/);
 });
 
 test("capture --list output becomes capture interfaces", async (t) => {
   const fake = await fakeContainerlab(t);
-  assert.deepEqual(await listC9sCaptureInterfaces(fake.options, "demo", fake.env("list")), [
+  assert.deepEqual(await listCaptureInterfaces(fake.options, "demo", fake.env("list")), [
     { node: "n1", interface: "eth1", peerNode: "n2", peerInterface: "eth1" }
   ]);
   assert.match((await fake.log())[0], /^args -r c9s capture --name demo --list -f json$/);
@@ -148,7 +149,7 @@ test("capture --list output becomes capture interfaces", async (t) => {
 test("aborting a capture sends SIGINT once and the stream ends with whole blocks", async (t) => {
   const fake = await fakeContainerlab(t);
   const controller = new AbortController();
-  const stream = await spawnC9sCapture(fake.options, ["-r", "c9s", "capture"], {
+  const stream = await spawnCapture(fake.options, ["-r", "c9s", "capture"], {
     env: fake.env("stream"),
     signal: controller.signal
   });
@@ -166,7 +167,7 @@ test("aborting a capture sends SIGINT once and the stream ends with whole blocks
 
 test("leaving the iteration early stops the capture with SIGINT", async (t) => {
   const fake = await fakeContainerlab(t);
-  const stream = await spawnC9sCapture(fake.options, [], {
+  const stream = await spawnCapture(fake.options, [], {
     env: fake.env("stream"),
     signal: new AbortController().signal
   });
@@ -180,7 +181,7 @@ test("leaving the iteration early stops the capture with SIGINT", async (t) => {
 test("a capture that ignores SIGINT gets SIGTERM after the grace time", async (t) => {
   const fake = await fakeContainerlab(t);
   const controller = new AbortController();
-  const stream = await spawnC9sCapture(fake.options, [], {
+  const stream = await spawnCapture(fake.options, [], {
     env: fake.env("ignore-int"),
     signal: controller.signal,
     stopGraceMs: 100
@@ -192,7 +193,7 @@ test("a capture that ignores SIGINT gets SIGTERM after the grace time", async (t
 
 test("a capture is read only as fast as it is consumed", async (t) => {
   const fake = await fakeContainerlab(t);
-  const stream = await spawnC9sCapture(fake.options, [], {
+  const stream = await spawnCapture(fake.options, [], {
     env: fake.env("flood"),
     signal: new AbortController().signal
   });
@@ -214,7 +215,7 @@ test("a capture is read only as fast as it is consumed", async (t) => {
 test("a capture that cannot start rejects with containerlab's error", async (t) => {
   const fake = await fakeContainerlab(t);
   await assert.rejects(
-    spawnC9sCapture(fake.options, [], { env: fake.env("fail"), signal: new AbortController().signal }),
+    spawnCapture(fake.options, [], { env: fake.env("fail"), signal: new AbortController().signal }),
     (error: Error & { status?: number }) => {
       assert.match(error.message, /eth9 of node n1 is not capturable; capturable: eth1/);
       assert.equal(error.status, 400);
@@ -225,7 +226,7 @@ test("a capture that cannot start rejects with containerlab's error", async (t) 
 
 test("a capture that fails after it started ends its stream with the error", async (t) => {
   const fake = await fakeContainerlab(t);
-  const stream = await spawnC9sCapture(fake.options, [], { env: fake.env("die"), signal: new AbortController().signal });
+  const stream = await spawnCapture(fake.options, [], { env: fake.env("die"), signal: new AbortController().signal });
   const chunks: Uint8Array[] = [];
   await assert.rejects(
     (async () => {
@@ -239,7 +240,7 @@ test("a capture that fails after it started ends its stream with the error", asy
 test("a gap is reported and the capture goes on", async (t) => {
   const fake = await fakeContainerlab(t);
   const gaps: CaptureGap[] = [];
-  const stream = await spawnC9sCapture(fake.options, [], {
+  const stream = await spawnCapture(fake.options, [], {
     env: fake.env("gap"),
     signal: new AbortController().signal,
     onGap: (gap) => gaps.push(gap)
@@ -260,7 +261,7 @@ test("a gap is reported and the capture goes on", async (t) => {
 
 test("a missing containerlab rejects with 503", async () => {
   await assert.rejects(
-    spawnC9sCapture({ binaryPath: path.join(os.tmpdir(), "no-such-dir-c9s", "containerlab"), sudo: false }, [], {
+    spawnCapture({ binaryPath: path.join(os.tmpdir(), "no-such-dir-c9s", "containerlab"), sudo: false }, [], {
       env: { PATH: process.env.PATH },
       signal: new AbortController().signal
     }),

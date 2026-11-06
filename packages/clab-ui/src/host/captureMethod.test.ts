@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { captureRoutePlan, parseCaptureMethod, type CaptureMethodHost } from "./captureMethod";
+import { captureRoutePlan, captureUsesStream, parseCaptureMethod, type CaptureMethodHost } from "./captureMethod";
 
 const docker: CaptureMethodHost = { stream: false, localWireshark: false, wiresharkVnc: true, edgeshark: true };
 const cluster: CaptureMethodHost = { stream: true, localWireshark: true, wiresharkVnc: true, edgeshark: false };
@@ -61,4 +61,31 @@ test("a picked method the lab host lacks falls back and says why", () => {
   });
   assert.deepEqual(notFound.routes, ["wireshark-vnc", "download"]);
   assert.match(notFound.notice ?? "", /Wireshark was not found on this computer\. Using Wireshark VNC instead\.$/);
+});
+
+test("a Docker or Podman host with capture streams needs no Edgeshark, and keeps it as a choice", () => {
+  const streams = { captureStream: true, edgeshark: true };
+  const choice = { method: "auto" as const, support: streams, localWireshark: true };
+  assert.equal(captureUsesStream(choice), true);
+  assert.equal(captureUsesStream({ ...choice, method: "wireshark-vnc" }), true);
+  assert.equal(captureUsesStream({ ...choice, interfaceNames: ["e1-1", "e1-2"] }), true);
+
+  assert.equal(captureUsesStream({ ...choice, method: "edgeshark" }), false, "picked Edgeshark");
+  assert.equal(captureUsesStream({ ...choice, interfaceNames: ["e1-1", "eth0"] }), false, "no lab link");
+  assert.equal(
+    captureUsesStream({ ...choice, method: "local-wireshark", localWireshark: false }),
+    false,
+    "this app only opens Wireshark through Edgeshark's link"
+  );
+  assert.equal(captureUsesStream({ ...choice, method: "local-wireshark" }), true);
+});
+
+test("hosts without Edgeshark always stream, and older hosts never do", () => {
+  const cluster = { captureStream: true, edgeshark: false };
+  const choice = { method: "edgeshark" as const, support: cluster, localWireshark: false };
+  assert.equal(captureUsesStream({ ...choice, interfaceNames: ["eth0"] }), true, "the host refuses it itself");
+
+  const older = { captureStream: false, edgeshark: true };
+  assert.equal(captureUsesStream({ ...choice, method: "auto", support: older }), false);
+  assert.equal(captureUsesStream({ ...choice, support: undefined }), false, "not answered yet");
 });

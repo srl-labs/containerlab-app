@@ -56,7 +56,8 @@ const LAB_HOST_PRESETS: Record<string, unknown> = {
 
 /**
  * The fake lab host: Docker, unless a spec sets `window.__CLAB_UI_HARNESS_LAB_HOST__`
- * to `"c9s"` (a Kubernetes cluster on this machine) to see what the view hides there.
+ * to `"c9s"` (a Kubernetes cluster on this machine) to see what the view hides there,
+ * or to `"docker-stream"` (Docker that captures lab links as one stream).
  * `window.__CLAB_UI_HARNESS_LAB_HOST_IDENTITY__` names the host in the toolbar,
  * or the page's `?labHost=` picks one of `LAB_HOST_PRESETS`.
  */
@@ -91,7 +92,7 @@ function harnessLabHost(): LabHostInfo {
     manifestExport: c9s,
     c9sDeployOptions: c9s,
     interfaceInspect: true,
-    captureStream: c9s,
+    captureStream: c9s || stub === "docker-stream",
     captureVnc: false
   };
   return {

@@ -42,7 +42,7 @@ Right-click a node or a link and choose **Capture**, then tick the interfaces: f
 ![Packet capture](../images/app/capture-dark.webp#only-dark){ .shot }
 ![Packet capture](../images/app/capture-light.webp#only-light){ .shot }
 
-Capture runs [Edgeshark](https://edgeshark.siemens.io/) and a Wireshark container on the lab host, so Docker there must be able to pull and run them. To open captures in your own Wireshark or through Edgeshark instead, change the [default capture method](labs.md#default-capture-method).
+Wireshark VNC runs a Wireshark container on the lab host, so Docker there must be able to pull and run it. To open captures in your own Wireshark or through [Edgeshark](https://edgeshark.siemens.io/) instead, change the [default capture method](labs.md#default-capture-method). Interfaces that are no lab links, such as `eth0`, and labs whose topology file is gone need Edgeshark running on the lab host.
 
 ## Impair a link
 

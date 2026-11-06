@@ -89,7 +89,7 @@ On a lab host:
 - **Files** live in your workspace on the host (`~/.clab`). The explorer lists the topologies there; they open as `clab-api://` files in the normal text editor and in the topology editor, and save back to the host. **Open Files in Explorer** adds the whole workspace to the Explorer view.
 - **Deploy, destroy, apply, start, stop, save** and the other lab actions run on the host, with the output in the **Containerlab** output channel.
 - **Shell, SSH, and telnet** open as VS Code terminals connected through the API Server. **Logs** open in an editor.
-- **Packet capture** runs Wireshark in a container on the host and shows it in a VS Code tab; Edgeshark links point at the host.
+- **Packet capture** opens the host's capture stream in Wireshark here, or runs Wireshark in a container on the host and shows it in a VS Code tab; Edgeshark links point at the host.
 - **Clone repository** and **Deploy lab file** with a Git URL clone into the host's workspace. The host takes GitHub and GitLab URLs.
 - **Image completion** in topology files and the topology editor offers the host's images.
 
@@ -111,7 +111,7 @@ Every setting is listed in the [VS Code settings reference](../reference/vscode-
 
 **Interfaces are missing.** Labs deployed with containerlab older than 0.64.0 need a redeploy before interfaces and statistics show up.
 
-**Packet capture does not open.** For local labs, Docker must work on the machine running the extension. On a lab host, Edgeshark must run there: right-click the host in the explorer and select **Install EdgeShark**. Check the [capture settings of the lab host](../reference/vscode-settings.md#lab-host-settings) if your browser reaches the lab host under a different name.
+**Packet capture does not open.** For local labs, Docker must work on the machine running the extension. Lab links need nothing else on a lab host with a current clab-api-server. Interfaces that are no lab links, such as `eth0`, and older servers need Edgeshark running there: right-click the host in the explorer and select **Install EdgeShark**. Check the [capture settings of the lab host](../reference/vscode-settings.md#lab-host-settings) if your browser reaches the lab host under a different name.
 
 <div class="next" markdown>
 [:lucide-arrow-right: Run your first lab](../getting-started/first-lab.md)

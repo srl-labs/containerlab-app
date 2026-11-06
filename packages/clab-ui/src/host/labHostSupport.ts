@@ -146,7 +146,7 @@ export interface LabBackendFeatures {
   /** Capture on the lab host itself: tcpdump in a node's network namespace. */
   hostCapture: boolean;
 
-  // Features of c9s lab hosts.
+  // Features of c9s lab hosts, then of hosts that capture without Edgeshark.
 
   /** Kubernetes manifests of a topology (`exportManifests`). */
   manifestExport: boolean;
@@ -154,12 +154,13 @@ export interface LabBackendFeatures {
   c9sDeployOptions: boolean;
   /**
    * Packet capture as one pcapng stream of lab-link interfaces, with their
-   * link peers (`captureInterfaces`, `openCaptureStream`): c9s lab hosts.
+   * link peers (`captureInterfaces`, `openCaptureStream`), without Edgeshark:
+   * a current clab-api-server or containerlab 0.83.0 or newer, with every runtime.
    */
   captureStream: boolean;
   /**
    * Wireshark VNC sessions fed by the lab host's capture stream instead of
-   * Edgeshark: a c9s clab-api-server that runs Docker next to it.
+   * Edgeshark; on c9s only with Docker next to it.
    */
   captureVnc: boolean;
 }

@@ -27,7 +27,7 @@ i=0
 while [ ! -p "$p" ]; do
   i=$((i+1))
   if [ "$i" -gt 300 ]; then
-    echo "Wireshark created no capture pipe $p; Wireshark VNC of a Kubernetes lab host needs a wireshark-vnc-docker image with ${CAPTURE_PIPE_ENV}" >&2
+    echo "Wireshark created no capture pipe $p; Wireshark VNC without Edgeshark needs a wireshark-vnc-docker image with ${CAPTURE_PIPE_ENV}" >&2
     exit 3
   fi
   sleep 0.2

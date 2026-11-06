@@ -342,7 +342,8 @@ export class LocalCapture {
     labName: string,
     targets: readonly CaptureNodeTarget[],
     open: OpenNodeCapture,
-    theme?: string
+    theme?: string,
+    labDirectory?: string
   ): Promise<CaptureWiresharkVncCreateResponse> {
     const runtime = await this.vncRuntime();
     if (!runtime) throw new LabBackendError(WIRESHARK_VNC_NEEDS_DOCKER, 501);
@@ -358,7 +359,8 @@ export class LocalCapture {
           interfaceNames: nodeTargets.map((target) => target.interface),
           captureEnv: `${CAPTURE_PIPE_ENV}=${capturePipePath(containerName)}`,
           ...(theme !== undefined ? { theme } : {}),
-          runArgs: []
+          runArgs: [],
+          ...(labDirectory ? { labDirectory } : {})
         });
         started.push(session);
         await this.requireCapturePipe(session);
@@ -380,7 +382,7 @@ export class LocalCapture {
     ).catch(() => undefined);
     if (result?.code === 1) {
       throw new LabBackendError(
-        `${this.options.wiresharkImage} has no capture pipe (${CAPTURE_PIPE_ENV}). Wireshark VNC of a Kubernetes lab host needs an image with the capture pipe mode; the current ghcr.io/srl-labs/wireshark-vnc-docker:latest has it.`,
+        `${this.options.wiresharkImage} has no capture pipe (${CAPTURE_PIPE_ENV}). Wireshark VNC without Edgeshark needs an image with the capture pipe mode; the current ghcr.io/srl-labs/wireshark-vnc-docker:latest has it.`,
         501
       );
     }

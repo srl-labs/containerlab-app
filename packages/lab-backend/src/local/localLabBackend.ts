@@ -58,7 +58,8 @@ import { containerRuntimeFeatures } from "../contract/support.ts";
 import { readJsonLines } from "../ndjson.ts";
 import { captureNodeTargets } from "../capture.ts";
 import { LocalCapture, WIRESHARK_VNC_NEEDS_DOCKER } from "./capture.ts";
-import { c9sCaptureArgs, listC9sCaptureInterfaces, spawnC9sCapture } from "./c9sCapture.ts";
+import { captureCommandArgs, containerlabHasCapture, listCaptureInterfaces, spawnCapture } from "./captureProcess.ts";
+import { CAPTURE_MIN_CONTAINERLAB_VERSION } from "./kube/versions.ts";
 import { createDockerNodeAccess } from "./dockerNodeAccess.ts";
 import { describeLocalHostScript, runLocalHostScript, streamLocalHostScript } from "./hostScripts.ts";
 import { inspectField } from "./inspect.ts";
@@ -120,11 +121,13 @@ const LOCAL_CAPABILITIES: LabBackendCapabilities = {
 
 /**
  * What a local host can do, by its lab runtime; c9s has node stats when
- * metrics.k8s.io answers, and Wireshark VNC with Docker or Podman on this machine.
+ * metrics.k8s.io answers, and Wireshark VNC with Docker or Podman on this
+ * machine. Capture streams need a containerlab with the `capture` command.
  */
 function localFeatures(
   runtime: ResolvedLocalOptions["runtime"],
   nodeStats: boolean,
+  captureStream: boolean,
   captureVnc = false
 ): LabBackendFeatures {
   const c9s = runtime === "c9s";
@@ -144,8 +147,8 @@ function localFeatures(
     interfaceInspect: true,
     manifestExport: c9s,
     c9sDeployOptions: c9s,
-    captureStream: c9s,
-    captureVnc: c9s && captureVnc
+    captureStream,
+    captureVnc: captureStream && captureVnc
   };
 }
 
@@ -173,6 +176,7 @@ export class LocalLabBackend implements LabBackend {
   private readonly access: NodeAccess;
   private kubeClient: KubeClient | undefined;
   private readonly capture: LocalCapture;
+  private captureCommand = false;
   private readonly fclingEngines: LocalFcling;
   private support: Promise<LabOperationSupport> | undefined;
   /** Running `containerlab events` commands; they must not outlive the app. */
@@ -471,9 +475,10 @@ export class LocalLabBackend implements LabBackend {
   }
 
   async features(): Promise<LabBackendFeatures> {
-    if (this.options.runtime !== "c9s") return localFeatures(this.options.runtime, true);
+    const captureStream = await this.hasCaptureStream();
+    if (this.options.runtime !== "c9s") return localFeatures(this.options.runtime, true, captureStream, true);
     const [nodeStats, vncRuntime] = await Promise.all([this.access.statsAvailable(), this.capture.vncRuntime()]);
-    return localFeatures(this.options.runtime, nodeStats, vncRuntime !== undefined);
+    return localFeatures(this.options.runtime, nodeStats, captureStream, vncRuntime !== undefined);
   }
 
   async hostProfile(): Promise<LabHostProfile> {
@@ -774,8 +779,11 @@ export class LocalLabBackend implements LabBackend {
   }
 
   async createWiresharkVnc(labName: string, request: { targets: CaptureTarget[]; theme?: string }) {
-    if (this.options.runtime === "c9s") {
-      // Wireshark VNC fed by this machine's capture stream of the cluster lab.
+    const c9s = this.options.runtime === "c9s";
+    const topology = c9s ? undefined : await this.runningTopologyFile(labName);
+    const labDirectory = topology ? path.join(path.dirname(topology), `clab-${labName}`) : undefined;
+    if (c9s || (await this.streamCaptures(labName, request.targets))) {
+      // Wireshark VNC fed by this machine's capture stream of the lab.
       const records = (await this.access.inspectLabs(labName))[labName] ?? [];
       if (records.length === 0) throw new LabBackendError(`Lab '${labName}' is not running.`, 404);
       const targets = captureNodeTargets(labName, request.targets, records);
@@ -787,42 +795,74 @@ export class LocalLabBackend implements LabBackend {
             targets: granted.map((target) => ({ containerName: target.node, interfaceName: target.interface })),
             signal
           }),
-        request.theme
+        request.theme,
+        labDirectory
       );
     }
-    const topology = await this.runningTopologyFile(labName);
-    const labDirectory = topology ? path.join(path.dirname(topology), `clab-${labName}`) : undefined;
     return this.capture.createVnc(labName, labDirectory, request.targets, request.theme);
   }
 
-  private requireCaptureStream(): void {
-    if (this.options.runtime !== "c9s") {
+  /**
+   * Whether a capture stream of this Docker or Podman lab covers the targets.
+   * The rest goes through Edgeshark: containerlab before 0.83.0, the management
+   * interface, and labs whose topology file is gone.
+   */
+  private async streamCaptures(labName: string, targets: readonly CaptureTarget[]): Promise<boolean> {
+    if (!(await this.hasCaptureStream())) return false;
+    try {
+      const records = (await this.access.inspectLabs(labName))[labName] ?? [];
+      const available = await this.captureInterfaces(labName);
+      return captureNodeTargets(labName, targets, records).every((target) =>
+        available.some(
+          (entry) =>
+            entry.node === target.node && (entry.interface === target.interface || entry.alias === target.interface)
+        )
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Whether this machine's containerlab captures streams: c9s always, Docker and
+   * Podman when it has the command, which also holds for builds without a version.
+   * Asked until it does, as it may get updated.
+   */
+  private async hasCaptureStream(): Promise<boolean> {
+    if (this.options.runtime === "c9s") return true;
+    this.captureCommand ||= await containerlabHasCapture(this.options);
+    return this.captureCommand;
+  }
+
+  private async requireCaptureStream(): Promise<void> {
+    if (!(await this.hasCaptureStream())) {
       throw new LabBackendError(
-        "Capture streams need a c9s lab host; this machine captures with Edgeshark.",
+        `Capture streams need containerlab ${CAPTURE_MIN_CONTAINERLAB_VERSION} or newer; update containerlab.`,
         501
       );
     }
   }
 
-  /** `containerlab -r c9s capture --name <lab> --list -f json`. */
+  /** `containerlab -r <runtime> capture --name <lab> --list -f json`. */
   async captureInterfaces(labName: string): Promise<CaptureInterface[]> {
-    this.requireCaptureStream();
-    return listC9sCaptureInterfaces(this.options, labName, await this.labEnv(labName));
+    await this.requireCaptureStream();
+    return listCaptureInterfaces(this.options, labName, await this.labEnv(labName));
   }
 
-  /** `containerlab -r c9s capture --name <lab> --target … -w -`, its stdout as pcapng. */
+  /** `containerlab -r <runtime> capture --name <lab> --target … -w -`, its stdout as pcapng. */
   async openCaptureStream(labName: string, options: CaptureStreamOptions): Promise<AsyncIterable<Uint8Array>> {
-    this.requireCaptureStream();
+    await this.requireCaptureStream();
     const records = (await this.access.inspectLabs(labName))[labName] ?? [];
     if (records.length === 0) throw new LabBackendError(`Lab '${labName}' is not running.`, 404);
-    const args = c9sCaptureArgs({
+    const args = captureCommandArgs({
+      runtime: this.options.runtime,
       labName,
       targets: captureNodeTargets(labName, options.targets, records),
       ...(options.duration !== undefined ? { duration: options.duration } : {}),
       ...(options.packetLimit !== undefined ? { packetLimit: options.packetLimit } : {}),
       ...(options.snapLength !== undefined ? { snapLength: options.snapLength } : {})
     });
-    return spawnC9sCapture(this.options, args, {
+    return spawnCapture(this.options, args, {
       env: await this.labEnv(labName),
       signal: options.signal,
       ...(options.onGap ? { onGap: options.onGap } : {})
@@ -831,7 +871,7 @@ export class LocalLabBackend implements LabBackend {
 
   /**
    * The shell command a terminal runs to capture into a pipe, e.g. into
-   * `wireshark -k -i -`: `containerlab -r c9s capture … -w -`, with the
+   * `wireshark -k -i -`: `containerlab -r <runtime> capture … -w -`, with any
    * cluster settings as environment variables. Arguments are quoted for a POSIX shell.
    */
   async captureCommandLine(
@@ -839,9 +879,14 @@ export class LocalLabBackend implements LabBackend {
     targets: CaptureTarget[],
     options: { duration?: string; packetLimit?: number } = {}
   ): Promise<{ command: string; env: Record<string, string> }> {
-    this.requireCaptureStream();
+    await this.requireCaptureStream();
     const records = (await this.access.inspectLabs(labName))[labName] ?? [];
-    const args = c9sCaptureArgs({ labName, targets: captureNodeTargets(labName, targets, records), ...options });
+    const args = captureCommandArgs({
+      runtime: this.options.runtime,
+      labName,
+      targets: captureNodeTargets(labName, targets, records),
+      ...options
+    });
     const env = await this.labEnv(labName);
     const clusterEnv = Object.fromEntries(
       ["CLAB_KUBE_CONTEXT", "CLAB_KUBECONFIG", "CLAB_KUBE_NAMESPACE"].flatMap((key) =>

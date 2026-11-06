@@ -35,10 +35,16 @@ export function hostCanCapture(info: LabHostInfo | undefined): boolean {
 }
 
 /**
- * A lab host that captures lab links as one stream (c9s): its nodes' own
- * interfaces are pod interfaces, so pickers offer the topology's links only.
+ * A lab host that only captures lab links (c9s): its nodes' own interfaces are
+ * pod interfaces, so pickers offer the topology's links only. Docker and Podman
+ * hosts offer every interface: Edgeshark covers what is no link.
  */
 export function hostCapturesLinks(info: LabHostInfo | undefined): boolean {
+  return info?.support.captureStream === true && !info.support.edgeshark;
+}
+
+/** A lab host that takes both ends of a link in one capture. */
+export function hostCapturesOneStream(info: LabHostInfo | undefined): boolean {
   return info?.support.captureStream === true;
 }
 
