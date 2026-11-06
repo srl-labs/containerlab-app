@@ -1,6 +1,6 @@
 /* eslint-disable import-x/max-dependencies */
 // Node editor content for the ContextPanel.
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EditorPanel } from "../../../ui/editor/EditorPanel";
 import { FieldVariablesProvider } from "../../../ui/form/FieldVariables";
@@ -8,6 +8,7 @@ import type { TabConfig } from "../../../ui/editor/EditorPanel";
 import { useApplySaveHandlers, useFooterControlsRef } from "../../../../hooks/ui";
 import { useNodeEditorForm, hasFieldChanged } from "../../../../hooks/editor/useNodeEditorForm";
 import { useClabUiRuntime } from "../../../../host";
+import { missingTemplateFields } from "../../../../core/utilities/customNodeConversions";
 import type {
   NodeEditorData,
   TabProps as NodeEditorTabProps
@@ -87,6 +88,41 @@ function getTabsForNode(
         ...(hasKindConfig ? [KIND_CONFIG_TAB] : [])
       ];
   return [tabs[0], ...kindTabs, ...tabs.slice(1)];
+}
+
+const TEMPLATE_FIELD_IDS = { customName: "node-custom-name", kind: "node-kind" } as const;
+
+/**
+ * Stops saving a template that is missing a required field: the save would be refused and
+ * the dialog close with what was entered, so the form opens on the field instead.
+ */
+function useTemplateSaveGuard(
+  formData: NodeEditorData | null,
+  setActiveTab: (tab: string) => void
+): { canSubmit: (data: NodeEditorData) => boolean; showRequiredErrors: boolean } {
+  const [blockedSaves, setBlockedSaves] = useState(0);
+  const formDataRef = useRef(formData);
+  formDataRef.current = formData;
+
+  const canSubmit = useCallback(
+    (data: NodeEditorData) => {
+      if (data.isCustomTemplate !== true || missingTemplateFields(data).length === 0) return true;
+      setActiveTab("basic");
+      setBlockedSaves((count) => count + 1);
+      return false;
+    },
+    [setActiveTab]
+  );
+
+  // After the render that brings the Basic tab back, so the field exists to take focus
+  useEffect(() => {
+    const current = formDataRef.current;
+    if (blockedSaves === 0 || !current) return;
+    const first = missingTemplateFields(current).at(0);
+    if (first) document.getElementById(TEMPLATE_FIELD_IDS[first])?.focus();
+  }, [blockedSaves]);
+
+  return { canSubmit, showRequiredErrors: blockedSaves > 0 };
 }
 
 /** On a kind change, drop the kind-specific keys the new kind does not accept. */
@@ -196,11 +232,13 @@ export const NodeEditorView: React.FC<NodeEditorViewProps> = ({
     return inheritedProps.filter((prop) => !hasFieldChanged(prop, formData, originalData));
   }, [inheritedProps, formData, originalData]);
 
+  const { canSubmit, showRequiredErrors } = useTemplateSaveGuard(formData, setActiveTab);
   const { handleApply, handleSave } = useApplySaveHandlers(
     formData,
     onApply,
     onSave,
-    resetAfterApply
+    resetAfterApply,
+    canSubmit
   );
 
   useEffect(() => {
@@ -239,7 +277,9 @@ export const NodeEditorView: React.FC<NodeEditorViewProps> = ({
     onChange: handleChangeWithInheritance,
     onPreview: previewChange,
     inheritedProps: effectiveInheritedProps,
-    inheritance
+    inheritance,
+    readOnly,
+    showRequiredErrors
   };
 
   return (

@@ -119,7 +119,13 @@ Some kinds take [settings of their own](https://containerlab.dev/manual/nodes/#k
 
 The fields come from the containerlab schema, so new kinds and settings appear once the app ships the newer schema. Kinds without such settings have no **Kind** tab. If you change a node's kind, settings the new kind doesn't accept are removed, since containerlab won't deploy the node with them.
 
-`nokia_sros` and `nokia_srsim` nodes have a **Components** tab for cards, MDAs, XIOMs, and the SFM. For `nokia_sros`, each card can also set the vCPUs, RAM, and NICs of its VM. In **Defaults & Groups**, a section without a kind shows every kind-specific setting and the kinds it applies to.
+`nokia_sros` and `nokia_srsim` nodes have a **Components** tab for cards, MDAs, XIOMs, and the SFM. For `nokia_sros`, each card can also set the vCPUs, RAM, and NICs of its VM.
+
+For `nokia_srsim`, the tab draws the chassis you picked with its real slots and offers only the hardware that chassis takes, from the list SR-SIM ships in its images. Click an empty slot to install a card, or **Add starter hardware** for a first build that deploys. Each card's type, copy and remove controls sit on its row, and the arrow opens its MDAs and XIOMs right below it. To move a card, drag it by its handle to another slot, or pick the slot from its number; a card already there swaps places with it. Anything that doesn't fit, for example after you change the chassis, is marked on its slot, and **Fit to** fixes it in one go. You can still type a type that isn't listed: containerlab only warns about it at deploy. The list comes with the app, so a newer image can offer hardware it doesn't know yet.
+
+The tab follows the topology file. Edits made in the file or the YAML tab show up while it is open, unless you have unsaved changes there. Components and an SFM set on a kind or group show where they come from, and editing them makes the list the node's own. `NOKIA_SROS_CHASSIS` in `env` picks the chassis, as it does at deploy, and the tab names any `NOKIA_SROS_*` hardware variable that wins over it.
+
+In **Defaults & Groups**, a section without a kind shows every kind-specific setting and the kinds it applies to.
 
 ## Other settings
 

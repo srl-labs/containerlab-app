@@ -22,7 +22,7 @@ Unlock the canvas, open the **Palette**, and select **Add** next to **Node Templ
 
 | Field | Does |
 | --- | --- |
-| Base name | Prefix for new node names. `srl` gives `srl1`, `srl2`, … |
+| Base name | Prefix for new node names. `srl` gives `srl1`, `srl2`, … Leave it empty to name nodes after the template. |
 | Icon and color | How the node looks on the canvas. |
 | Interface pattern | How to name interfaces when you connect this node. |
 | Default | Use this template for ++shift++ + click. |

@@ -7,23 +7,15 @@
 
 import type {
   HealthCheckConfig as _HealthCheckConfig,
-  SrosMda as _SrosMda,
-  SrosXiom as _SrosXiom,
   SrosComponent as _SrosComponent,
   NodeEditorData as _NodeEditorData
 } from "../../../core/types/editors";
-import { INTEGRATED_SROS_TYPES as _INTEGRATED_SROS_TYPES } from "../../../core/types/editors";
 import type { NodeInheritance } from "../../../core/utilities/nodeInheritance";
 
 // Re-export types
 export type HealthCheckConfig = _HealthCheckConfig;
-export type SrosMda = _SrosMda;
-export type SrosXiom = _SrosXiom;
 export type SrosComponent = _SrosComponent;
 export type NodeEditorData = _NodeEditorData;
-
-// Re-export values
-export const INTEGRATED_SROS_TYPES = _INTEGRATED_SROS_TYPES;
 
 /**
  * Props for tab components
@@ -37,4 +29,8 @@ export interface TabProps {
   inheritedProps?: string[];
   /** What the node inherits from defaults, its kind and its group */
   inheritance?: NodeInheritance;
+  /** The lab is locked: the form only shows values */
+  readOnly?: boolean;
+  /** A save was stopped for missing fields: the form marks the ones still empty */
+  showRequiredErrors?: boolean;
 }

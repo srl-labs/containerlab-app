@@ -1,6 +1,6 @@
 // Searchable dropdown with keyboard navigation.
-import React from "react";
-import Autocomplete from "@mui/material/Autocomplete";
+import React, { useState } from "react";
+import Autocomplete, { createFilterOptions } from "@mui/material/Autocomplete";
 import TextField from "@mui/material/TextField";
 import Box from "@mui/material/Box";
 
@@ -24,7 +24,13 @@ interface FilterableDropdownProps {
   helperText?: string;
   required?: boolean;
   error?: boolean;
+  /** Show the dropdown arrow on a field that also takes free text */
+  showArrow?: boolean;
+  /** Names a field that shows no label */
+  ariaLabel?: string;
 }
+
+const filterByInput = createFilterOptions<FilterableDropdownOption>();
 
 export const FilterableDropdown: React.FC<FilterableDropdownProps> = ({
   id,
@@ -38,9 +44,14 @@ export const FilterableDropdown: React.FC<FilterableDropdownProps> = ({
   renderOption,
   helperText,
   required,
-  error
+  error,
+  showArrow = false,
+  ariaLabel
 }) => {
   const selectedOption = options.find((opt) => opt.value === value) ?? null;
+  // Opening shows every option; only what is typed after that narrows them. Otherwise a
+  // free-text value that matches nothing would open an empty list.
+  const [isTyping, setIsTyping] = useState(false);
 
   return (
     <Autocomplete
@@ -55,10 +66,14 @@ export const FilterableDropdown: React.FC<FilterableDropdownProps> = ({
         }
       }}
       onInputChange={(_event, newInputValue, reason) => {
+        if (reason === "input") setIsTyping(true);
         if (allowFreeText && reason === "input") {
           onChange(newInputValue);
         }
       }}
+      onClose={() => setIsTyping(false)}
+      filterOptions={(all, state) => (isTyping ? filterByInput(all, state) : all)}
+      forcePopupIcon={showArrow ? true : "auto"}
       inputValue={allowFreeText ? value : undefined}
       getOptionLabel={(option) => {
         if (typeof option === "string") return option;
@@ -88,6 +103,10 @@ export const FilterableDropdown: React.FC<FilterableDropdownProps> = ({
       renderInput={(params) => (
         <TextField
           {...(params as unknown as React.ComponentProps<typeof TextField>)}
+          slotProps={{
+            ...params.slotProps,
+            htmlInput: { ...params.slotProps.htmlInput, "aria-label": ariaLabel }
+          }}
           label={label}
           placeholder={placeholder}
           helperText={helperText}
