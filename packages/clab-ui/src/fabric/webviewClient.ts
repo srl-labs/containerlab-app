@@ -60,7 +60,7 @@ export function createWebviewFabricClient(channel: WebviewChannel): FabricClient
 
   return {
     engineStatus: () => request<FclingEngineStatus>({ op: "engine-status" }),
-    startEngine: () => request<FclingEngineStatus>({ op: "engine-start" }),
+    startEngine: (options) => request<FclingEngineStatus>({ op: "engine-start", ...options }),
     stopEngine: () => request<void>({ op: "engine-stop" }),
     api: <T>(apiRequest: Parameters<FabricClient["api"]>[0]) =>
       request<T>({ op: "api", request: apiRequest }),

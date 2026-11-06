@@ -13,6 +13,18 @@ export const FCLING_IMAGE = "ghcr.io/srl-labs/fcling:0.9.0";
 /** The port `fcling serve` listens on inside its container. */
 export const FCLING_PORT = 8765;
 
+/** Where fcling looks for a lab's nodes unless told otherwise. */
+export const FCLING_DEFAULT_GNMI_PORT = 57400;
+
+export function isValidGnmiPort(port: unknown): port is number {
+  return typeof port === "number" && Number.isInteger(port) && port >= 1 && port <= 65535;
+}
+
+/** fcling's global option for a port, before its command. Its default needs none. */
+export function fclingGnmiPortArgs(port: number | undefined): string[] {
+  return port === undefined || port === FCLING_DEFAULT_GNMI_PORT ? [] : ["-p", String(port)];
+}
+
 /** Wide enough for every report: without a terminal, fcling squeezes its tables into 80 columns. */
 export const FCLING_REPORT_COLUMNS = 400;
 
@@ -24,8 +36,21 @@ export interface FclingEngineStatus {
   containerName?: string;
   /** ISO time the container started. */
   startedAt?: string;
+  /**
+   * The port it reaches the lab's nodes on, or will when it starts. A lab host
+   * too old to say this also cannot change it.
+   */
+  gnmiPort?: number;
   /** Why it failed: the end of its log. */
   error?: string;
+}
+
+export interface FclingEngineStartOptions {
+  /**
+   * A new port for the lab's nodes, kept for the next start and used for its
+   * reports. An engine on another port is replaced, and keeps its history.
+   */
+  gnmiPort?: number;
 }
 
 export type FclingApiMethod = "GET" | "POST" | "DELETE";
@@ -176,7 +201,7 @@ export interface FabricEventHandlers {
 export interface FabricClient {
   engineStatus(): Promise<FclingEngineStatus>;
   /** Starts the engine, or finds it running; pulling its image can take a while. */
-  startEngine(): Promise<FclingEngineStatus>;
+  startEngine(options?: FclingEngineStartOptions): Promise<FclingEngineStatus>;
   /** Stops the engine and keeps its history. */
   stopEngine(): Promise<void>;
   /** The answer of the engine's API; rejects with a {@link FabricApiError}. */
@@ -192,7 +217,7 @@ export interface FabricWebviewInitialData {
 /** A request of the Fabric webview to the extension host, answered by `fabric:response`. */
 export type FabricWebviewRequest =
   | { op: "engine-status" }
-  | { op: "engine-start" }
+  | { op: "engine-start"; gnmiPort?: number }
   | { op: "engine-stop" }
   | { op: "api"; request: FclingApiRequest };
 

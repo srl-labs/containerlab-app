@@ -1,6 +1,11 @@
 /** The Fabric view's way to a lab's fcling engine, through whichever backend hosts the lab. */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { isFclingApiCallAllowed, type FclingApiRequest } from "@containerlab/clab-ui/fabric/engine";
+import {
+  isFclingApiCallAllowed,
+  isValidGnmiPort,
+  type FclingApiRequest,
+  type FclingEngineStartOptions
+} from "@containerlab/clab-ui/fabric/engine";
 import type { LabBackend } from "@srl-labs/containerlab-lab-backend";
 
 import type { EndpointResolver } from "./endpointResolver.ts";
@@ -11,6 +16,10 @@ import { handleRouteError, RequestError } from "./runtimeProxy.ts";
 interface FclingTargetBody {
   endpointId?: string;
   labName?: string;
+}
+
+interface FclingStartBody extends FclingTargetBody {
+  gnmiPort?: unknown;
 }
 
 interface FclingApiBody extends FclingTargetBody {
@@ -26,6 +35,13 @@ function requireLabName(labName: string | undefined): string {
   const name = labName?.trim();
   if (!name) throw new RequestError("Missing lab name.", 400);
   return name;
+}
+
+function startOptions(body: FclingStartBody | undefined): FclingEngineStartOptions | undefined {
+  const gnmiPort = body?.gnmiPort;
+  if (gnmiPort === undefined) return undefined;
+  if (!isValidGnmiPort(gnmiPort)) throw new RequestError("The gNMI port must be between 1 and 65535.", 400);
+  return { gnmiPort };
 }
 
 function parseAfter(value: string | undefined): number | undefined {
@@ -60,7 +76,7 @@ export function registerFclingProxy(app: FastifyInstance, resolveEndpoint: Endpo
   /** Registers a POST route that answers with what `action` returns. */
   const engineRoute = (
     url: string,
-    action: (backend: LabBackend, labName: string) => Promise<unknown>
+    action: (backend: LabBackend, labName: string, body: FclingStartBody | undefined) => Promise<unknown>
   ): void => {
     app.post<{ Body: FclingTargetBody }>(
       url,
@@ -68,7 +84,7 @@ export function registerFclingProxy(app: FastifyInstance, resolveEndpoint: Endpo
         const resolved = resolveEndpoint(request, reply, request.body?.endpointId);
         if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
         try {
-          const answer = await action(resolved.backend, requireLabName(request.body?.labName));
+          const answer = await action(resolved.backend, requireLabName(request.body?.labName), request.body);
           return await reply.send(answer ?? { ok: true });
         } catch (error) {
           return handleRouteError(reply, error);
@@ -80,8 +96,8 @@ export function registerFclingProxy(app: FastifyInstance, resolveEndpoint: Endpo
   engineRoute("/api/runtime/fcling/engine/status", (backend, labName) =>
     backend.fclingEngine({ labName })
   );
-  engineRoute("/api/runtime/fcling/engine/start", (backend, labName) =>
-    backend.startFclingEngine({ labName })
+  engineRoute("/api/runtime/fcling/engine/start", (backend, labName, body) =>
+    backend.startFclingEngine({ labName }, startOptions(body))
   );
   engineRoute("/api/runtime/fcling/engine/stop", (backend, labName) =>
     backend.stopFclingEngine({ labName })

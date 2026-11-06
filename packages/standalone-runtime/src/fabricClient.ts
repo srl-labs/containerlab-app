@@ -64,7 +64,7 @@ export function createStandaloneFabricClient(labName: string, endpointId?: strin
 
   return {
     engineStatus: () => post<FclingEngineStatus>("engine/status", {}),
-    startEngine: () => post<FclingEngineStatus>("engine/start", {}),
+    startEngine: (options) => post<FclingEngineStatus>("engine/start", options ?? {}),
     stopEngine: async () => {
       await post<unknown>("engine/stop", {});
     },

@@ -8,6 +8,7 @@ export type {
   FabricWebviewRequest,
   FclingApiRequest,
   FclingApiResponse,
+  FclingEngineStartOptions,
   FclingEngineState,
   FclingEngineStatus,
   FclingEvent

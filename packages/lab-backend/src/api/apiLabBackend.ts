@@ -59,6 +59,7 @@ import type {
   CaptureTarget,
   ExecResponse,
   FclingApiRequest,
+  FclingEngineStartOptions,
   InspectContainerInfo,
   GenerateTopologyRequest,
   GraphExportFormat,
@@ -720,9 +721,9 @@ export class ApiLabBackend implements LabBackend {
     return this.client.getFclingEngine(this.token, lab.labName);
   }
 
-  async startFclingEngine(lab: LabTarget) {
+  async startFclingEngine(lab: LabTarget, options?: FclingEngineStartOptions) {
     await this.requireFcling();
-    return this.client.startFclingEngine(this.token, lab.labName);
+    return this.client.startFclingEngine(this.token, lab.labName, options);
   }
 
   async stopFclingEngine(lab: LabTarget) {

@@ -28,7 +28,7 @@ import type {
   VersionCheckResponse,
   VersionResponse
 } from "../contract/dto.ts";
-import { FCLING_IMAGE, FCLING_REPORT_COLUMNS } from "@containerlab/clab-ui/fabric/engine";
+import { FCLING_IMAGE, FCLING_REPORT_COLUMNS, fclingGnmiPortArgs } from "@containerlab/clab-ui/fabric/engine";
 
 import { LabBackendError } from "../contract/errors.ts";
 import { gottyOptionsError, sshxReadOnlyLink } from "../shareOptions.ts";
@@ -215,7 +215,8 @@ export async function fcling(
   options: ResolvedLocalOptions,
   topology: string,
   mgmtNetwork: string,
-  command: string
+  command: string,
+  gnmiPort?: number
 ): Promise<FclingCommandResponse> {
   const args = [
     "run",
@@ -232,6 +233,7 @@ export async function fcling(
     "-v",
     `${topology}:/topo.yml`,
     FCLING_IMAGE,
+    ...fclingGnmiPortArgs(gnmiPort),
     "-t",
     "/topo.yml",
     ...command.split(/\s+/).filter(Boolean)

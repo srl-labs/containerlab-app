@@ -667,6 +667,19 @@ test("a server that does not list fcling still runs fcli: the feature and its ca
   assert.equal(requests.some((request) => request.url.pathname.includes("/fcling")), false);
 });
 
+test("starting the engine sends a gNMI port only when one is chosen", async (t) => {
+  const requests = mockServer(t, { features: NEW_SERVER, health: { runtime: "docker" } });
+  const backend = new ApiLabBackend({ baseUrl: "https://new.test", token: "token" });
+  const engineCalls = () => requests.filter((request) => request.url.pathname.endsWith("/fcling/engine"));
+
+  await backend.startFclingEngine({ labName: "lab1" });
+  assert.equal(engineCalls()[0]?.body, undefined);
+
+  await backend.startFclingEngine({ labName: "lab1" }, { gnmiPort: 57410 });
+  assert.equal(engineCalls()[1]?.method, "POST");
+  assert.deepEqual(engineCalls()[1]?.body, { gnmiPort: 57410 });
+});
+
 test("the engine's API is not asked for what the Fabric view does not offer", async (t) => {
   const requests = mockServer(t, { features: NEW_SERVER, health: { runtime: "docker" } });
   const backend = new ApiLabBackend({ baseUrl: "https://new.test", token: "token" });

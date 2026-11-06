@@ -23,6 +23,7 @@ import type {
   FclingApiRequest,
   FclingApiResponse,
   FclingCommandResponse,
+  FclingEngineStartOptions,
   FclingEngineStatus,
   GenerateTopologyRequest,
   GenerateTopologyResponse,
@@ -1142,8 +1143,15 @@ export class ClabApiClient {
   }
 
   /** The server pulls the engine's image first, which can take minutes. */
-  async startFclingEngine(token: string, labName: string): Promise<FclingEngineStatus> {
-    const res = await this.request("POST", `/api/v1/labs/${enc(labName)}/fcling/engine`, token);
+  async startFclingEngine(
+    token: string,
+    labName: string,
+    options: FclingEngineStartOptions = {},
+  ): Promise<FclingEngineStatus> {
+    const url = `/api/v1/labs/${enc(labName)}/fcling/engine`;
+    const res = options.gnmiPort === undefined
+      ? await this.request("POST", url, token)
+      : await this.request("POST", url, token, JSON.stringify({ gnmiPort: options.gnmiPort }), "application/json");
     return (await res.json()) as FclingEngineStatus;
   }
 

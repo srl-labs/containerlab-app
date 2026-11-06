@@ -1,5 +1,6 @@
 /** The top of the Fabric window: which lab, whether it is live, and going back in time. */
 import HistoryIcon from "@mui/icons-material/History";
+import LanOutlinedIcon from "@mui/icons-material/LanOutlined";
 import MenuIcon from "@mui/icons-material/Menu";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
@@ -18,6 +19,7 @@ import React, { useState } from "react";
 
 import { controlRadius } from "../../theme/surfaces";
 
+import { GnmiPortDialog } from "./FabricGnmiPort";
 import { useFabric } from "./fabricContext";
 import type { FabricConnection } from "./fabricData";
 import { ago, clock } from "./fabricFormat";
@@ -107,8 +109,9 @@ function GoBack(): React.JSX.Element | null {
 }
 
 function EngineMenu(): React.JSX.Element {
-  const { stopEngine } = useFabric();
+  const { stopEngine, gnmiPort, changeGnmiPort } = useFabric();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [changingPort, setChangingPort] = useState(false);
   return (
     <>
       <Tooltip title="More">
@@ -117,6 +120,18 @@ function EngineMenu(): React.JSX.Element {
         </IconButton>
       </Tooltip>
       <Menu anchorEl={anchor} open={anchor !== null} onClose={() => setAnchor(null)}>
+        {gnmiPort === undefined ? null : (
+          <MenuItem
+            data-testid="fabric-gnmi-port"
+            onClick={() => {
+              setAnchor(null);
+              setChangingPort(true);
+            }}
+          >
+            <ListItemIcon><LanOutlinedIcon fontSize="small" /></ListItemIcon>
+            gNMI port: {gnmiPort}
+          </MenuItem>
+        )}
         <MenuItem
           data-testid="fabric-stop-engine"
           onClick={() => {
@@ -128,6 +143,9 @@ function EngineMenu(): React.JSX.Element {
           Stop engine
         </MenuItem>
       </Menu>
+      {changingPort && gnmiPort !== undefined ? (
+        <GnmiPortDialog gnmiPort={gnmiPort} onClose={() => setChangingPort(false)} onChange={changeGnmiPort} />
+      ) : null}
     </>
   );
 }
@@ -154,6 +172,35 @@ export function FabricHeader({ onToggleNav }: { onToggleNav: () => void }): Reac
       <ConnectionState />
       <GoBack />
       <EngineMenu />
+    </Box>
+  );
+}
+
+/** No node reached usually means the wrong port: the engine itself is fine with that. */
+export function FabricNodesDownBanner(): React.JSX.Element | null {
+  const { status, at, gnmiPort, changeGnmiPort } = useFabric();
+  const [changingPort, setChangingPort] = useState(false);
+  const nodes = status?.nodes ?? [];
+  if (at !== undefined || gnmiPort === undefined || nodes.length === 0) return null;
+  if (nodes.some((node) => node.status !== "down")) return null;
+  const warn = toneColor("warn");
+  return (
+    <Box
+      role="status"
+      data-testid="fabric-nodes-down-banner"
+      sx={{
+        display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", px: 1.5, py: 0.5, flexShrink: 0,
+        bgcolor: tint(warn, 12), borderBottom: `1px solid ${tint(warn, 34)}`
+      }}
+    >
+      <LanOutlinedIcon fontSize="small" sx={{ color: "warning.main" }} />
+      <Typography variant="body2" sx={{ flex: "1 1 240px", minWidth: 0 }}>
+        No node can be reached. The engine looks for them on gNMI port <b>{gnmiPort}</b>.
+      </Typography>
+      <Button size="small" variant="outlined" data-testid="fabric-gnmi-port-change" onClick={() => setChangingPort(true)}>Change port</Button>
+      {changingPort ? (
+        <GnmiPortDialog gnmiPort={gnmiPort} onClose={() => setChangingPort(false)} onChange={changeGnmiPort} />
+      ) : null}
     </Box>
   );
 }

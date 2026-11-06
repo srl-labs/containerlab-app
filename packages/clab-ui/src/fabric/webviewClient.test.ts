@@ -40,6 +40,17 @@ describe("createWebviewFabricClient", () => {
     assert.deepEqual(await second, { state: "ready" });
   });
 
+  test("asks to start the engine, with a gNMI port when one is chosen", () => {
+    const { channel, posted } = fakeChannel();
+    const client = createWebviewFabricClient(channel);
+    void client.startEngine();
+    void client.startEngine({ gnmiPort: 57410 });
+    assert.deepEqual(posted, [
+      { type: "fabric:request", requestId: 1, op: "engine-start" },
+      { type: "fabric:request", requestId: 2, op: "engine-start", gnmiPort: 57410 }
+    ]);
+  });
+
   test("rejects with the status of a failed request", async () => {
     const { channel, deliver } = fakeChannel();
     const client = createWebviewFabricClient(channel);

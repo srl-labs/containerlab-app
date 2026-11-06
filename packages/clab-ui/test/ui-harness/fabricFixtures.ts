@@ -7,6 +7,7 @@ import type {
   FabricClient,
   FabricEventHandlers,
   FclingApiRequest,
+  FclingEngineStartOptions,
   FclingEngineStatus,
   FclingEvent
 } from "../../src/fabric/engine";
@@ -452,35 +453,54 @@ function matchPath(path: string, prefix: string): string | undefined {
 
 /**
  * `ready`, or how the engine is found: `fresh` (stopped, and starts), `pulling`
- * (its start never answers), `failed`, `empty` (no SR Linux nodes).
+ * (its start never answers), `failed`, `empty` (no SR Linux nodes), `wrong-port`
+ * (no node answers until the port is 57410), `old-host` (does not say its port).
  */
 export function createFixtureFabricClient(state: string): { client: FabricClient; controls: FabricHarnessControls } {
   const calls: string[] = [];
   const streams = new Set<FabricEventHandlers>();
   let engineState = initialEngineState(state);
+  let gnmiPort = 57400;
   let polls = 0;
   let incidents = initialIncidents();
   const baselines: FabricBaseline[] = [];
   const topology: FabricTopology = state === "empty" ? EMPTY_TOPOLOGY : structuredClone(TOPOLOGY);
   const history = historyChanges();
 
+  const portOfHost = () => (state === "old-host" ? {} : { gnmiPort });
+
   const engineStatus = (): FclingEngineStatus => {
     if (engineState === "failed") {
       return {
         state: "failed",
         image: "ghcr.io/srl-labs/fcling:latest",
+        ...portOfHost(),
         error: "Error: lab.clab.yml lists no SR Linux nodes\nthe engine exited with status 2"
       };
     }
-    return { state: engineState, image: "ghcr.io/srl-labs/fcling:latest", containerName: "clab-fabrictest-fcling" };
+    return { state: engineState, image: "ghcr.io/srl-labs/fcling:latest", containerName: "clab-fabrictest-fcling", ...portOfHost() };
   };
+
+  function nodesAnswer() {
+    const status = statusAnswer();
+    if (state === "empty") return { ...status, nodes: [] };
+    if (state !== "wrong-port" || gnmiPort === 57410) return status;
+    return {
+      ...status,
+      nodes: status.nodes.map((node) => ({
+        ...node,
+        status: "down",
+        error: `no answer from ${node.address} on gNMI port ${gnmiPort}`
+      }))
+    };
+  }
 
   function answer(request: FclingApiRequest): unknown {
     const { method, path, query, body } = request;
     if (query?.at && Number(query.at) < started) {
       throw new FabricApiError(400, "The history starts 3 hours ago: there is nothing kept before that.");
     }
-    if (path === "status") return state === "empty" ? { ...statusAnswer(), nodes: [] } : statusAnswer();
+    if (path === "status") return nodesAnswer();
     if (path === "topology") return topology;
     if (path === "reports") return FABRIC_CATALOG;
     if (path === "checks") {
@@ -548,9 +568,10 @@ export function createFixtureFabricClient(state: string): { client: FabricClient
       }
       return engineStatus();
     },
-    async startEngine() {
-      calls.push("engine-start");
+    async startEngine(options?: FclingEngineStartOptions) {
+      calls.push(options?.gnmiPort === undefined ? "engine-start" : `engine-start port=${options.gnmiPort}`);
       if (state === "pulling") await new Promise(() => undefined);
+      gnmiPort = options?.gnmiPort ?? gnmiPort;
       engineState = "starting";
       return engineStatus();
     },
