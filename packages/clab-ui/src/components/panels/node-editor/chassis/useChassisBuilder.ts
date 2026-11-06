@@ -5,6 +5,7 @@ import { getDefaultNodeType } from "../../../../core/constants/nodeTypes";
 import {
   allChassisSlots,
   canBuildChassis,
+  cardSlotChoices,
   checkHardware,
   copyCard,
   findSrsimChassis,
@@ -51,12 +52,16 @@ function resolveNodeChassis({ data, inheritance }: Pick<TabProps, "data" | "inhe
   return { kind, defaultType, nodeType, env, chassis: isSrsim ? findSrsimChassis(nodeType) : undefined };
 }
 
-/** The slot to show: the one picked if it still exists, else the first card, else a CPM */
+/** Picked when somebody closes the open slot, so that none opens in its place */
+const NOTHING_OPEN = "";
+
+/** The slot to open: the one picked if it still exists, else the first card, else a CPM */
 function resolveSelection(
   picked: string | undefined,
   layout: ChassisLayout,
   showSfm: boolean
 ): string | undefined {
+  if (picked === NOTHING_OPEN) return undefined;
   if (picked === SFM_SLOT_ID && showSfm) return picked;
   const installed = allChassisSlots(layout).filter(isSlotInstalled);
   if (installed.some((slot) => slot.id === picked)) return picked;
@@ -97,12 +102,15 @@ export interface ChassisBuilder {
   showSfm: boolean;
   isEmpty: boolean;
   canStart: boolean;
-  /** The slot somebody picked; undefined until then */
-  pickedId: string | undefined;
+  /** The slot to bring into view, after somebody asked for it */
+  revealId: string | undefined;
   /** The slot whose details are showing */
   selectedId: string | undefined;
   openSlots: string[];
+  /** Card slots a card can go to, in chassis order */
+  slotChoices: string[];
   pick: (id: string) => void;
+  toggle: (id: string) => void;
   setType: (type: string) => void;
   setSfm: (sfm: string) => void;
   install: (slot: ChassisSlot) => void;
@@ -121,6 +129,11 @@ export function useChassisBuilder({
   inheritance
 }: Pick<TabProps, "data" | "onChange" | "inheritance">): ChassisBuilder {
   const [pickedId, setPickedId] = useState<string>();
+  const [revealId, setRevealId] = useState<string>();
+  const openSlot = (id: string): void => {
+    setPickedId(id);
+    setRevealId(id);
+  };
 
   const { kind, defaultType, nodeType, env, chassis } = resolveNodeChassis({ data, inheritance });
   const components = useMemo(() => data.components ?? [], [data.components]);
@@ -134,6 +147,7 @@ export function useChassisBuilder({
   const showSfm = chassis === undefined || chassis.sfm.length > 0 || sfm !== "";
   const isEmpty = components.length === 0 && sfm === "";
   const openSlots = freeCardSlots(chassis, layout);
+  const selectedId = resolveSelection(pickedId, layout, showSfm);
   const setComponents = (next: SrosComponent[]): void => onChange({ components: next });
 
   return {
@@ -151,25 +165,32 @@ export function useChassisBuilder({
     showSfm,
     isEmpty,
     canStart: chassis !== undefined && isEmpty && canBuildChassis(chassis),
-    pickedId,
-    selectedId: resolveSelection(pickedId, layout, showSfm),
+    revealId,
+    selectedId,
     openSlots,
-    pick: setPickedId,
+    slotChoices: cardSlotChoices(chassis, layout),
+    pick: openSlot,
+    toggle: (id) => {
+      if (selectedId === id) setPickedId(NOTHING_OPEN);
+      else openSlot(id);
+    },
     setType: (type) => onChange({ type }),
     setSfm: (value) => onChange({ sfm: value }),
     install: (slot) => {
       setComponents(installSlot(chassis, components, slot.label));
-      setPickedId(slot.id);
+      // A CPM of a distributed chassis has nothing to open, so whatever is open stays that way
+      if (slot.role === "card" || chassis?.integrated === true) openSlot(slot.id);
+      else setRevealId(slot.id);
     },
     installSfm: () => {
       const first = chassis?.sfm.at(0);
       if (first !== undefined) onChange({ sfm: first });
-      setPickedId(SFM_SLOT_ID);
+      setRevealId(SFM_SLOT_ID);
     },
     applyStarter: () => {
       if (!chassis) return;
       onChange(starterHardware(chassis));
-      setPickedId("1");
+      openSlot("1");
     },
     fit: () => {
       if (chassis) onChange(fitToChassis(chassis, sfm, components));
@@ -189,18 +210,20 @@ export function useChassisBuilder({
     },
     removeFromSlot: (slot) => {
       setComponents(removeSlot(chassis, components, slot));
-      setPickedId(undefined);
+      if (selectedId === slot.id) setPickedId(undefined);
     },
     copyToOpenSlot: (slot) => {
       const target = openSlots.at(0);
       if (target === undefined || slot.componentIndex === undefined) return;
       setComponents(copyCard(components, slot.componentIndex, target));
-      setPickedId(target);
+      openSlot(target);
     },
     moveToSlot: (slot, name) => {
-      if (slot.componentIndex === undefined) return;
+      if (slot.componentIndex === undefined || name === slot.label) return;
       setComponents(moveCard(components, slot.componentIndex, name));
-      setPickedId(name);
+      // Whichever card was open stays open, wherever it went
+      if (selectedId === slot.id) openSlot(name);
+      else setPickedId(selectedId === name ? slot.label : (selectedId ?? NOTHING_OPEN));
     }
   };
 }

@@ -572,15 +572,21 @@ export function copyCard(
   return insertComponent(components, { ...components[index], slot: slotValue(name) });
 }
 
-/** Move a card to another slot */
+/** Move a card to another slot, with everything on it; a card already there swaps places with it */
 export function moveCard(
   components: SrosComponent[],
   index: number,
   name: string
 ): SrosComponent[] {
-  return components.map((component, position) =>
-    position === index ? { ...component, slot: slotValue(name) } : component
+  const moved = components[index];
+  const occupant = components.findIndex(
+    (component, position) => position !== index && componentSlotName(component) === name
   );
+  const others = components.filter((_, position) => position !== index && position !== occupant);
+  const placed = insertComponent(others, { ...moved, slot: slotValue(name) });
+  return occupant === -1
+    ? placed
+    : insertComponent(placed, { ...components[occupant], slot: moved.slot });
 }
 
 /** The lowest unused MDA slot, leaving out slots whose MDA cannot be changed */
@@ -602,6 +608,12 @@ export function freeCardSlots(chassis: SrsimChassis | undefined, layout: Chassis
   const highest = Math.max(0, ...[...used].map(Number).filter((slot) => !Number.isNaN(slot)));
   const range = Array.from({ length: Math.max(12, highest + 1) }, (_, position) => String(position + 1));
   return range.filter((slot) => !used.has(slot));
+}
+
+/** Every card slot a card can go to, in chassis order; one holding a card means swapping them */
+export function cardSlotChoices(chassis: SrsimChassis | undefined, layout: ChassisLayout): string[] {
+  const names = new Set([...layout.cards.map((slot) => slot.label), ...freeCardSlots(chassis, layout)]);
+  return [...names].sort((a, b) => slotRank(a) - slotRank(b));
 }
 
 /** Env keys that set hardware: containerlab lets them win over type, components and sfm */

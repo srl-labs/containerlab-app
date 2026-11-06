@@ -4,6 +4,7 @@ import test from "node:test";
 import type { SrosComponent } from "../types/editors";
 
 import {
+  cardSlotChoices,
   checkHardware,
   copyCard,
   describeChassis,
@@ -403,6 +404,49 @@ test("copies and moves cards with everything on them", () => {
   ];
   assert.deepEqual(copyCard(cards, 1, "3")[2], { ...cards[1], slot: 3 });
   assert.deepEqual(moveCard(cards, 1, "4")[1], { ...cards[1], slot: 4 });
+});
+
+test("a moved card lands where the chassis has it, swapping with a card already there", () => {
+  const cards: SrosComponent[] = [
+    { slot: "A" },
+    { slot: 1, type: "first", mda: [{ slot: 1, type: "m" }] },
+    { slot: 2, type: "second" },
+    { slot: 3, type: "third" }
+  ];
+  const slotsAndTypes = (list: SrosComponent[]) => list.map(({ slot, type }) => [slot, type]);
+
+  assert.deepEqual(slotsAndTypes(moveCard(cards, 1, "5")), [
+    ["A", undefined],
+    [2, "second"],
+    [3, "third"],
+    [5, "first"]
+  ]);
+  const swapped = moveCard(cards, 1, "3");
+  assert.deepEqual(slotsAndTypes(swapped), [
+    ["A", undefined],
+    [1, "third"],
+    [2, "second"],
+    [3, "first"]
+  ]);
+  assert.deepEqual(swapped[3].mda, cards[1].mda);
+});
+
+test("offers every card slot in chassis order, its own and taken ones included", () => {
+  const found = chassis("sr-7");
+  assert.deepEqual(cardSlotChoices(found, layoutChassis(found, [{ slot: 4 }, { slot: 1 }])), [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5"
+  ]);
+  // A card in a slot the chassis lacks can still stay there, and sorts by number
+  const beyond = cardSlotChoices(found, layoutChassis(found, [{ slot: 12 }]));
+  assert.deepEqual(beyond, ["1", "2", "3", "4", "5", "12"]);
+  // Without a catalog entry the open range is offered around the card
+  const open = cardSlotChoices(undefined, layoutChassis(undefined, [{ slot: 14 }]));
+  assert.equal(open[0], "1");
+  assert.equal(open.at(-1), "15");
 });
 
 test("picks the next free MDA slot around fixed ones", () => {

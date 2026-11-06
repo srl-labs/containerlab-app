@@ -25,7 +25,7 @@ export const REMOVE_BUTTON_SX = {
     bgcolor: "color-mix(in srgb, var(--vscode-errorForeground) 12%, transparent)"
   }
 } as const;
-export const HEADER_ROW_SX = {
+const HEADER_ROW_SX = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
@@ -48,6 +48,8 @@ const XIOM_ROW_SX = {
 } as const;
 const REMOVE_CELL_SX = { display: "flex", justifyContent: "center", pt: "3px" } as const;
 const ELLIPSIS_SX = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
+/** On a slot's row the outline stays out of the way until the field is in use */
+const ROW_FIELD_SX = { "& .MuiOutlinedInput-notchedOutline": { borderColor: "transparent" } } as const;
 /** A catalog mismatch is advice, not an error: containerlab deploys it anyway */
 const WARNING_FIELD_SX = {
   "& .MuiFormHelperText-root": { color: "warning.main" },
@@ -77,12 +79,15 @@ export const TypeField: React.FC<{
   issue?: string;
   hint?: string;
   placeholder?: string;
+  /** Sits on a slot's row, where a visible label would repeat on every line */
+  inRow?: boolean;
   onChange: (type: string) => void;
-}> = ({ id, label, value, types, issue, hint, placeholder, onChange }) => (
-  <Box sx={issue === undefined ? undefined : WARNING_FIELD_SX}>
+}> = ({ id, label, value, types, issue, hint, placeholder, inRow = false, onChange }) => (
+  <Box sx={[issue !== undefined && WARNING_FIELD_SX, inRow && ROW_FIELD_SX]}>
     <FilterableDropdown
       id={id}
-      label={label}
+      label={inRow ? undefined : label}
+      ariaLabel={inRow ? label : undefined}
       value={value}
       onChange={onChange}
       options={types.map((type) => ({ value: type, label: type }))}

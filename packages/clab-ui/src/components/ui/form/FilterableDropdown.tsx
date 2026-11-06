@@ -26,6 +26,8 @@ interface FilterableDropdownProps {
   error?: boolean;
   /** Show the dropdown arrow on a field that also takes free text */
   showArrow?: boolean;
+  /** Names a field that shows no label */
+  ariaLabel?: string;
 }
 
 const filterByInput = createFilterOptions<FilterableDropdownOption>();
@@ -43,7 +45,8 @@ export const FilterableDropdown: React.FC<FilterableDropdownProps> = ({
   helperText,
   required,
   error,
-  showArrow = false
+  showArrow = false,
+  ariaLabel
 }) => {
   const selectedOption = options.find((opt) => opt.value === value) ?? null;
   // Opening shows every option; only what is typed after that narrows them. Otherwise a
@@ -100,6 +103,10 @@ export const FilterableDropdown: React.FC<FilterableDropdownProps> = ({
       renderInput={(params) => (
         <TextField
           {...(params as unknown as React.ComponentProps<typeof TextField>)}
+          slotProps={{
+            ...params.slotProps,
+            htmlInput: { ...params.slotProps.htmlInput, "aria-label": ariaLabel }
+          }}
           label={label}
           placeholder={placeholder}
           helperText={helperText}

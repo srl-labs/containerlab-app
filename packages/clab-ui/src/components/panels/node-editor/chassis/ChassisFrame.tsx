@@ -1,18 +1,23 @@
-// Front panel of a chassis: every slot at a glance, the way the hardware is laid out.
+// Front panel of a chassis: every slot at a glance, each row with the controls for what is in it.
 import React from "react";
-import AddIcon from "@mui/icons-material/Add";
-import LockIcon from "@mui/icons-material/LockOutlined";
-import WarningAmberIcon from "@mui/icons-material/WarningAmberRounded";
 import Box from "@mui/material/Box";
-import ButtonBase from "@mui/material/ButtonBase";
 import Typography from "@mui/material/Typography";
 
-import { SFM_SLOT_ID, type ChassisLayout, type ChassisSlot } from "../../../../core/sros/srsimChassis";
+import {
+  allChassisSlots,
+  SFM_SLOT_ID,
+  type ChassisLayout,
+  type ChassisSlot
+} from "../../../../core/sros/srsimChassis";
 import type { SrosComponent } from "../../../../core/types/editors";
+import type { SrosComponentTypes } from "../../../../hooks/editor";
 import { controlRadius } from "../../../../theme/surfaces";
 
-/** A chassis with more slots than this gets two columns of cards */
-const SINGLE_COLUMN_CARD_SLOTS = 10;
+import type { SlotChoice } from "./SlotControls";
+import { EmptySlot, FixedPart } from "./SlotPlaceholders";
+import { InstalledSlot, SfmSlot } from "./SlotRow";
+import { useCardDrag } from "./useCardDrag";
+import type { ChassisBuilder } from "./useChassisBuilder";
 
 const FRAME_SX = {
   display: "flex",
@@ -25,46 +30,7 @@ const FRAME_SX = {
   bgcolor: "action.hover"
 } as const;
 
-const SLOT_SX = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "flex-start",
-  gap: 1,
-  width: "100%",
-  minWidth: 0,
-  minHeight: 34,
-  px: 0.75,
-  border: 1,
-  borderRadius: controlRadius,
-  textAlign: "left",
-  transition: "border-color 120ms ease, background-color 120ms ease, color 120ms ease",
-  "&.Mui-focusVisible": { outline: "1px solid", outlineColor: "primary.main", outlineOffset: 1 }
-} as const;
-
-const SLOT_BADGE_SX = {
-  flexShrink: 0,
-  minWidth: 22,
-  height: 22,
-  px: 0.5,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  borderRadius: "4px",
-  fontSize: 11,
-  fontWeight: 600,
-  fontVariantNumeric: "tabular-nums"
-} as const;
-
-const SLOT_TEXT_SX = {
-  flex: 1,
-  minWidth: 0,
-  fontSize: 12,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap"
-} as const;
-
-/** What sits on a card beyond its type, for the slot's second column */
+/** What sits on a card beyond its type, for the toggle on its row */
 function describeSlotContents(component: SrosComponent | undefined): string {
   if (!component) return "";
   const xioms = component.xiom ?? [];
@@ -76,117 +42,11 @@ function describeSlotContents(component: SrosComponent | undefined): string {
   return parts.join(" · ");
 }
 
-interface SlotButtonProps {
-  id: string;
-  badge: string;
-  text: string;
-  contents?: string;
-  selected: boolean;
-  hasIssue: boolean;
-  onClick: () => void;
-}
-
-const FilledSlot: React.FC<SlotButtonProps> = ({
-  id,
-  badge,
-  text,
-  contents = "",
-  selected,
-  hasIssue,
-  onClick
-}) => {
-  const state = hasIssue ? ", needs a look" : "";
-  const accent = selected ? "primary.main" : "divider";
-  return (
-    <ButtonBase
-      data-testid={`chassis-slot-${id}`}
-      aria-pressed={selected}
-      aria-label={`Slot ${badge}: ${text}${contents === "" ? "" : `, ${contents}`}${state}`}
-      onClick={onClick}
-      sx={{
-        ...SLOT_SX,
-        bgcolor: selected ? "action.selected" : "background.default",
-        borderColor: hasIssue && !selected ? "warning.main" : accent,
-        "&:hover": { borderColor: selected ? "primary.main" : "text.secondary" }
-      }}
-    >
-      <Box
-        component="span"
-        sx={{
-          ...SLOT_BADGE_SX,
-          bgcolor: selected ? "primary.main" : "action.selected",
-          color: selected ? "primary.contrastText" : "text.primary"
-        }}
-      >
-        {badge}
-      </Box>
-      <Box component="span" sx={SLOT_TEXT_SX} title={text}>
-        {text}
-      </Box>
-      {contents !== "" && (
-        <Typography variant="caption" sx={{ flexShrink: 0, color: "text.secondary" }}>
-          {contents}
-        </Typography>
-      )}
-      {hasIssue && (
-        <WarningAmberIcon sx={{ flexShrink: 0, fontSize: 15, color: "warning.main" }} aria-hidden />
-      )}
-    </ButtonBase>
-  );
-};
-
-const EmptySlot: React.FC<{
-  id: string;
-  badge: string;
-  readOnly: boolean;
-  onInstall: () => void;
-}> = ({ id, badge, readOnly, onInstall }) => (
-  <ButtonBase
-    data-testid={`chassis-slot-${id}`}
-    aria-label={readOnly ? `Slot ${badge}: empty` : `Install in slot ${badge}`}
-    onClick={onInstall}
-    sx={{
-      ...SLOT_SX,
-      color: "text.secondary",
-      // Taken from the text so the outline reads on the frame in light and dark themes alike
-      borderColor: "color-mix(in srgb, currentColor 40%, transparent)",
-      borderStyle: "dashed",
-      "&:hover": {
-        color: "primary.main",
-        borderColor: "primary.main",
-        bgcolor: "action.hover"
-      }
-    }}
-  >
-    <Box component="span" sx={{ ...SLOT_BADGE_SX, fontWeight: 500 }}>
-      {badge}
-    </Box>
-    <Box component="span" sx={SLOT_TEXT_SX}>
-      {readOnly ? "Empty" : "Install"}
-    </Box>
-    {!readOnly && <AddIcon sx={{ flexShrink: 0, fontSize: 15 }} aria-hidden />}
-  </ButtonBase>
-);
-
-/** Hardware that comes with the chassis and cannot be changed */
-const FixedPart: React.FC<{ part: string }> = ({ part }) => (
-  <Box
-    sx={{ ...SLOT_SX, borderColor: "divider", bgcolor: "background.default", cursor: "default" }}
-    title="Comes with the chassis"
-  >
-    <LockIcon sx={{ flexShrink: 0, ml: 0.25, fontSize: 15, color: "text.secondary" }} aria-hidden />
-    <Box component="span" sx={SLOT_TEXT_SX}>
-      {part}
-    </Box>
-  </Box>
-);
-
-const SlotGroup: React.FC<{
-  title: string;
-  note?: string;
-  columns: number;
-  children: React.ReactNode;
-}> = ({ title, note, columns, children }) => (
+const SlotGroup: React.FC<{ title: string; note?: string; children: React.ReactNode }> = ({
+  title,
+  note,
+  children
+}) => (
   <Box role="group" aria-label={title}>
     <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1, mb: 0.5, px: 0.25 }}>
       <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>
@@ -198,16 +58,9 @@ const SlotGroup: React.FC<{
         </Typography>
       )}
     </Box>
-    <Box sx={{ display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: 0.5 }}>
-      {children}
-    </Box>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>{children}</Box>
   </Box>
 );
-
-function slotText(component: SrosComponent | undefined, defaultTypeLabel: string): string {
-  const type = component?.type;
-  return type === undefined || type === "" ? defaultTypeLabel : type;
-}
 
 /** Installed cards out of the slots the chassis has; a card in a slot it lacks does not count */
 function cardCountNote(layout: ChassisLayout, cardSlots: number | undefined): string {
@@ -216,50 +69,62 @@ function cardCountNote(layout: ChassisLayout, cardSlots: number | undefined): st
   return `${installed.filter((slot) => Number(slot.label) <= cardSlots).length} of ${cardSlots}`;
 }
 
-interface ChassisFrameProps {
-  /** Nameplate of the chassis */
+/** The slots a card can go to, saying which of them would swap it with another card */
+function describeSlotChoices(
+  names: string[],
+  cards: ChassisSlot[],
+  components: SrosComponent[]
+): SlotChoice[] {
+  return names.map((name) => {
+    const index = cards.find((slot) => slot.label === name)?.componentIndex;
+    if (index === undefined) return { name };
+    const type = components[index].type;
+    return { name, note: type === undefined || type === "" ? "Swap" : `Swap with ${type}` };
+  });
+}
+
+export interface ChassisNameplate {
   name?: string;
   description?: string;
-  /** How the chassis runs, under its nameplate */
+  /** How the chassis runs, under its name */
   note?: string;
   fixedHardware?: string;
   /** Card slots the chassis has; undefined when the catalog does not know it */
   cardSlots?: number;
-  /** What an entry without a type runs */
-  defaultTypeLabel: string;
-  layout: ChassisLayout;
-  components: SrosComponent[];
-  sfm: string;
-  showSfm: boolean;
-  selectedId: string | undefined;
-  issueSlots: ReadonlySet<string>;
-  /** Slots stay visible while the lab is locked, without the install prompt */
+}
+
+interface ChassisFrameProps {
+  nameplate: ChassisNameplate;
+  builder: ChassisBuilder;
+  knownTypes: SrosComponentTypes;
+  resourceKeys: string[];
+  /** Slots stay visible while the lab is locked, without anything to change them */
   readOnly: boolean;
-  onSelect: (id: string) => void;
-  onInstall: (slot: ChassisSlot) => void;
-  onInstallSfm: () => void;
+  sfmHint: string | undefined;
 }
 
 export const ChassisFrame: React.FC<ChassisFrameProps> = ({
-  name,
-  description,
-  note,
-  fixedHardware,
-  cardSlots,
-  defaultTypeLabel,
-  layout,
-  components,
-  sfm,
-  showSfm,
-  selectedId,
-  issueSlots,
+  nameplate,
+  builder,
+  knownTypes,
+  resourceKeys,
   readOnly,
-  onSelect,
-  onInstall,
-  onInstallSfm
+  sfmHint
 }) => {
+  const { name, description, note, fixedHardware, cardSlots } = nameplate;
+  const { chassis, components, layout, sfm, showSfm, selectedId, revealId, issueSlots, issueAt } = builder;
+  const drag = useCardDrag(builder.moveToSlot);
+  const slotChoices = describeSlotChoices(builder.slotChoices, layout.cards, components);
+
+  // A single built-in slot has nothing to pick between, so it opens straight on its details
+  const slots = allChassisSlots(layout);
+  const isOnlySlot = !showSfm && slots.length === 1 && slots[0].builtIn;
+  const canDrag = !readOnly && !isOnlySlot;
+
   const renderSlot = (slot: ChassisSlot): React.ReactElement => {
     const component = slot.componentIndex === undefined ? undefined : components[slot.componentIndex];
+    const drop = canDrag ? drag.dropProps(slot) : undefined;
+    const dragState = drag.stateOf(slot);
     if (component === undefined && !slot.builtIn) {
       return (
         <EmptySlot
@@ -267,28 +132,44 @@ export const ChassisFrame: React.FC<ChassisFrameProps> = ({
           id={slot.id}
           badge={slot.label}
           readOnly={readOnly}
-          onInstall={() => onInstall(slot)}
+          drop={drop}
+          dragState={dragState}
+          onInstall={() => builder.install(slot)}
         />
       );
     }
     return (
-      <FilledSlot
+      <InstalledSlot
         key={slot.id}
-        id={slot.id}
-        badge={slot.label}
-        text={slotText(component, defaultTypeLabel)}
+        slot={slot}
+        component={component}
+        chassis={chassis}
+        knownTypes={knownTypes}
+        resourceKeys={resourceKeys}
         contents={describeSlotContents(component)}
-        selected={selectedId === slot.id}
+        slotChoices={slotChoices}
+        canCopy={builder.openSlots.length > 0}
+        readOnly={readOnly}
+        isOnlySlot={isOnlySlot}
+        isOpen={selectedId === slot.id}
+        reveal={revealId === slot.id}
         hasIssue={issueSlots.has(slot.id)}
-        onClick={() => onSelect(slot.id)}
+        issueAt={issueAt}
+        grip={canDrag && slot.role === "card" ? drag.gripProps(slot) : undefined}
+        drop={drop}
+        dragState={dragState}
+        onToggle={() => builder.toggle(slot.id)}
+        onUpdate={(updates) => builder.updateSlot(slot, updates)}
+        onRemove={() => builder.removeFromSlot(slot)}
+        onCopy={() => builder.copyToOpenSlot(slot)}
+        onMove={(target) => builder.moveToSlot(slot, target)}
       />
     );
   };
 
-  const hasNameplate = name !== undefined && name !== "";
   return (
     <Box sx={FRAME_SX} data-testid="chassis-frame">
-      {hasNameplate && (
+      {name !== undefined && name !== "" && (
         <Box sx={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 1, px: 0.25 }}>
           <Typography variant="subtitle2" data-testid="chassis-name">
             {name}
@@ -312,32 +193,31 @@ export const ChassisFrame: React.FC<ChassisFrameProps> = ({
           ))}
         </Box>
       )}
-      {layout.control.length > 0 && (
-        <SlotGroup title="Control" columns={2}>
-          {layout.control.map(renderSlot)}
-        </SlotGroup>
-      )}
-      {layout.cards.length > 0 && (
-        <SlotGroup
-          title="Line cards"
-          note={cardCountNote(layout, cardSlots)}
-          columns={layout.cards.length > SINGLE_COLUMN_CARD_SLOTS ? 2 : 1}
-        >
-          {layout.cards.map(renderSlot)}
-        </SlotGroup>
+      {isOnlySlot ? (
+        <SlotGroup title="Hardware">{renderSlot(slots[0])}</SlotGroup>
+      ) : (
+        <>
+          {layout.control.length > 0 && <SlotGroup title="Control">{layout.control.map(renderSlot)}</SlotGroup>}
+          {layout.cards.length > 0 && (
+            <SlotGroup title="Line cards" note={cardCountNote(layout, cardSlots)}>
+              {layout.cards.map(renderSlot)}
+            </SlotGroup>
+          )}
+        </>
       )}
       {showSfm && (
-        <SlotGroup title="Fabric" columns={1}>
+        <SlotGroup title="Fabric">
           {sfm === "" ? (
-            <EmptySlot id={SFM_SLOT_ID} badge="SFM" readOnly={readOnly} onInstall={onInstallSfm} />
+            <EmptySlot id={SFM_SLOT_ID} badge="SFM" readOnly={readOnly} onInstall={builder.installSfm} />
           ) : (
-            <FilledSlot
-              id={SFM_SLOT_ID}
-              badge="SFM"
-              text={sfm}
-              selected={selectedId === SFM_SLOT_ID}
-              hasIssue={issueSlots.has(SFM_SLOT_ID)}
-              onClick={() => onSelect(SFM_SLOT_ID)}
+            <SfmSlot
+              chassis={chassis}
+              knownTypes={knownTypes}
+              value={sfm}
+              reveal={revealId === SFM_SLOT_ID}
+              issue={issueAt({ kind: "sfm" })}
+              hint={sfmHint}
+              onChange={builder.setSfm}
             />
           )}
         </SlotGroup>

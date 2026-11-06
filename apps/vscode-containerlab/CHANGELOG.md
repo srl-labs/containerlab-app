@@ -3,7 +3,7 @@
 ## [0.26.4] - Unreleased
 
 - **Open Fabric View** on a running lab shows what is wrong with its SR Linux fabric and what changed: topology health, incidents, a history that can go back in time, lenses and every report. It runs `fcling` next to the lab and keeps its history until the lab is destroyed.
-- The **Components** tab of SR-SIM nodes is now a chassis builder: it draws the chassis with its real slots and offers only the CPMs, cards, SFMs, XIOMs, and MDAs that chassis takes, using the hardware list SR-SIM ships in its images. Fixed hardware and fixed MDAs are shown as such, **Add starter hardware** sets up a first build, cards can be copied and moved between slots, and what doesn't fit a chassis is marked on its slot with **Fit to** to fix it in one go.
+- The **Components** tab of SR-SIM nodes is now a chassis builder: it draws the chassis with its real slots and offers only the CPMs, cards, SFMs, XIOMs, and MDAs that chassis takes, using the hardware list SR-SIM ships in its images. Fixed hardware and fixed MDAs are shown as such, **Add starter hardware** sets up a first build, cards can be copied and dragged between slots, and what doesn't fit a chassis is marked on its slot with **Fit to** to fix it in one go.
 - Saving a node template without a name or kind no longer closes the dialog and loses what was entered: the dialog stays open on the missing field.
 - A node template without a base name can now be dragged onto the canvas: its nodes are named after the template.
 - fcli is replaced by fcling. Its menu entries run the same reports, and the setting `containerlab.extras.fcli.extraDockerArgs` is now `containerlab.extras.fcling.extraDockerArgs`.

@@ -12,11 +12,10 @@ const IMAGE = "registry.srlinux.dev/pub/nokia_srsim:26.3.R1";
 const SEL_APPLY_BTN = '[data-testid="panel-apply-btn"]';
 const SEL_COMPONENTS_TAB = '[data-testid="panel-tab-components"]';
 const KIND_SRSIM = "nokia_srsim";
-const SLOT_A = "chassis-slot-A";
 const SLOT_1 = "chassis-slot-1";
 const SLOT_2 = "chassis-slot-2";
 const SLOT_3 = "chassis-slot-3";
-const SLOT_SFM = "chassis-slot-sfm";
+const TOGGLE_2 = "chassis-toggle-2";
 const NAME = "chassis-name";
 const STATUS = "chassis-status";
 const CARD_TYPE = "#slot-1-type";
@@ -96,9 +95,9 @@ test.describe("SR-SIM chassis builder and the YAML", () => {
         })
       );
 
-      await expect(page.getByTestId(SLOT_3)).toContainText("iom5-e");
-      await expect(page.getByTestId("chassis-slot-B")).toContainText("cpm5");
-      await expect(page.getByTestId(SLOT_SFM)).toContainText("m-sfm5-7");
+      await expect(page.locator("#slot-3-type")).toHaveValue("iom5-e");
+      await expect(page.locator("#slot-B-type")).toHaveValue("cpm5");
+      await expect(page.locator("#sfm-type")).toHaveValue("m-sfm5-7");
       await expect(page.getByTestId(SLOT_1)).toContainText("1 MDA");
       await expect(page.locator(CARD_TYPE)).toHaveValue("iom4-e");
       await expect(page.locator("#slot-1-mda-0-type")).toHaveValue("me6-100gb-qsfp28");
@@ -125,7 +124,7 @@ test.describe("SR-SIM chassis builder and the YAML", () => {
         topoViewerPage,
         fileWith({ ...SR7, components: [cpm, { slot: 1, type: "iom5-e" }, { slot: 2, type: "iom4-e" }] })
       );
-      await page.getByTestId(SLOT_2).click();
+      await page.getByTestId(TOGGLE_2).click();
       await expect(page.locator("#slot-2-type")).toHaveValue("iom4-e");
 
       await topoViewerPage.writeYamlFile(
@@ -139,21 +138,21 @@ test.describe("SR-SIM chassis builder and the YAML", () => {
 
       await topoViewerPage.writeYamlFile(FILE, fileWith(SR7));
       await expect(page.getByTestId("chassis-starter")).toBeVisible();
-      await expect(page.getByTestId("slot-inspector")).toHaveCount(0);
+      await expect(page.locator(CARD_TYPE)).toHaveCount(0);
     });
 
     test("keeps the slot being looked at when only other things change", async ({ page, topoViewerPage }) => {
       const cards = [{ slot: 1, type: "iom5-e" }, { slot: 2, type: "iom4-e" }];
       await openRaw(page, topoViewerPage, fileWith({ ...SR7, components: cards }));
-      await page.getByTestId(SLOT_2).click();
+      await page.getByTestId(TOGGLE_2).click();
 
       await topoViewerPage.writeYamlFile(
         FILE,
         fileWith({ ...SR7, components: [{ slot: "A", type: "cpm5" }, ...cards] })
       );
 
-      await expect(page.getByTestId(SLOT_A)).toContainText("cpm5");
-      await expect(page.getByTestId(SLOT_2)).toHaveAttribute("aria-pressed", "true");
+      await expect(page.locator("#slot-A-type")).toHaveValue("cpm5");
+      await expect(page.getByTestId(TOGGLE_2)).toHaveAttribute("aria-expanded", "true");
       await expect(page.locator("#slot-2-type")).toHaveValue("iom4-e");
     });
 
@@ -171,14 +170,14 @@ test.describe("SR-SIM chassis builder and the YAML", () => {
         FILE,
         fileWith({ ...SR7, components: [cpm, { slot: 1, type: "iom4-e" }, { slot: 2, type: "iom5-e" }] })
       );
-      await expect(page.getByTestId(SLOT_1)).toContainText("iom4-e");
+      await expect(page.locator(CARD_TYPE)).toHaveValue("iom4-e");
 
       // Applying the same thing twice writes nothing, so nothing echoes back
       await topoViewerPage.writeYamlFile(
         FILE,
         fileWith({ ...SR7, components: [cpm, { slot: 1, type: "iom5-e" }, { slot: 2, type: "iom4-e" }] })
       );
-      await expect(page.getByTestId(SLOT_2)).toContainText("iom4-e");
+      await expect(page.locator("#slot-2-type")).toHaveValue("iom4-e");
     });
 
     test("keeps unsaved edits, and saving them leaves other outside edits in place", async ({ page, topoViewerPage }) => {
@@ -186,7 +185,7 @@ test.describe("SR-SIM chassis builder and the YAML", () => {
       await openRaw(page, topoViewerPage, fileWith({ ...SR7, components: [cpm, { slot: 1, type: "iom5-e" }] }));
 
       await page.getByTestId(SLOT_2).click();
-      await expect(page.getByTestId(SLOT_2)).toContainText("iom5-e");
+      await expect(page.locator("#slot-2-type")).toHaveValue("iom5-e");
 
       await topoViewerPage.writeYamlFile(
         FILE,
@@ -198,7 +197,7 @@ test.describe("SR-SIM chassis builder and the YAML", () => {
       );
       // The canvas has picked the file up, and the card being added is still there
       await page.waitForTimeout(800);
-      await expect(page.getByTestId(SLOT_2)).toContainText("iom5-e");
+      await expect(page.locator("#slot-2-type")).toHaveValue("iom5-e");
 
       await page.locator(SEL_APPLY_BTN).click();
       await expect
@@ -233,8 +232,8 @@ test.describe("SR-SIM chassis builder and the YAML", () => {
       await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
       await page.locator(SEL_COMPONENTS_TAB).click();
 
-      await expect(page.getByTestId(SLOT_1)).toContainText("iom4-e");
-      await expect(page.getByTestId("chassis-slot-5")).toContainText("iom5-e");
+      await expect(page.locator(CARD_TYPE)).toHaveValue("iom4-e");
+      await expect(page.locator("#slot-5-type")).toHaveValue("iom5-e");
       await expect(page.getByTestId(SLOT_2)).toContainText("Install");
     });
 
@@ -257,8 +256,8 @@ test.describe("SR-SIM chassis builder and the YAML", () => {
 
       await page.locator('[data-testid="panel-tab-edit"]').click();
       await page.locator(SEL_COMPONENTS_TAB).click();
-      await expect(page.getByTestId(SLOT_1)).toContainText("iom4-e");
-      await expect(page.getByTestId("chassis-slot-4")).toContainText("iom5-e");
+      await expect(page.locator(CARD_TYPE)).toHaveValue("iom4-e");
+      await expect(page.locator("#slot-4-type")).toHaveValue("iom5-e");
     });
   });
 
@@ -290,9 +289,9 @@ topology:
       );
 
       await expect(page.getByTestId(NAME)).toHaveText("SR-7");
-      await expect(page.getByTestId(SLOT_A)).toContainText("cpm5");
-      await expect(page.getByTestId("chassis-slot-B")).toContainText("cpm5");
-      await expect(page.getByTestId(SLOT_2)).toContainText("iom5-e");
+      await expect(page.locator("#slot-A-type")).toHaveValue("cpm5");
+      await expect(page.locator("#slot-B-type")).toHaveValue("cpm5");
+      await expect(page.locator("#slot-2-type")).toHaveValue("iom5-e");
       await expect(page.getByTestId(STATUS)).toHaveAttribute("data-status", "ok");
     });
 
@@ -332,7 +331,7 @@ topology:
       );
 
       await expect(page.getByTestId(STATUS)).toHaveAttribute("data-status", "ok");
-      await expect(page.getByTestId(SLOT_SFM)).toContainText("sfm-s");
+      await expect(page.locator("#sfm-type")).toHaveValue("sfm-s");
       await expect(page.getByTestId(SLOT_1)).toContainText("1 XIOM · 1 MDA");
       await expect(page.locator("#slot-1-xiom-0-type")).toHaveValue("iom-s-1.5t");
       await expect(page.locator("#slot-1-xiom-0-mda-0-slot")).toHaveValue("1");
@@ -379,9 +378,9 @@ topology:
       await openRaw(page, topoViewerPage, yaml);
 
       await expect(page.getByTestId(NAME)).toHaveText("SR-7");
-      await expect(page.getByTestId(SLOT_A)).toContainText("cpm5");
-      await expect(page.getByTestId(SLOT_1)).toContainText("iom5-e");
-      await expect(page.getByTestId(SLOT_SFM)).toContainText("m-sfm5-7");
+      await expect(page.locator("#slot-A-type")).toHaveValue("cpm5");
+      await expect(page.locator(CARD_TYPE)).toHaveValue("iom5-e");
+      await expect(page.locator("#sfm-type")).toHaveValue("m-sfm5-7");
       await expect(page.getByTestId("chassis-inherited")).toContainText("kind nokia_srsim");
 
       // Nothing edited: nothing to save, and the node stays as short as it was
@@ -417,10 +416,10 @@ topology:
         )
       );
 
-      await expect(page.getByTestId(SLOT_2)).toContainText("iom4-e");
+      await expect(page.locator("#slot-2-type")).toHaveValue("iom4-e");
       await expect(page.getByTestId(SLOT_1)).toContainText("Install");
       await expect(page.getByTestId(SLOT_3)).toContainText("Install");
-      await expect(page.getByTestId(SLOT_SFM)).toContainText("m-sfm5-7");
+      await expect(page.locator("#sfm-type")).toHaveValue("m-sfm5-7");
     });
 
     test("NOKIA_SROS_CHASSIS in env is the chassis, as at deploy", async ({ page, topoViewerPage }) => {
@@ -448,7 +447,7 @@ topology:
         })
       );
       await expect(page.getByTestId(STATUS)).toHaveAttribute("data-status", "ok");
-      await expect(page.getByTestId(SLOT_1)).toContainText("CARD");
+      await expect(page.locator(CARD_TYPE)).toHaveValue(/CARD/);
     });
 
     test("flags what containerlab refuses to parse", async ({ page, topoViewerPage }) => {
@@ -504,9 +503,8 @@ topology:
     test("looking around changes nothing", async ({ page, topoViewerPage }) => {
       await openRaw(page, topoViewerPage, COMMENTED);
 
-      await page.getByTestId(SLOT_A).click();
-      await page.getByTestId(SLOT_2).click();
-      await page.getByTestId(SLOT_SFM).click();
+      await page.getByTestId(TOGGLE_2).click();
+      await page.getByTestId(TOGGLE_2).click();
 
       await expect(page.locator(SEL_APPLY_BTN)).toHaveCount(0);
       expect(await topoViewerPage.getYamlFromFile(FILE)).toBe(COMMENTED);
@@ -515,7 +513,6 @@ topology:
     test("an edit keeps what it did not touch", async ({ page, topoViewerPage }) => {
       await openRaw(page, topoViewerPage, COMMENTED);
 
-      await page.getByTestId(SLOT_2).click();
       await page.locator("#slot-2-type").fill("iom4-e");
       await page.locator(SEL_APPLY_BTN).click();
 
@@ -544,7 +541,6 @@ topology:
       );
 
       await page.getByRole("button", { name: "Remove from chassis" }).click();
-      await page.getByTestId(SLOT_SFM).click();
       await page.getByRole("button", { name: "Remove SFM" }).click();
       await page.locator(SEL_APPLY_BTN).click();
 
