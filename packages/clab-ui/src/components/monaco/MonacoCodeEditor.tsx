@@ -10,6 +10,7 @@ import Ajv from "ajv";
 
 import { useClabUiHost } from "../../host";
 import { parseLuminance } from "../../utils/color";
+import { shortcutKeys } from "../../utils/shortcuts";
 import {
   buildContainerlabSchemaCompletionItems,
   buildMonacoYamlOptions,
@@ -116,6 +117,21 @@ function triggerPaste(
     multicursorText: null,
     clipboardEvent
   });
+}
+
+interface MessageController extends monaco.editor.IEditorContribution {
+  showMessage(message: string, position: monaco.IPosition): void;
+}
+
+function showPasteBlockedMessage(editor: monaco.editor.ICodeEditor): void {
+  const position = editor.getPosition();
+  if (!position) return;
+  editor
+    .getContribution<MessageController>("editor.contrib.messageController")
+    ?.showMessage(
+      `Clipboard access is blocked. Press ${shortcutKeys("paste")} to paste.`,
+      position
+    );
 }
 
 function installPlainSpaceKeyHandler(editor: monaco.editor.IStandaloneCodeEditor): monaco.IDisposable {
@@ -962,13 +978,9 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
     }
 
     // -----------------------------------------------------------------------
-    // Paste workaround for VS Code webview sandbox.
-    //
-    // Monaco's built-in paste calls navigator.clipboard.readText() which is
-    // blocked inside VS Code webviews. VS Code intercepts Ctrl+V itself,
-    // reads the system clipboard, and dispatches a synthetic ClipboardEvent
-    // with clipboardData pre-populated. We listen for that event and insert
-    // the text programmatically so paste works reliably.
+    // Ctrl+V reaches the editor as a paste event, which carries the clipboard
+    // text without any clipboard permission. navigator.clipboard does not exist
+    // on plain HTTP pages and can be denied, so the key must not depend on it.
     // -----------------------------------------------------------------------
     const editorDomNode = editor.getDomNode();
 
@@ -986,14 +998,16 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
       editorDomNode.addEventListener("paste", handlePaste);
     }
 
-    // Override Monaco's context-menu "Paste" action so it also works in the
-    // webview sandbox. The override tries navigator.clipboard.readText()
-    // (may succeed when triggered by a user gesture like a menu click) and
-    // falls back gracefully.
+    // A menu click fires no paste event, so the context-menu "Paste" has to read
+    // the clipboard, and says so when the page is not allowed to. VS Code webviews
+    // get no paste event for Ctrl+V either, so only there the key runs this too.
     const pasteActionDisposable = editor.addAction({
       id: "editor.action.clipboardPasteAction.override",
       label: "Paste",
-      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV],
+      keybindings:
+        typeof window.acquireVsCodeApi === "function"
+          ? [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV]
+          : [],
       contextMenuGroupId: "9_cutcopypaste",
       contextMenuOrder: 3,
       run: async (ed) => {
@@ -1005,8 +1019,7 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
             triggerPaste(ed, clipText);
           }
         } catch {
-          // clipboard.readText() blocked; the DOM paste listener handles
-          // Ctrl+V via the synthetic ClipboardEvent from VS Code instead.
+          showPasteBlockedMessage(ed);
         }
       }
     });

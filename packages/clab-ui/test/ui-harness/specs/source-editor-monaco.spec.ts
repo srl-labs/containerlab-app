@@ -131,6 +131,27 @@ async function dispatchEditorPaste(page: Page, text: string): Promise<void> {
   }, text);
 }
 
+/** Puts text on the system clipboard with a real selection and key press. */
+async function copyWithKeyboard(page: Page, text: string): Promise<void> {
+  await page.evaluate((value) => {
+    const source = document.createElement("textarea");
+    source.id = "clipboard-source";
+    source.value = value;
+    document.body.appendChild(source);
+    source.focus();
+    source.select();
+  }, text);
+  await page.keyboard.press(process.platform === "darwin" ? "Meta+C" : "Control+C");
+  await page.evaluate(() => document.getElementById("clipboard-source")?.remove());
+}
+
+/** Plain HTTP pages have no navigator.clipboard. */
+async function removeClipboardApi(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    Object.defineProperty(window.navigator, "clipboard", { configurable: true, value: undefined });
+  });
+}
+
 async function selectEditorRange(
   page: Page,
   range: {
@@ -370,6 +391,99 @@ test.describe("Monaco YAML source editor", () => {
         message: "one undo should remove the complete pasted block"
       })
       .toBe(base);
+  });
+
+  test("pastes with the keyboard on a page without clipboard access", async ({
+    page,
+    topoViewerPage
+  }) => {
+    await topoViewerPage.resetFiles();
+    await topoViewerPage.gotoFile(TOPOLOGY_FILE);
+    await topoViewerPage.waitForCanvasReady();
+    await topoViewerPage.setEditMode();
+    await topoViewerPage.unlock();
+    await openYamlEditor(page);
+    await removeClipboardApi(page);
+
+    const base = "name: demo\ntopology:\n  nodes:\n";
+    const pasted = "    leaf1:\n      kind: nokia_srlinux\n      image: ghcr.io/nokia/srlinux\n";
+    await copyWithKeyboard(page, pasted);
+    await setEditorValue(page, base, 4, 1);
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+V" : "Control+V");
+
+    await expect
+      .poll(async () => editorValue(page), {
+        timeout: 5000,
+        message: "Ctrl+V should paste the clipboard once, with its indentation"
+      })
+      .toBe(base + pasted);
+
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+Z" : "Control+Z");
+    await expect
+      .poll(async () => editorValue(page), {
+        timeout: 5000,
+        message: "one undo should remove the complete pasted block"
+      })
+      .toBe(base);
+  });
+
+  test("Ctrl+V reads the clipboard in a VS Code webview, which fires no paste event", async ({
+    page,
+    topoViewerPage
+  }) => {
+    const fromClipboardApi = "from-clipboard-api\n";
+    await page.addInitScript((text) => {
+      const withVsCode = window as Window & { acquireVsCodeApi?: () => unknown };
+      withVsCode.acquireVsCodeApi = () => ({ postMessage: () => undefined });
+      Object.defineProperty(window.navigator, "clipboard", {
+        configurable: true,
+        value: { readText: async () => text, writeText: async () => undefined }
+      });
+    }, fromClipboardApi);
+    await topoViewerPage.resetFiles();
+    await topoViewerPage.gotoFile(TOPOLOGY_FILE);
+    await topoViewerPage.waitForCanvasReady();
+    await topoViewerPage.setEditMode();
+    await topoViewerPage.unlock();
+    await openYamlEditor(page);
+
+    const base = "name: demo\n";
+    await setEditorValue(page, base, 2, 1);
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+V" : "Control+V");
+
+    await expect
+      .poll(async () => editorValue(page), {
+        timeout: 5000,
+        message: "Ctrl+V should paste what the clipboard API returns"
+      })
+      .toBe(base + fromClipboardApi);
+  });
+
+  test("the Paste menu entry says when clipboard access is blocked", async ({
+    page,
+    topoViewerPage
+  }) => {
+    await topoViewerPage.resetFiles();
+    await topoViewerPage.gotoFile(TOPOLOGY_FILE);
+    await topoViewerPage.waitForCanvasReady();
+    await topoViewerPage.setEditMode();
+    await topoViewerPage.unlock();
+    await openYamlEditor(page);
+    await removeClipboardApi(page);
+
+    const base = "name: demo\n";
+    await setEditorValue(page, base, 2, 1);
+    await page.locator(".monaco-editor .view-lines").first().click({ button: "right" });
+    const pasteEntry = page.locator(".monaco-menu .action-label", { hasText: /^Paste$/ }).first();
+    await expect(pasteEntry).toBeVisible();
+    // The menu ignores a click that follows right after it opens.
+    await page.waitForTimeout(300);
+    await pasteEntry.click();
+
+    await expect(page.locator(".monaco-editor-overlaymessage")).toContainText(
+      /Clipboard access is blocked\. Press .+V to paste\./
+    );
+    expect(await editorValue(page)).toBe(base);
   });
 
   test("does not open empty suggestions for free-form YAML values", async ({
