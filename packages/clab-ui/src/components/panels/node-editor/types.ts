@@ -31,4 +31,6 @@ export interface TabProps {
   inheritance?: NodeInheritance;
   /** The lab is locked: the form only shows values */
   readOnly?: boolean;
+  /** A save was stopped for missing fields: the form marks the ones still empty */
+  showRequiredErrors?: boolean;
 }

@@ -12,6 +12,7 @@ import type { TopoNode, TopologyNodeData } from "../../core/types/graph";
 import type { CustomNodeTemplate } from "../../core/types/editors";
 import { getDefaultNodeType } from "../../core/constants/nodeTypes";
 import type { NodeBoxAppearance } from "../../core/types/topology";
+import { templateNodeBaseName } from "../../core/utilities/customNodeConversions";
 import { getUniqueId } from "../../core/utilities/idUtils";
 import { convertEditorDataToYaml } from "../../core/utilities/nodeEditorConversions";
 import { normalizeNodeBoxAppearance } from "../../core/utilities/nodeBoxAppearance";
@@ -104,11 +105,6 @@ function resolveTemplate(
     if (defaultTemplate) return defaultTemplate;
   }
   return options.customNodes[0];
-}
-
-function resolveBaseName(template: CustomNodeTemplate): string | null {
-  const baseName = (template.baseName ?? template.name).trim();
-  return baseName ? baseName : null;
 }
 
 function toNonEmptyString(value: string | undefined): string | undefined {
@@ -300,13 +296,7 @@ export function useNodeCreation(
         return;
       }
 
-      const baseName = resolveBaseName(resolvedTemplate);
-      if (baseName === null) {
-        log.warn(`[NodeCreation] Custom node template '${resolvedTemplate.name}' has no base name`);
-        return;
-      }
-
-      const nodeId = generateNodeName(baseName, getUsedIds());
+      const nodeId = generateNodeName(templateNodeBaseName(resolvedTemplate), getUsedIds());
       const nodeName = nodeId;
       const kind = getResolvedKind(resolvedTemplate);
       const nodeData = createNodeData(nodeId, nodeName, resolvedTemplate, kind);

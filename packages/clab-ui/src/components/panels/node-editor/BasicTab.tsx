@@ -29,6 +29,8 @@ import { useCustomIcons, useNodeStyle } from "../../../stores/topoViewerStore";
 import { buildCustomIconMap, getCustomIconUrl } from "../../../utils/iconUtils";
 import { DEFAULT_ICON_COLOR } from "../../canvas/types";
 
+import { missingTemplateFields } from "../../../core/utilities/customNodeConversions";
+
 import type { TabProps } from "./types";
 import { CustomNodeTemplateFields } from "./CustomNodeTemplateFields";
 import { BoxAppearanceFields } from "./BoxAppearanceFields";
@@ -106,7 +108,9 @@ interface KindFieldProps extends TabProps {
 }
 
 const KindField: React.FC<KindFieldProps> = (props) => {
-  const { data, onChange, kinds, onKindChange } = props;
+  const { data, onChange, kinds, onKindChange, showRequiredErrors = false } = props;
+  const isTemplate = data.isCustomTemplate === true;
+  const isMissingKind = showRequiredErrors && isTemplate && missingTemplateFields(data).includes("kind");
   const kindOptions = useMemo(() => kinds.map((kind) => ({ value: kind, label: kind })), [kinds]);
 
   const handleKindChange = useCallback(
@@ -126,7 +130,9 @@ const KindField: React.FC<KindFieldProps> = (props) => {
       onChange={handleKindChange}
       placeholder="Search or type kind…"
       allowFreeText={true}
-      helperText={inheritedFieldHint(props, "kind")}
+      required={isTemplate}
+      error={isMissingKind}
+      helperText={isMissingKind ? "Choose a kind to save the template" : inheritedFieldHint(props, "kind")}
     />
   );
 };
@@ -459,6 +465,7 @@ function areNodeFieldsPropsEqual(prev: TabProps, next: TabProps): boolean {
   if (
     prev.onChange !== next.onChange ||
     prev.inheritance !== next.inheritance ||
+    prev.showRequiredErrors !== next.showRequiredErrors ||
     !isSameList(prev.inheritedProps, next.inheritedProps)
   ) {
     return false;
@@ -475,7 +482,8 @@ const NodeFieldsComponent: React.FC<TabProps> = ({
   data,
   onChange,
   inheritedProps = [],
-  inheritance
+  inheritance,
+  showRequiredErrors = false
 }) => {
   const isCustomTemplate = data.isCustomTemplate === true;
   const section = data.section?.level;
@@ -512,7 +520,11 @@ const NodeFieldsComponent: React.FC<TabProps> = ({
     <>
       {isCustomTemplate && (
         <PanelSection title="Template">
-          <CustomNodeTemplateFields data={data} onChange={onChange} />
+          <CustomNodeTemplateFields
+            data={data}
+            onChange={onChange}
+            showRequiredErrors={showRequiredErrors}
+          />
         </PanelSection>
       )}
 
@@ -529,6 +541,7 @@ const NodeFieldsComponent: React.FC<TabProps> = ({
             onKindChange={handleKindChange}
             inheritedProps={inheritedProps}
             inheritance={inheritance}
+            showRequiredErrors={showRequiredErrors}
           />
         )}
 
@@ -589,7 +602,8 @@ export const BasicTab: React.FC<TabProps> = ({
   onChange,
   onPreview,
   inheritedProps,
-  inheritance
+  inheritance,
+  showRequiredErrors
 }) => {
   const isCustomTemplate = data.isCustomTemplate === true;
   // Defaults, kinds and groups have no canvas look.
@@ -604,6 +618,7 @@ export const BasicTab: React.FC<TabProps> = ({
         onChange={onChange}
         inheritedProps={inheritedProps}
         inheritance={inheritance}
+        showRequiredErrors={showRequiredErrors}
       />
 
       {isBoxed && !isSection && (

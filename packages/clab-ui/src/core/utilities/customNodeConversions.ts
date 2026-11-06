@@ -151,6 +151,35 @@ export function convertCustomTemplateToEditorData(
 }
 
 /**
+ * The fields a template is missing, in form order. Every host refuses a template without
+ * them, so it has to be stopped in the form or what was entered is lost.
+ */
+export function missingTemplateFields(
+  data: Pick<NodeEditorData, "customName" | "kind">
+): Array<"customName" | "kind"> {
+  const isBlank = (value: string | undefined): boolean => (value ?? "").trim() === "";
+  return [
+    ...(isBlank(data.customName) ? (["customName"] as const) : []),
+    ...(isBlank(data.kind) ? (["kind"] as const) : [])
+  ];
+}
+
+/**
+ * What a template's nodes are named after: its base name, or else the template name. Made
+ * valid for a topology, where a node name starts with a letter or digit and has no spaces.
+ */
+export function templateNodeBaseName(
+  template: Pick<CustomNodeTemplate, "name" | "baseName">
+): string {
+  const baseName = template.baseName?.trim() ?? "";
+  const valid = (baseName !== "" ? baseName : template.name)
+    .replace(/[^a-zA-Z0-9._|-]+/g, "-")
+    .replace(/^[^a-zA-Z0-9]+/, "")
+    .replace(/[^a-zA-Z0-9]+$/, "");
+  return valid !== "" ? valid : "node";
+}
+
+/**
  * Convert NodeEditorData back to SaveCustomNodeData format for extension.
  * Includes all configurable node properties so custom templates can have
  * default values for license, startup-config, env, binds, etc.
