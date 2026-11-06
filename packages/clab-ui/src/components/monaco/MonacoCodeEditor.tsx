@@ -4,6 +4,7 @@ import * as monaco from "monaco-editor";
 import "monaco-editor/min/vs/editor/editor.main.css";
 // @ts-ignore Monaco's bundled YAML grammar module is untyped.
 import * as yamlMonaco from "monaco-editor/esm/vs/basic-languages/yaml/yaml.js";
+import { PasteAction } from "monaco-editor/esm/vs/editor/contrib/clipboard/browser/clipboard.js";
 import { configureMonacoYaml, type MonacoYaml } from "monaco-yaml";
 import * as YAML from "yaml";
 import Ajv from "ajv";
@@ -123,15 +124,22 @@ interface MessageController extends monaco.editor.IEditorContribution {
   showMessage(message: string, position: monaco.IPosition): void;
 }
 
+/** Above Monaco's own paste, which is at 10000. */
+const PASTE_IMPLEMENTATION_PRIORITY = 20000;
+
+function isVsCodeWebview(): boolean {
+  return typeof window.acquireVsCodeApi === "function";
+}
+
 function showPasteBlockedMessage(editor: monaco.editor.ICodeEditor): void {
   const position = editor.getPosition();
   if (!position) return;
+  const message = isVsCodeWebview()
+    ? "Clipboard access is blocked."
+    : `Clipboard access is blocked. Press ${shortcutKeys("paste")} to paste.`;
   editor
     .getContribution<MessageController>("editor.contrib.messageController")
-    ?.showMessage(
-      `Clipboard access is blocked. Press ${shortcutKeys("paste")} to paste.`,
-      position
-    );
+    ?.showMessage(message, position);
 }
 
 function installPlainSpaceKeyHandler(editor: monaco.editor.IStandaloneCodeEditor): monaco.IDisposable {
@@ -998,31 +1006,48 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
       editorDomNode.addEventListener("paste", handlePaste);
     }
 
-    // A menu click fires no paste event, so the context-menu "Paste" has to read
-    // the clipboard, and says so when the page is not allowed to. VS Code webviews
-    // get no paste event for Ctrl+V either, so only there the key runs this too.
-    const pasteActionDisposable = editor.addAction({
-      id: "editor.action.clipboardPasteAction.override",
-      label: "Paste",
-      keybindings:
-        typeof window.acquireVsCodeApi === "function"
-          ? [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV]
-          : [],
-      contextMenuGroupId: "9_cutcopypaste",
-      contextMenuOrder: 3,
-      run: async (ed) => {
-        if (ed.getOption(monaco.editor.EditorOption.readOnly)) return;
-        try {
-          const clipText = await navigator.clipboard.readText();
-          if (clipText) {
-            markSeparateEdit();
-            triggerPaste(ed, clipText);
-          }
-        } catch {
-          showPasteBlockedMessage(ed);
+    // A menu click fires no paste event, so the menu's "Paste" has to read the
+    // clipboard, and says so when the page is not allowed to.
+    const pasteFromClipboard = async (): Promise<void> => {
+      if (editor.getOption(monaco.editor.EditorOption.readOnly)) return;
+      try {
+        const clipText = await navigator.clipboard.readText();
+        if (clipText) {
+          markSeparateEdit();
+          triggerPaste(editor, clipText);
         }
+      } catch {
+        showPasteBlockedMessage(editor);
       }
-    });
+    };
+
+    // Monaco adds its "Paste" entry only where it expects clipboard access, so
+    // that entry runs the code above, and other pages get an entry of their own.
+    const pasteMenuDisposable = PasteAction
+      ? PasteAction.addImplementation(
+          PASTE_IMPLEMENTATION_PRIORITY,
+          "clab-ui-paste",
+          () => editor.hasTextFocus() && pasteFromClipboard()
+        )
+      : editor.addAction({
+          id: "clab-ui.paste",
+          label: "Paste",
+          precondition: "!editorReadonly",
+          contextMenuGroupId: "9_cutcopypaste",
+          contextMenuOrder: 4,
+          run: pasteFromClipboard
+        });
+
+    // VS Code webviews get no paste event for Ctrl+V, so there the key reads the
+    // clipboard too.
+    const vsCodePasteKeyDisposable = isVsCodeWebview()
+      ? editor.onKeyDown((event) => {
+          if (!event.equals(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          void pasteFromClipboard();
+        })
+      : undefined;
 
     scheduleValidation();
 
@@ -1034,7 +1059,8 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
         window.removeEventListener(type, handleSeparateEditEvent, true);
       }
       clearTimeout(separateEditTimer);
-      pasteActionDisposable.dispose();
+      pasteMenuDisposable.dispose();
+      vsCodePasteKeyDisposable?.dispose();
       fileLinksDisposable?.dispose();
       for (const keybindingDisposable of suggestWidgetKeyDisposables) {
         keybindingDisposable.dispose();

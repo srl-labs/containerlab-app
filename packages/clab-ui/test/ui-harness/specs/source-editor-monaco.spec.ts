@@ -146,10 +146,8 @@ async function copyWithKeyboard(page: Page, text: string): Promise<void> {
 }
 
 /** Plain HTTP pages have no navigator.clipboard. */
-async function removeClipboardApi(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    Object.defineProperty(window.navigator, "clipboard", { configurable: true, value: undefined });
-  });
+function removeClipboardApiFromWindow(): void {
+  Object.defineProperty(window.navigator, "clipboard", { configurable: true, value: undefined });
 }
 
 async function selectEditorRange(
@@ -403,7 +401,7 @@ test.describe("Monaco YAML source editor", () => {
     await topoViewerPage.setEditMode();
     await topoViewerPage.unlock();
     await openYamlEditor(page);
-    await removeClipboardApi(page);
+    await page.evaluate(removeClipboardApiFromWindow);
 
     const base = "name: demo\ntopology:\n  nodes:\n";
     const pasted = "    leaf1:\n      kind: nokia_srlinux\n      image: ghcr.io/nokia/srlinux\n";
@@ -459,31 +457,61 @@ test.describe("Monaco YAML source editor", () => {
       .toBe(base + fromClipboardApi);
   });
 
-  test("the Paste menu entry says when clipboard access is blocked", async ({
+  for (const { name, missingAtLoad } of [
+    { name: "Monaco's entry", missingAtLoad: false },
+    { name: "the entry for pages Monaco has none on", missingAtLoad: true }
+  ]) {
+    test(`the menu has one Paste, and ${name} says when clipboard access is blocked`, async ({
+      page,
+      topoViewerPage
+    }) => {
+      if (missingAtLoad) await page.addInitScript(removeClipboardApiFromWindow);
+      await topoViewerPage.resetFiles();
+      await topoViewerPage.gotoFile(TOPOLOGY_FILE);
+      await topoViewerPage.waitForCanvasReady();
+      await topoViewerPage.setEditMode();
+      await topoViewerPage.unlock();
+      await openYamlEditor(page);
+      await page.evaluate(removeClipboardApiFromWindow);
+
+      const base = "name: demo\n";
+      await setEditorValue(page, base, 2, 1);
+      await page.locator(".monaco-editor .view-lines").first().click({ button: "right" });
+      const pasteEntries = page.locator(".monaco-menu .action-label", { hasText: /^Paste$/ });
+      await expect(pasteEntries).toHaveCount(1);
+      // The menu ignores a click that follows right after it opens.
+      await page.waitForTimeout(300);
+      await pasteEntries.click();
+
+      await expect(page.locator(".monaco-editor-overlaymessage")).toContainText(
+        /Clipboard access is blocked\. Press .+V to paste\./
+      );
+      expect(await editorValue(page)).toBe(base);
+    });
+  }
+
+  test("the blocked message in a VS Code webview does not suggest the key", async ({
     page,
     topoViewerPage
   }) => {
+    await page.addInitScript(() => {
+      const withVsCode = window as Window & { acquireVsCodeApi?: () => unknown };
+      withVsCode.acquireVsCodeApi = () => ({ postMessage: () => undefined });
+    });
     await topoViewerPage.resetFiles();
     await topoViewerPage.gotoFile(TOPOLOGY_FILE);
     await topoViewerPage.waitForCanvasReady();
     await topoViewerPage.setEditMode();
     await topoViewerPage.unlock();
     await openYamlEditor(page);
-    await removeClipboardApi(page);
+    await page.evaluate(removeClipboardApiFromWindow);
 
-    const base = "name: demo\n";
-    await setEditorValue(page, base, 2, 1);
-    await page.locator(".monaco-editor .view-lines").first().click({ button: "right" });
-    const pasteEntry = page.locator(".monaco-menu .action-label", { hasText: /^Paste$/ }).first();
-    await expect(pasteEntry).toBeVisible();
-    // The menu ignores a click that follows right after it opens.
-    await page.waitForTimeout(300);
-    await pasteEntry.click();
+    await setEditorValue(page, "name: demo\n", 2, 1);
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+V" : "Control+V");
 
-    await expect(page.locator(".monaco-editor-overlaymessage")).toContainText(
-      /Clipboard access is blocked\. Press .+V to paste\./
-    );
-    expect(await editorValue(page)).toBe(base);
+    const message = page.locator(".monaco-editor-overlaymessage");
+    await expect(message).toContainText("Clipboard access is blocked.");
+    await expect(message).not.toContainText("to paste");
   });
 
   test("does not open empty suggestions for free-form YAML values", async ({
