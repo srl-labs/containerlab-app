@@ -5,6 +5,9 @@
  * they are advisory there too, so a type the catalog does not list stays usable. MDAs under
  * a XIOM are not checked against the chassis, because the catalog does not say which MDA
  * types a XIOM accepts.
+ *
+ * The catalog has no slot counts for XIOMs and XCMs either, so those limits are kept by hand
+ * below. Containerlab does not check them; they are advisory here like everything else.
  */
 import type { SrosComponent, SrosMda, SrosXiom } from "../types/editors";
 import { isRecord } from "../utilities/typeHelpers";
@@ -30,6 +33,8 @@ export interface SrsimChassis {
   fixedMdas: Readonly<Partial<Record<number, string>>>;
   /** Cards of this chassis take no separate MDA */
   noSeparateMda: boolean;
+  /** Slots a card of this chassis has for an MDA or a XIOM; undefined when no limit is known */
+  xcmModuleSlots?: number;
 }
 
 /** Id of the SFM tile: the SFM is a node-level key, not a component in a slot */
@@ -41,6 +46,17 @@ export const SRSIM_CHASSIS_ENV = "NOKIA_SROS_CHASSIS";
 const HARDWARE_ENV_KEY = /^NOKIA_SROS_(CHASSIS|CARD|SFM|MDA_\S+|XIOM_\S+)$/;
 
 const CPM_SLOTS = new Set(["A", "B"]);
+
+// From the SR OS interface configuration guide:
+// https://documentation.nokia.com/sr/26-10/7750-sr/books/interface-configuration/configuration-overview.html
+export const XIOM_MDA_SLOTS = 2;
+export const XIOM_MDA_NOTE = `An XIOM has ${XIOM_MDA_SLOTS} MDA slots`;
+/** `mda N` and `xiom xN` on one of these cards are the same physical slot N */
+const XCM_MODULE_SLOTS = new Map([
+  ["SR-2s", 1],
+  ["SR-7s", 1],
+  ["SR-14s", 2]
+]);
 
 /** Containerlab expands ${VAR} before it reads the file, so such a value is unknown here */
 function isVariable(value: string): boolean {
@@ -90,7 +106,8 @@ export function findSrsimChassis(type: string | undefined): SrsimChassis | undef
     sfm: entry.sfm ?? [],
     fixedHardware: entry.fixed_hw_cfg,
     fixedMdas: toFixedMdas(entry.fixed_mdas),
-    noSeparateMda: rawMda.includes(null)
+    noSeparateMda: rawMda.includes(null),
+    xcmModuleSlots: XCM_MODULE_SLOTS.get(name)
   };
 }
 
@@ -248,8 +265,18 @@ function isUnlisted(type: string | undefined, listed: string[]): boolean {
   return isSet(type) && !isVariable(type) && listed.length > 0 && !listed.includes(type);
 }
 
-/** What containerlab refuses when it reads a list of MDAs or XIOMs, by position in the list */
-function slotListProblems(entries: Array<{ slot?: number }>, noun: string): Map<number, string> {
+/** The hardware's limit on a list of MDAs or XIOMs */
+interface SlotLimit {
+  highest: number;
+  message: string;
+}
+
+/** What containerlab refuses in a list of MDAs or XIOMs, and what the hardware has no slot for */
+function slotListProblems(
+  entries: Array<{ slot?: number }>,
+  noun: string,
+  limit?: SlotLimit
+): Map<number, string> {
   const problems = new Map<number, string>();
   const seen = new Set<number>();
   entries.forEach(({ slot }, index) => {
@@ -257,10 +284,44 @@ function slotListProblems(entries: Array<{ slot?: number }>, noun: string): Map<
       problems.set(index, `${noun} needs a slot number`);
     } else if (seen.has(slot)) {
       problems.set(index, `${noun} slot ${slot} is used twice, which containerlab refuses to deploy`);
+    } else if (limit !== undefined && slot > limit.highest) {
+      problems.set(index, limit.message);
     }
     if (slot !== undefined) seen.add(slot);
   });
   return problems;
+}
+
+/** What a card of this chassis has room for, in words */
+export function xcmSlotsNote(chassis: SrsimChassis | undefined): string | undefined {
+  const count = chassis?.xcmModuleSlots;
+  if (count === undefined) return undefined;
+  const room = count === 1 ? "1 slot, for" : `${count} slots, each for`;
+  return `An XCM on ${chassis?.name} has ${room} an MDA or an XIOM`;
+}
+
+/** What is wrong among a card's own MDAs and XIOMs, each by position in its list */
+function moduleProblems(
+  chassis: SrsimChassis | undefined,
+  component: SrosComponent
+): { mda: Map<number, string>; xiom: Map<number, string> } {
+  const mdas = component.mda ?? [];
+  const xioms = component.xiom ?? [];
+  const count = chassis?.xcmModuleSlots;
+  if (count === undefined || slotRole(componentSlotName(component)) !== "card") {
+    return { mda: slotListProblems(mdas, "MDA"), xiom: slotListProblems(xioms, "XIOM") };
+  }
+  const limit = { highest: count, message: xcmSlotsNote(chassis) ?? "" };
+  const mda = slotListProblems(mdas, "MDA", limit);
+  const xiom = slotListProblems(xioms, "XIOM", limit);
+  // Flagged on the MDA: fixing it then keeps the XIOM, and whatever sits on that
+  const xiomSlots = new Set(xioms.map(({ slot }) => slot));
+  mdas.forEach(({ slot }, index) => {
+    if (slot !== undefined && xiomSlots.has(slot) && !mda.has(index)) {
+      mda.set(index, `XCM slot ${slot} holds either an MDA or an XIOM, not both`);
+    }
+  });
+  return { mda, xiom };
 }
 
 function slotIssue(chassis: SrsimChassis, name: string): string | undefined {
@@ -327,23 +388,25 @@ function componentIssues(
 
   // Containerlab does not check MDAs configured on a distributed CPM
   const checkMdas = chassis?.integrated === true || slotRole(slotName) === "card";
-  const mdaProblems = slotListProblems(component.mda ?? [], "MDA");
+  const problems = moduleProblems(chassis, component);
   (component.mda ?? []).forEach((mda, mdaIndex) => {
     const target = { kind: "mda", component: index, mda: mdaIndex } as const;
     const missing = isSet(mda.type) ? undefined : `MDA ${mda.slot ?? ""} needs a type`;
     const fit = chassis && checkMdas ? mdaIssue(chassis, mda) : undefined;
-    add(target, mdaProblems.get(mdaIndex) ?? fit ?? missing);
+    add(target, problems.mda.get(mdaIndex) ?? fit ?? missing);
   });
 
-  const xiomProblems = slotListProblems(component.xiom ?? [], "XIOM");
   (component.xiom ?? []).forEach((xiom, xiomIndex) => {
     const target = { kind: "xiom", component: index, xiom: xiomIndex } as const;
     const name = `x${xiom.slot ?? ""}`;
     const missing = isSet(xiom.type) ? undefined : `XIOM ${name} needs a type`;
     const fit = chassis ? xiomIssue(chassis, xiom) : undefined;
-    add(target, xiomProblems.get(xiomIndex) ?? fit ?? missing);
+    add(target, problems.xiom.get(xiomIndex) ?? fit ?? missing);
 
-    const nestedProblems = slotListProblems(xiom.mda ?? [], `MDA under ${name}:`);
+    const nestedProblems = slotListProblems(xiom.mda ?? [], `MDA under ${name}:`, {
+      highest: XIOM_MDA_SLOTS,
+      message: XIOM_MDA_NOTE
+    });
     (xiom.mda ?? []).forEach((mda, mdaIndex) => {
       const mdaTarget = { kind: "mda", component: index, xiom: xiomIndex, mda: mdaIndex } as const;
       const missingType = isSet(mda.type) ? undefined : `MDA ${name}/${mda.slot ?? ""} needs a type`;
@@ -429,19 +492,18 @@ function fitComponent(
   const next: SrosComponent = { ...component };
   if (isFlagged({ kind: "type", component: index })) next.type = fitType(chassis, component, name);
 
+  const problems = moduleProblems(chassis, component);
   if (component.mda) {
-    const problems = slotListProblems(component.mda, "MDA");
     next.mda = component.mda.flatMap((mda, mdaIndex) => {
       if (!isFlagged({ kind: "mda", component: index, mda: mdaIndex })) return [mda];
       const isFixedSlot = mda.slot !== undefined && chassis.fixedMdas[mda.slot] !== undefined;
       const replacement = chassis.mda.at(0);
-      return problems.has(mdaIndex) || isFixedSlot || replacement === undefined
+      return problems.mda.has(mdaIndex) || isFixedSlot || replacement === undefined
         ? []
         : [{ ...mda, type: replacement }];
     });
   }
   if (component.xiom) {
-    const problems = slotListProblems(component.xiom, "XIOM");
     next.xiom = component.xiom.flatMap((xiom, xiomIndex) => {
       const fitted: SrosXiom = {
         ...xiom,
@@ -451,7 +513,7 @@ function fitComponent(
       };
       if (!isFlagged({ kind: "xiom", component: index, xiom: xiomIndex })) return [fitted];
       const replacement = chassis.xiom.at(0);
-      return problems.has(xiomIndex) || replacement === undefined
+      return problems.xiom.has(xiomIndex) || replacement === undefined
         ? []
         : [{ ...fitted, type: replacement }];
     });
@@ -589,15 +651,31 @@ export function moveCard(
     : insertComponent(placed, { ...components[occupant], slot: moved.slot });
 }
 
-/** The lowest unused MDA slot, leaving out slots whose MDA cannot be changed */
+function lowestFreeSlot(taken: Array<number | undefined>): number {
+  const used = new Set(taken);
+  let slot = 1;
+  while (used.has(slot)) slot += 1;
+  return slot;
+}
+
+/**
+ * The lowest unused MDA slot, leaving out slots whose MDA cannot be changed
+ * and slots the XIOMs of an XCM hold.
+ */
 export function nextMdaSlot(
   mdas: SrosMda[],
-  fixedMdas: Readonly<Partial<Record<number, string>>> = {}
+  fixedMdas: Readonly<Partial<Record<number, string>>> = {},
+  xcmXioms: SrosXiom[] = []
 ): number {
-  const used = new Set(mdas.map((mda) => mda.slot));
-  let slot = 1;
-  while (used.has(slot) || fixedMdas[slot] !== undefined) slot += 1;
-  return slot;
+  return lowestFreeSlot([
+    ...[...mdas, ...xcmXioms].map(({ slot }) => slot),
+    ...Object.keys(fixedMdas).map(Number)
+  ]);
+}
+
+/** The lowest unused XIOM slot, leaving out slots the MDAs of an XCM hold */
+export function nextXiomSlot(xioms: SrosXiom[], xcmMdas: SrosMda[] = []): number {
+  return lowestFreeSlot([...xioms, ...xcmMdas].map(({ slot }) => slot));
 }
 
 /** Card slots a card could move to: all open ones, or a sensible range without a catalog entry */

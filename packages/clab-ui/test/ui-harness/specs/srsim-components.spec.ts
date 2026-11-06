@@ -260,6 +260,58 @@ test.describe("SR-SIM chassis builder", () => {
     await expect(page.getByTestId("chassis-toggle-A")).toHaveCount(0);
   });
 
+  test("holds XCMs and XIOMs to the slots they have", async ({ page, topoViewerPage }) => {
+    await openComponents(page, topoViewerPage, {
+      kind: KIND_SRSIM,
+      type: "sr-7s",
+      image: IMAGE,
+      sfm: "sfm-s",
+      components: [{ slot: "A", type: "cpm2-s" }, { slot: 1, type: "xcm-7s" }]
+    });
+    const card = page.getByTestId(SLOT_1);
+    const addXiom = card.getByRole("button", { name: "Add XIOM" });
+    await expect(card).toContainText("An XCM on SR-7s has 1 slot, for an MDA or an XIOM.");
+
+    // The XCM's one slot goes to the XIOM, which leaves no room for a second module
+    await addXiom.click();
+    await expect(addXiom).toBeDisabled();
+    await expect(addXiom.locator("xpath=..")).toHaveAttribute(
+      "title",
+      "An XCM on SR-7s has 1 slot, for an MDA or an XIOM"
+    );
+    await expect(card.getByRole("button", { name: "Add MDA" }).first()).toBeDisabled();
+
+    const xiom = page.getByTestId("xiom-1");
+    const addMda = xiom.getByRole("button", { name: "Add MDA" });
+    await addMda.click();
+    await addMda.click();
+    await expect(addMda).toBeDisabled();
+    await page.locator("#slot-1-xiom-0-mda-0-type").fill("ms2-400gb-qsfpdd+2-100gb-qsfp28");
+    await page.locator("#slot-1-xiom-0-mda-1-type").fill("ms2-400gb-qsfpdd+2-100gb-qsfp28");
+    await expect(page.getByTestId("chassis-status")).toHaveAttribute("data-status", "ok");
+
+    // The limits only advise: a file can say otherwise, and Fit to brings it back in line
+    await card.getByRole("button", { name: "Remove XIOM x1" }).click();
+    await expect(addXiom).toBeEnabled();
+    await openComponents(page, topoViewerPage, {
+      kind: KIND_SRSIM,
+      type: "sr-7s",
+      image: IMAGE,
+      sfm: "sfm-s",
+      components: [
+        { slot: "A", type: "cpm2-s" },
+        { slot: 1, type: "xcm-7s", xiom: [{ slot: 1, type: "iom-s-3.0t" }, { slot: 2, type: "iom-s-3.0t" }] }
+      ]
+    });
+    await expect(page.getByTestId("chassis-status")).toContainText(
+      "Slot 1: An XCM on SR-7s has 1 slot, for an MDA or an XIOM"
+    );
+    await page.getByTestId("chassis-fit").click();
+    await expect(page.getByTestId("chassis-status")).toHaveAttribute("data-status", "ok");
+    await expect(page.getByTestId("xiom-2")).toHaveCount(0);
+    await expect(page.getByTestId("xiom-1")).toBeVisible();
+  });
+
   test("flags what does not fit a new chassis and fixes it in one go", async ({ page, topoViewerPage }) => {
     await openComponents(page, topoViewerPage, {
       kind: KIND_SRSIM,
