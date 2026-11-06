@@ -1,7 +1,7 @@
 /**
- * Packet capture on a c9s lab host through the containerlab CLI:
- * `containerlab -r c9s capture … -w -` writes one pcapng stream to stdout,
- * and `capture --list -f json` names the lab-link interfaces.
+ * Packet capture through the containerlab CLI, on every runtime:
+ * `containerlab -r <runtime> capture … -w -` writes one pcapng stream to
+ * stdout, and `capture --list -f json` names the lab-link interfaces.
  */
 import { spawn, type ChildProcessByStdio } from "node:child_process";
 import readline from "node:readline";
@@ -18,9 +18,10 @@ import {
 import type { CaptureGap, CaptureInterface } from "../contract/dto.ts";
 import { LabBackendError } from "../contract/errors.ts";
 import type { ResolvedLocalOptions } from "./options.ts";
-import { containerlabCommand, lastContainerlabError, runChecked, stripAnsi } from "./process.ts";
+import { containerlabCommand, lastContainerlabError, runChecked, runCommand, stripAnsi } from "./process.ts";
 
-export interface C9sCaptureRequest {
+export interface LocalCaptureRequest {
+  runtime: string;
   labName: string;
   targets: CaptureNodeTarget[];
   duration?: string;
@@ -28,12 +29,12 @@ export interface C9sCaptureRequest {
   snapLength?: number;
 }
 
-/** The arguments of `containerlab -r c9s capture` that write the request's pcapng to stdout. */
-export function c9sCaptureArgs(request: C9sCaptureRequest): string[] {
+/** The arguments of `containerlab capture` that write the request's pcapng to stdout. */
+export function captureCommandArgs(request: LocalCaptureRequest): string[] {
   const limits = captureLimits(request);
   return [
     "-r",
-    "c9s",
+    request.runtime,
     "capture",
     "--name",
     request.labName,
@@ -46,13 +47,34 @@ export function c9sCaptureArgs(request: C9sCaptureRequest): string[] {
   ];
 }
 
-/** `containerlab -r c9s capture --name <lab> --list -f json`. */
-export async function listC9sCaptureInterfaces(
-  options: Pick<ResolvedLocalOptions, "binaryPath" | "sudo">,
+/** Whether this machine's containerlab has the `capture` command; older ones do not. */
+export async function containerlabHasCapture(
+  options: Pick<ResolvedLocalOptions, "binaryPath" | "sudo" | "env">
+): Promise<boolean> {
+  const [file, args] = containerlabCommand(options, ["capture", "--help"]);
+  try {
+    return (await runCommand(file, args, { env: options.env, timeoutMs: 15_000 })).code === 0;
+  } catch {
+    return false;
+  }
+}
+
+/** `containerlab -r <runtime> capture --name <lab> --list -f json`. */
+export async function listCaptureInterfaces(
+  options: Pick<ResolvedLocalOptions, "binaryPath" | "sudo" | "runtime">,
   labName: string,
   env: NodeJS.ProcessEnv
 ): Promise<CaptureInterface[]> {
-  const [file, args] = containerlabCommand(options, ["-r", "c9s", "capture", "--name", labName, "--list", "-f", "json"]);
+  const [file, args] = containerlabCommand(options, [
+    "-r",
+    options.runtime,
+    "capture",
+    "--name",
+    labName,
+    "--list",
+    "-f",
+    "json"
+  ]);
   const result = await runChecked(file, args, { env, timeoutMs: 60_000 });
   const start = result.stdout.indexOf("[");
   if (start < 0) return [];
@@ -80,10 +102,14 @@ type CaptureChild = ChildProcessByStdio<null, Readable, Readable>;
  * Ends the capture: SIGINT lets containerlab finish the file and stop the
  * clabwire processes in the pods. A process that is still there after the
  * grace time gets SIGTERM (containerlab aborts on a second signal), then SIGKILL.
+ * A process this user may not signal (under sudo) ends when its pipe closes.
  */
 function stopCapture(child: CaptureChild, graceMs: number): void {
   if (child.exitCode !== null || child.signalCode !== null) return;
-  child.kill("SIGINT");
+  if (!child.kill("SIGINT")) {
+    child.stdout.destroy();
+    return;
+  }
   const escalate = (signal: NodeJS.Signals, next?: () => void) =>
     setTimeout(() => {
       if (child.exitCode !== null || child.signalCode !== null) return;
@@ -123,7 +149,7 @@ function failure(stderr: string[], code: number | null): LabBackendError {
  * is consumed. Aborting `signal`, or leaving the iteration early, stops the
  * command with SIGINT; the stream then ends with containerlab's last block.
  */
-export function spawnC9sCapture(
+export function spawnCapture(
   options: Pick<ResolvedLocalOptions, "binaryPath" | "sudo">,
   args: string[],
   processOptions: CaptureProcessOptions
@@ -185,7 +211,7 @@ export function spawnC9sCapture(
         complete = true;
       } finally {
         if (!complete) {
-          // The consumer left early, e.g. Wireshark closed: end the capture in the pods too.
+          // The consumer left early, e.g. Wireshark closed: end the capture too.
           stop();
           // Keep reading, so containerlab finishes its file instead of writing into a closed pipe.
           void drain(source);

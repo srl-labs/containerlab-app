@@ -270,7 +270,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
 
     const runningLabName = item?.labName ?? actionTopologyRef?.labName;
 
-    /** On a lab host with capture streams (c9s), the stream dialog with these interfaces ticked. */
+    /** On a lab host with capture streams, the stream dialog with these interfaces ticked. */
     const openStreamCapture = async (targets: CaptureTargets, title: string): Promise<boolean> => {
       if (!actionTopologyRef) return false;
       return openStreamCaptureDialog({
@@ -285,7 +285,13 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
     ): Promise<void> => {
       // Known from the explorer's lab host; Docker hosts open Wireshark right away, within the click.
       const streamTargets = requests.flatMap((request) => request.targets);
-      if (hostCapturesStreams(actionEndpointId) && streamTargets.length > 0) {
+      if (
+        streamTargets.length > 0 &&
+        hostCapturesStreams(
+          actionEndpointId,
+          streamTargets.map((target) => target.interfaceName)
+        )
+      ) {
         await openStreamCapture(streamTargets, `Capture: ${targetLabel}`);
         return;
       }

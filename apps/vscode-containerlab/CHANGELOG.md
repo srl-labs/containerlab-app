@@ -2,6 +2,7 @@
 
 ## [0.26.4] - Unreleased
 
+- Packet capture on Docker and Podman no longer needs **Edgeshark**: lab links open in Wireshark on this computer or Wireshark VNC, or save as a `.pcapng`, with containerlab 0.83.0 or newer, or a current clab-api-server. Edgeshark stays available as a capture method, and for interfaces that are no lab links, such as `eth0`.
 - **Open Fabric View** on a running lab shows what is wrong with its SR Linux fabric and what changed: topology health, incidents, a history that can go back in time, lenses and every report. It runs `fcling` next to the lab and keeps its history until the lab is destroyed.
 - The Fabric view can use another gNMI port for a lab, from its menu, for nodes that do not listen on 57400, such as ones EDA manages. Reports from the **Run fcling** entries use it too.
 - The **Components** tab of SR-SIM nodes is now a chassis builder: it draws the chassis with its real slots and offers only the CPMs, cards, SFMs, XIOMs, and MDAs that chassis takes, using the hardware list SR-SIM ships in its images. Fixed hardware and fixed MDAs are shown as such, **Add starter hardware** sets up a first build, cards can be copied and dragged between slots, and what doesn't fit a chassis is marked on its slot with **Fit to** to fix it in one go.

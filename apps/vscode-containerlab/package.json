@@ -1404,9 +1404,9 @@
               "Edgeshark"
             ],
             "enumDescriptions": [
-              "Wireshark on this computer when it is found and the lab host streams captures (Kubernetes), else Wireshark VNC, else Edgeshark or saving a .pcapng.",
-              "Wireshark installed here. Kubernetes (c9s) lab hosts stream the capture into it; Docker and Podman lab hosts open it through Edgeshark's packetflix link.",
-              "Wireshark in a VS Code tab, in a container on the lab host (or on this computer's Docker for a cluster used from here).",
+              "Wireshark on this computer when it is found and the lab host streams captures, else Wireshark VNC, else saving a .pcapng. Without capture streams (containerlab before 0.83.0, or an older clab-api-server): Wireshark VNC or Edgeshark.",
+              "Wireshark installed here, reading the lab host's capture stream. Without capture streams, or without Wireshark on this machine, Docker and Podman lab hosts open it through Edgeshark's packetflix link.",
+              "Wireshark in a VS Code tab, in a container on the lab host (or on this computer's Docker for a lab host used from here).",
               "A packetflix link that Wireshark on this computer opens through Edgeshark. Docker and Podman lab hosts only."
             ],
             "markdownDescription": "**This computer**: where a capture opens. Kubernetes lab hosts and API Servers have their own, in Settings → their lab host page. When the lab host lacks the method you pick, the capture opens the automatic way and says why."

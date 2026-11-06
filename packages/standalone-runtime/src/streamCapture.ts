@@ -1,5 +1,5 @@
 /**
- * Captures on lab hosts that capture lab links as one stream (c9s): the
+ * Captures on lab hosts that capture lab links as one stream: the
  * picker lists the lab-link interfaces, and the capture goes where the user
  * chose: Wireshark on this machine (desktop), Wireshark in a window (VNC on
  * a clab-api-server, or for a cluster used from this machine a VNC container
@@ -8,6 +8,7 @@
 import type { CaptureTarget } from "@srl-labs/containerlab-lab-backend";
 import {
   CAPTURE_DURATIONS,
+  captureUsesStream,
   linkCaptureKey,
   parseLabCaptureInterfaces
 } from "@containerlab/clab-ui/host";
@@ -95,10 +96,21 @@ function runStreamCapture(
   }
 }
 
-/** Whether a lab host captures lab links as one stream, as far as it already answered. */
-export function hostCapturesStreams(endpointId: string | undefined): boolean {
+/**
+ * Whether a capture of these interfaces goes through the lab host's stream,
+ * as far as it already answered; else through Wireshark VNC or Edgeshark.
+ */
+export function hostCapturesStreams(
+  endpointId: string | undefined,
+  interfaceNames?: readonly string[]
+): boolean {
   if (endpointId === undefined) return false;
-  return useLabHostStore.getState().hosts.get(endpointId)?.support.captureStream === true;
+  return captureUsesStream({
+    method: loadCapturePreferences(endpointId).preferredAction,
+    support: useLabHostStore.getState().hosts.get(endpointId)?.support,
+    localWireshark: useAuthStore.getState().localWireshark,
+    ...(interfaceNames ? { interfaceNames } : {})
+  });
 }
 
 /**
@@ -152,11 +164,21 @@ export interface StreamCaptureDialogRequest {
 export async function openStreamCaptureDialog(request: StreamCaptureDialogRequest): Promise<boolean> {
   const endpointId = request.target.endpointId;
   const info = endpointId !== undefined ? await loadLabHostInfo(endpointId) : undefined;
-  if (info?.support.captureStream !== true) return false;
+  const preferred = loadCapturePreferences(endpointId).preferredAction;
+  if (
+    !captureUsesStream({
+      method: preferred,
+      support: info?.support,
+      localWireshark: useAuthStore.getState().localWireshark
+    }) ||
+    !info
+  ) {
+    return false;
+  }
   const { deliveries, notice } = streamCaptureDeliveries(
     info,
     { localWireshark: useAuthStore.getState().localWireshark },
-    loadCapturePreferences(endpointId).preferredAction
+    preferred
   );
   runtimeUiActions.openCapture({
     ...request.target,

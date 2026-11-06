@@ -342,6 +342,34 @@ const SRSIM_RUNTIME = [
   ])
 ];
 
+test.describe("Capture on a Docker lab host with capture streams", () => {
+  test.beforeEach(async ({ page, topoViewerPage }) => {
+    await page.addInitScript(() => {
+      (window as { __CLAB_UI_HARNESS_LAB_HOST__?: unknown }).__CLAB_UI_HARNESS_LAB_HOST__ = "docker-stream";
+    });
+    await topoViewerPage.resetFiles();
+    await topoViewerPage.gotoFile(SPINE_LEAF_FILE);
+    await topoViewerPage.waitForCanvasReady();
+    await topoViewerPage.fit();
+    await deployLab(page);
+  });
+
+  test("still offers the management interface, which Edgeshark captures", async ({ page }) => {
+    await openCapturePanel(page, "leaf1");
+    await expect(row(page, "eth0")).toBeVisible();
+    await expect(row(page, "e1-1")).toBeVisible();
+  });
+
+  test("both ends of a link can open in one Wireshark", async ({ page }) => {
+    await openLinkMenu(page, "leaf1", "spine1");
+    await page.locator('[data-testid="context-menu-item-capture-link"]').hover();
+
+    await expect(page.locator(SEL_PANEL)).toContainText("spine1 ↔ leaf1");
+    await expect(page.locator(SEL_MODE)).toBeVisible();
+    await expect(page.locator(SEL_SUBMIT)).toHaveText("Capture both ends");
+  });
+});
+
 test.describe("Capture submenu of a distributed SR-SIM node", () => {
   test.beforeEach(async ({ page, topoViewerPage }) => {
     await topoViewerPage.resetFiles();

@@ -1001,8 +1001,13 @@ function openCanvasCaptures(requests: WiresharkCaptureRequest[]): void {
     return;
   }
 
-  // A c9s lab host captures the picked link ends as one stream; its dialog asks where it goes.
-  if (hostCapturesStreams(target.endpointId)) {
+  // A lab host with capture streams takes the picked link ends as one; its dialog asks where it goes.
+  if (
+    hostCapturesStreams(
+      target.endpointId,
+      captures.flatMap((capture) => capture.targets.map((entry) => entry.interfaceName)),
+    )
+  ) {
     void openStreamCaptureDialog({
       target,
       ...streamCaptureSelection(

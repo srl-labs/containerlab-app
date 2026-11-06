@@ -6,6 +6,9 @@
 /** The first containerlab release with the c9s inspect fields, `logs` and namespaced events. */
 export const C9S_MIN_CONTAINERLAB_VERSION = "0.83.0";
 
+/** The first containerlab release with `capture` on Docker and Podman; older ones capture through Edgeshark. */
+export const CAPTURE_MIN_CONTAINERLAB_VERSION = "0.83.0";
+
 /** The first clabernetes release with the client capture interface and node run state. */
 export const C9S_MIN_CLABERNETES_VERSION = "0.11.0";
 

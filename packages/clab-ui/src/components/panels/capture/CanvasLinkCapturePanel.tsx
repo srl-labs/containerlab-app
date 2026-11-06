@@ -3,7 +3,7 @@ import React from "react";
 
 import { useClabUiHost } from "../../../host";
 import { useGraphStore } from "../../../stores/graphStore";
-import { hostCapturesLinks, useLabHostStore } from "../../../stores/labHostStore";
+import { hostCapturesOneStream, useLabHostStore } from "../../../stores/labHostStore";
 
 import { CaptureMenuPanel } from "./CaptureMenuPanel";
 import type { CaptureRequestGroup } from "./captureInterfaceOptions";
@@ -28,8 +28,8 @@ export const CanvasLinkCapturePanel: React.FC<CanvasLinkCapturePanelProps> = ({
 }) => {
   const { topoViewer } = useClabUiHost();
   const nodes = useGraphStore((state) => state.nodes);
-  // A host that captures lab links as one stream (c9s) takes both ends in one capture.
-  const oneStream = useLabHostStore((state) => hostCapturesLinks(state.info));
+  // A host that captures lab links as one stream takes both ends in one capture.
+  const oneStream = useLabHostStore((state) => hostCapturesOneStream(state.info));
   const shareNamespace = React.useMemo(
     () => oneStream || linkEndsShareNamespace(ends, nodes),
     [ends, nodes, oneStream]

@@ -1,9 +1,10 @@
 /**
- * Capture on lab hosts that capture lab links as one pcapng stream: a
- * Kubernetes cluster (c9s) on this machine, or a c9s clab-api-server.
+ * Capture on lab hosts that capture lab links as one pcapng stream, which
+ * needs no Edgeshark: this machine with a current containerlab, or a current
+ * clab-api-server, with every runtime.
  *
- * - Cluster on this machine: an integrated terminal runs
- *   `containerlab -r c9s capture … -w - | wireshark -k -i -` (the default
+ * - This machine: an integrated terminal runs
+ *   `containerlab -r <runtime> capture … -w - | wireshark -k -i -` (the default
  *   when Wireshark is found here, also a Windows Wireshark under WSL), or
  *   Wireshark VNC in a webview, whose container runs on this machine's Docker
  *   and reads the capture from here (the default without a Wireshark), or the
@@ -31,11 +32,15 @@ import {
   type LocalLabBackend
 } from "@srl-labs/containerlab-lab-backend/local";
 
-import { captureRoutePlan, parseCaptureMethod } from "@containerlab/clab-ui/host";
+import {
+  captureRoutePlan,
+  captureUsesStream,
+  parseCaptureMethod
+} from "@containerlab/clab-ui/host";
 
 import { outputChannel } from "../globals";
 import { backendFor, captureMethodSetting, connectionOf } from "../backend/labBackends";
-import { isClusterConnection, type LabConnection } from "../backend/connections";
+import type { LabConnection } from "../backend/connections";
 import { labHostInfo } from "../backend/labHostSupport";
 
 export type StreamCaptureDelivery = "terminal" | "wireshark" | "vnc" | "save";
@@ -95,7 +100,7 @@ export function streamCaptureDeliveries(
   preferred: string | undefined,
   localWireshark = true
 ): StreamCaptureDeliveries {
-  // On a cluster here, a terminal pipes containerlab capture into Wireshark; else the app does.
+  // On this machine, a terminal pipes containerlab capture into Wireshark; else the app does.
   const wireshark: StreamCaptureDelivery = onThisMachine ? "terminal" : "wireshark";
   const vncUnavailable = info.profile?.wiresharkVncUnavailable;
   const plan = captureRoutePlan(parseCaptureMethod(preferred), {
@@ -130,14 +135,25 @@ function showFallbackNotice(notice: string | undefined, hostId: string): void {
   });
 }
 
-/** Whether the node's lab host captures lab links as one stream; undefined when it cannot be asked. */
+/**
+ * The node's lab host when a capture of these interfaces goes through its
+ * stream; undefined when it goes through Wireshark VNC or Edgeshark, or the
+ * lab host cannot be asked.
+ */
 export async function streamCaptureHost(
-  node: unknown
+  node: unknown,
+  interfaceNames?: readonly string[]
 ): Promise<{ connection: LabConnection; info: LabHostInfo } | undefined> {
   const connection = connectionOf(node);
-  if (connection.kind !== "api" && !isClusterConnection(connection)) return undefined;
   const info = await labHostInfo(connection);
-  return info?.support.captureStream === true ? { connection, info } : undefined;
+  if (!info) return undefined;
+  const usesStream = captureUsesStream({
+    method: parseCaptureMethod(captureMethodSetting(connection)),
+    support: info.support,
+    localWireshark: (await findLocalWireshark()) !== undefined,
+    ...(interfaceNames ? { interfaceNames } : {})
+  });
+  return usesStream ? { connection, info } : undefined;
 }
 
 /** The running lab of a container name or topology node, and the node's topology name. */
@@ -191,7 +207,7 @@ async function pickInterfaces(
   );
   if (interfaces.length === 0) {
     void vscode.window.showWarningMessage(
-      `${node} has no lab links to capture. On Kubernetes only interfaces of links between nodes can be captured.`
+      `${node} has no lab links to capture. Capture streams only cover interfaces of links between nodes.`
     );
     return undefined;
   }

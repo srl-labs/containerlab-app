@@ -121,7 +121,9 @@ The app shows the links to copy or open. Labs on a lab host need a clab-api-serv
 
 Right-click a running node and choose **Capture**, or right-click a link to capture both ends. Pick the interfaces, then Wireshark opens.
 
-On Docker and Podman lab hosts, captures come from Edgeshark: a `packetflix:` link that your Wireshark opens through cshargextcap, or Wireshark VNC in a browser window.
+Captures need no Edgeshark: containerlab captures lab links as one stream, which opens in Wireshark on this computer or Wireshark VNC, or saves as a `.pcapng`. On Docker and Podman this needs containerlab 0.83.0 or newer on this computer, or a clab-api-server that offers capture streams; with older ones they capture through Edgeshark.
+
+[Edgeshark](https://edgeshark.siemens.io/) remains an option on Docker and Podman lab hosts: pick it as the default capture method, or use **Capture interface (Edgeshark)**. It is also what captures interfaces that are no lab links, such as the management interface `eth0`, and labs whose topology file is gone.
 
 ### Default capture method
 
@@ -129,9 +131,9 @@ Where a capture opens is a setting of each lab host: **Default capture method** 
 
 | Method | Docker or Podman lab host | Kubernetes (c9s) lab host |
 | --- | --- | --- |
-| **Automatic** (default) | Wireshark VNC, else Edgeshark | Wireshark on this computer when the app can open it (desktop, VS Code with Wireshark found), else Wireshark VNC, else a `.pcapng` |
-| **Wireshark on this computer** | Edgeshark's `packetflix:` link, which starts it | The capture stream into `wireshark -k -i -` (desktop and VS Code; greyed out in the web app) |
-| **Wireshark VNC** | Wireshark VNC fed by Edgeshark | Wireshark VNC fed by the capture stream |
+| **Automatic** (default) | Wireshark on this computer when the app can open it (desktop, VS Code with Wireshark found), else Wireshark VNC, else a `.pcapng` | The same |
+| **Wireshark on this computer** | The capture stream into `wireshark -k -i -`; from the web app, Edgeshark's `packetflix:` link, which starts it | The capture stream into `wireshark -k -i -` (desktop and VS Code; greyed out in the web app) |
+| **Wireshark VNC** | Wireshark VNC fed by the capture stream | Wireshark VNC fed by the capture stream |
 | **Edgeshark** | The `packetflix:` link | Greyed out: not supported on Kubernetes |
 
 When the lab host lacks the method you picked, for example Edgeshark on a cluster, Wireshark VNC without Docker, or Wireshark that is not installed, the capture opens the automatic way and says why: VS Code once per session, the capture dialog of the web and desktop apps under its choices. The earlier values `Wireshark VNC` and `Edgeshark` keep working. On a Kubernetes lab host the Edgeshark controls of the web and desktop settings are greyed out too.

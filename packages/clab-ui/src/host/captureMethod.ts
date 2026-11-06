@@ -8,8 +8,8 @@
 
 /**
  * `auto` picks per lab host: Wireshark on this computer when the host streams
- * captures into it and Wireshark is there, else Wireshark VNC, else Edgeshark
- * or a download.
+ * captures into it and Wireshark is there, else Wireshark VNC, else a download
+ * or, on a host without capture streams, Edgeshark.
  */
 export type CaptureMethod = "auto" | "local-wireshark" | "wireshark-vnc" | "edgeshark";
 
@@ -52,7 +52,7 @@ export function parseCaptureMethod(value: unknown): CaptureMethod {
 
 /** What a lab host and the app offer for captures. */
 export interface CaptureMethodHost {
-  /** The lab host captures lab links as one stream (c9s): no Edgeshark, but downloads. */
+  /** The lab host captures lab links as one stream: downloads, and no need for Edgeshark. */
   stream: boolean;
   /** Stream hosts: the app can open Wireshark on this computer and found it. */
   localWireshark: boolean;
@@ -79,7 +79,7 @@ function routeAvailable(route: CaptureRoute, host: CaptureMethodHost): boolean {
     case "wireshark-vnc":
       return host.wiresharkVnc;
     case "edgeshark":
-      return !host.stream && host.edgeshark;
+      return host.edgeshark;
     case "download":
       return host.stream;
   }
@@ -104,6 +104,34 @@ function unavailableReason(method: Exclude<CaptureMethod, "auto">, host: Capture
     case "edgeshark":
       return host.stream ? EDGESHARK_ON_KUBERNETES : "this lab host has no Edgeshark";
   }
+}
+
+/** Interfaces a capture stream never covers: it captures lab links. */
+const MANAGEMENT_INTERFACES: ReadonlySet<string> = new Set(["eth0", "mgmt0", "lo"]);
+
+/** What decides between a lab host's capture stream and Edgeshark. */
+export interface CaptureStreamChoice {
+  method: CaptureMethod;
+  support: { captureStream: boolean; edgeshark: boolean } | undefined;
+  /** This app can open Wireshark on this computer. */
+  localWireshark: boolean;
+  /** The interfaces to capture, when known. */
+  interfaceNames?: readonly string[];
+}
+
+/**
+ * Whether a capture goes through the lab host's stream, which needs no
+ * Edgeshark. A host that has both (Docker, Podman) keeps Edgeshark for what
+ * asks for it: the Edgeshark method, Wireshark on this computer from an app
+ * that can only open it through Edgeshark's link, and management interfaces.
+ */
+export function captureUsesStream(choice: CaptureStreamChoice): boolean {
+  const { method, support, localWireshark, interfaceNames = [] } = choice;
+  if (support?.captureStream !== true) return false;
+  if (!support.edgeshark) return true;
+  if (method === "edgeshark") return false;
+  if (method === "local-wireshark" && !localWireshark) return false;
+  return !interfaceNames.some((name) => MANAGEMENT_INTERFACES.has(name));
 }
 
 /** Where captures open on this lab host with `method` picked, first route first. */
