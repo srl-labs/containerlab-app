@@ -7,6 +7,7 @@
 - The **Components** tab of SR-SIM nodes is now a chassis builder: it draws the chassis with its real slots and offers only the CPMs, cards, SFMs, XIOMs, and MDAs that chassis takes, using the hardware list SR-SIM ships in its images. Fixed hardware and fixed MDAs are shown as such, **Add starter hardware** sets up a first build, cards can be copied and dragged between slots, and what doesn't fit a chassis is marked on its slot with **Fit to** to fix it in one go.
 - Saving a node template without a name or kind no longer closes the dialog and loses what was entered: the dialog stays open on the missing field.
 - A node template without a base name can now be dragged onto the canvas: its nodes are named after the template.
+- **Paste** in the YAML editor's menu now says when clipboard access is blocked, instead of doing nothing.
 - fcli is replaced by fcling. Its menu entries run the same reports, and the setting `containerlab.extras.fcli.extraDockerArgs` is now `containerlab.extras.fcling.extraDockerArgs`.
 - Build from the shared monorepo UI workspace, now named `@containerlab/clab-ui`.
 - Restore the extension-specific Marketplace documentation.
