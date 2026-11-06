@@ -3,15 +3,15 @@ import ErrorOutlineIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
 import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
 import LinearProgress from "@mui/material/LinearProgress";
 import Typography from "@mui/material/Typography";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-import type { FabricClient, FclingEngineStatus } from "../../fabric/engine";
+import type { FabricClient, FclingEngineStartOptions, FclingEngineStatus } from "../../fabric/engine";
 import { controlRadius, floatingRadius } from "../../theme/surfaces";
 import { MONO_FONT_FAMILY } from "../../theme/typography";
 
+import { GnmiPortStart } from "./FabricGnmiPort";
 import { errorMessage } from "./fabricData";
 
 const POLL_STARTING_MS = 1_500;
@@ -44,19 +44,25 @@ function phaseOf(status: FclingEngineStatus): EnginePhase {
 /** The engine's state: started once on opening, followed from then on. */
 function useEngine(client: FabricClient): {
   engine: EnginePhase;
-  start: () => void;
+  /** The port of the lab's nodes, when the host says. */
+  gnmiPort: number | undefined;
+  start: (options?: FclingEngineStartOptions) => void;
   stop: () => void;
   check: () => void;
 } {
   const [engine, setEngine] = useState<EnginePhase>({ phase: "checking" });
+  const [gnmiPort, setGnmiPort] = useState<number | undefined>(undefined);
   const autoStarted = useRef(false);
   const alive = useRef(true);
 
-  const start = useCallback(() => {
+  const start = useCallback((options?: FclingEngineStartOptions) => {
     setEngine({ phase: "starting" });
-    client.startEngine().then(
+    if (options?.gnmiPort !== undefined) setGnmiPort(options.gnmiPort);
+    client.startEngine(options).then(
       (status) => {
-        if (alive.current) setEngine(status.state === "stopped" ? { phase: "connecting" } : phaseOf(status));
+        if (!alive.current) return;
+        setGnmiPort(status.gnmiPort);
+        setEngine(status.state === "stopped" ? { phase: "connecting" } : phaseOf(status));
       },
       (error: unknown) => {
         if (alive.current) setEngine({ phase: "failed", error: errorMessage(error) });
@@ -69,6 +75,7 @@ function useEngine(client: FabricClient): {
     client.engineStatus().then(
       (status) => {
         if (!alive.current) return;
+        setGnmiPort(status.gnmiPort);
         if (status.state === "stopped" && !autoStarted.current) {
           autoStarted.current = true;
           start();
@@ -89,6 +96,7 @@ function useEngine(client: FabricClient): {
     client.engineStatus().then(
       (status) => {
         if (!alive.current) return;
+        setGnmiPort(status.gnmiPort);
         // A stream that ended while the engine still runs comes back by itself.
         setEngine((current) => {
           const next = phaseOf(status);
@@ -109,7 +117,9 @@ function useEngine(client: FabricClient): {
       client.engineStatus().then(
         (status) => {
           failures = 0;
-          if (alive.current) setEngine((current) => (current.phase === phaseOf(status).phase ? current : phaseOf(status)));
+          if (!alive.current) return;
+          setGnmiPort(status.gnmiPort);
+          setEngine((current) => (current.phase === phaseOf(status).phase ? current : phaseOf(status)));
         },
         (error: unknown) => {
           failures += 1;
@@ -134,7 +144,7 @@ function useEngine(client: FabricClient): {
     );
   }, [client]);
 
-  return { engine, start, stop, check };
+  return { engine, gnmiPort, start, stop, check };
 }
 
 function GateCard({ icon, title, children, progress = false, testId }: {
@@ -172,12 +182,18 @@ function GateText({ children }: { children: React.ReactNode }): React.JSX.Elemen
 export function FabricEngineGate({ client, labName, children }: {
   client: FabricClient;
   labName: string;
-  children: (engine: { stop: () => void; check: () => void }) => React.ReactNode;
+  children: (engine: {
+    stop: () => void;
+    check: () => void;
+    gnmiPort: number | undefined;
+    changeGnmiPort: (port: number) => void;
+  }) => React.ReactNode;
 }): React.JSX.Element {
-  const { engine, start, stop, check } = useEngine(client);
+  const { engine, gnmiPort, start, stop, check } = useEngine(client);
+  const startOn = (port?: number) => start(port === undefined ? undefined : { gnmiPort: port });
   switch (engine.phase) {
     case "ready":
-      return <>{children({ stop, check })}</>;
+      return <>{children({ stop, check, gnmiPort, changeGnmiPort: startOn })}</>;
     case "checking":
       return (
         <GateCard testId="fabric-engine-checking" icon={<HubOutlinedIcon />} title="Looking for the fabric engine" progress>
@@ -211,7 +227,7 @@ export function FabricEngineGate({ client, labName, children }: {
               ? "Its history is kept, and it records nothing while stopped."
               : "It stops when the lab is destroyed or deployed again. Start it to follow the fabric again."}
           </GateText>
-          <Button variant="contained" sx={{ mt: 0.5 }} data-testid="fabric-engine-start" onClick={start}>Start engine</Button>
+          <GnmiPortStart key={gnmiPort} gnmiPort={gnmiPort} label="Start engine" testId="fabric-engine-start" onStart={startOn} />
         </GateCard>
       );
     case "failed":
@@ -228,7 +244,7 @@ export function FabricEngineGate({ client, labName, children }: {
           >
             {engine.error}
           </Box>
-          <Button variant="contained" sx={{ mt: 0.5 }} data-testid="fabric-engine-retry" onClick={start}>Retry</Button>
+          <GnmiPortStart key={gnmiPort} gnmiPort={gnmiPort} label="Retry" testId="fabric-engine-retry" onStart={startOn} />
         </GateCard>
       );
   }

@@ -101,7 +101,10 @@ class FabricPanel {
       case "engine-status":
         return this.backend.fclingEngine(this.target);
       case "engine-start":
-        return this.backend.startFclingEngine(this.target);
+        return this.backend.startFclingEngine(
+          this.target,
+          request.gnmiPort === undefined ? undefined : { gnmiPort: request.gnmiPort }
+        );
       case "engine-stop":
         return this.backend.stopFclingEngine(this.target);
       case "api":

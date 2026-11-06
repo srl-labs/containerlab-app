@@ -33,6 +33,9 @@ export interface FabricContextValue {
   connection: FabricConnection;
   subscribeLive: FabricLiveSubscribe;
   stopEngine: () => void;
+  /** The port of the lab's nodes, when the host says; only then can it change. */
+  gnmiPort: number | undefined;
+  changeGnmiPort: (port: number) => void;
 }
 
 const FabricContext = createContext<FabricContextValue | undefined>(undefined);
@@ -46,11 +49,13 @@ export function useFabric(): FabricContextValue {
 const CATALOG_REQUEST = { method: "GET", path: "reports" } as const;
 const STATUS_REQUEST = { method: "GET", path: "status" } as const;
 
-export function FabricProvider({ client, labName, onStreamClosed, stopEngine, children }: {
+export function FabricProvider({ client, labName, onStreamClosed, stopEngine, gnmiPort, changeGnmiPort, children }: {
   client: FabricClient;
   labName: string;
   onStreamClosed: () => void;
   stopEngine: () => void;
+  gnmiPort: number | undefined;
+  changeGnmiPort: (port: number) => void;
   children: React.ReactNode;
 }): React.JSX.Element {
   const [route, setRoute] = useState(() => loadRoute(labName));
@@ -88,10 +93,13 @@ export function FabricProvider({ client, labName, onStreamClosed, stopEngine, ch
     reloadCore,
     connection,
     subscribeLive: subscribe,
-    stopEngine
+    stopEngine,
+    gnmiPort,
+    changeGnmiPort
   }), [
     client, labName, at, route, status.answer, status.error, topology.answer, topology.error,
-    incidents.answer, incidents.error, catalog, reloadCore, connection, subscribe, stopEngine
+    incidents.answer, incidents.error, catalog, reloadCore, connection, subscribe, stopEngine,
+    gnmiPort, changeGnmiPort
   ]);
 
   return <FabricContext.Provider value={value}>{children}</FabricContext.Provider>;

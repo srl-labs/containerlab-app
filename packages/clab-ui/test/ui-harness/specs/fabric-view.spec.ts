@@ -27,6 +27,93 @@ async function nav(page: Page, id: string): Promise<void> {
   await page.getByTestId(id).click();
 }
 
+test.describe("the gNMI port", () => {
+  test("can be chosen when starting the engine", async ({ page }) => {
+    await open(page);
+    await page.getByTestId("fabric-menu").click();
+    await page.getByTestId("fabric-stop-engine").click();
+    const input = page.getByTestId("fabric-gnmi-port-input");
+    await expect(input).toHaveValue("57400");
+
+    await input.fill("70000");
+    await expect(page.getByTestId("fabric-engine-start")).toBeDisabled();
+
+    await input.fill("57410");
+    await page.getByTestId("fabric-engine-start").click();
+    await expect(page.getByTestId("fabric-topology")).toBeVisible();
+    expect(await calls(page)).toContain("engine-start port=57410");
+  });
+
+  test("starting on the same port does not ask for a new one", async ({ page }) => {
+    await open(page);
+    await page.getByTestId("fabric-menu").click();
+    await page.getByTestId("fabric-stop-engine").click();
+    await page.getByTestId("fabric-engine-start").click();
+    await expect(page.getByTestId("fabric-topology")).toBeVisible();
+    expect(await calls(page)).toContain("engine-start");
+  });
+
+  test("changes from the menu, which restarts the engine", async ({ page }) => {
+    await open(page);
+    await page.getByTestId("fabric-menu").click();
+    await expect(page.getByTestId("fabric-gnmi-port")).toContainText("57400");
+    await page.getByTestId("fabric-gnmi-port").click();
+
+    const dialog = page.getByTestId("fabric-gnmi-port-dialog");
+    await expect(dialog).toContainText("the history stays");
+    await expect(page.getByTestId("fabric-gnmi-port-apply")).toBeDisabled();
+
+    await page.getByTestId("fabric-gnmi-port-input").fill("57410");
+    await page.getByTestId("fabric-gnmi-port-input").press("Enter");
+    await expect(dialog).toBeHidden();
+    await expect(page.getByTestId("fabric-topology")).toBeVisible();
+    expect(await calls(page)).toContain("engine-start port=57410");
+
+    await page.getByTestId("fabric-menu").click();
+    await expect(page.getByTestId("fabric-gnmi-port")).toContainText("57410");
+  });
+
+  test("cancelling leaves the engine alone", async ({ page }) => {
+    await open(page);
+    await page.getByTestId("fabric-menu").click();
+    await page.getByTestId("fabric-gnmi-port").click();
+    await page.getByTestId("fabric-gnmi-port-input").fill("57410");
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByTestId("fabric-gnmi-port-dialog")).toBeHidden();
+    expect((await calls(page)).filter((call) => call.startsWith("engine-start"))).toHaveLength(0);
+  });
+
+  test("is pointed out when no node can be reached", async ({ page }) => {
+    await open(page, "wrong-port");
+    const banner = page.getByTestId("fabric-nodes-down-banner");
+    await expect(banner).toContainText("gNMI port 57400");
+
+    await page.getByTestId("fabric-gnmi-port-change").click();
+    await page.getByTestId("fabric-gnmi-port-input").fill("57410");
+    await page.getByTestId("fabric-gnmi-port-apply").click();
+
+    await expect(page.getByTestId("fabric-topology")).toBeVisible();
+    await expect(banner).toBeHidden();
+    await expect(page.getByTestId("fabric-nodes-live")).toContainText("5/6 nodes live");
+  });
+
+  test("is not blamed while some nodes answer", async ({ page }) => {
+    await open(page);
+    await expect(page.getByTestId("fabric-nodes-live")).toContainText("5/6 nodes live");
+    await expect(page.getByTestId("fabric-nodes-down-banner")).toHaveCount(0);
+  });
+
+  test("is not offered by a host that cannot change it", async ({ page }) => {
+    await open(page, "old-host");
+    await page.getByTestId("fabric-menu").click();
+    await expect(page.getByTestId("fabric-stop-engine")).toBeVisible();
+    await expect(page.getByTestId("fabric-gnmi-port")).toHaveCount(0);
+    await page.getByTestId("fabric-stop-engine").click();
+    await expect(page.getByTestId("fabric-engine-start")).toBeEnabled();
+    await expect(page.getByTestId("fabric-gnmi-port-input")).toHaveCount(0);
+  });
+});
+
 test.describe("the engine", () => {
   test("starts by itself on opening, once, and shows the fabric when it answers", async ({ page }) => {
     await open(page, "fresh");

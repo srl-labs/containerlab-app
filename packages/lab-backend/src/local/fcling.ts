@@ -1,16 +1,22 @@
 /**
  * A lab's fcling engine on this machine: a container on the lab's management
- * network that streams its nodes and keeps their history. Nothing is kept here:
- * its address and token are read back from the container, so an engine outlives
- * the app that started it.
+ * network that streams its nodes and keeps their history. Its address and token
+ * are read back from the container, so an engine outlives the app that started
+ * it. Only a port chosen for a lab is kept, in a file of the lab workspace: stopping
+ * an engine removes its container, and the lab usually comes back the same.
  */
 import { randomBytes } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 import {
+  FCLING_DEFAULT_GNMI_PORT,
   FCLING_IMAGE,
   FCLING_PORT,
+  fclingGnmiPortArgs,
   fclingQueryString,
   isFclingApiCallAllowed,
+  isValidGnmiPort,
   parseFclingEvents,
   type FclingApiRequest,
   type FclingApiResponse,
@@ -24,6 +30,8 @@ import { runCommand, stripAnsi } from "./process.ts";
 
 /** Marks an engine with its lab. Not `containerlab`: inspect would list it as a node. */
 const ENGINE_LAB_LABEL = "clab-fcling-lab";
+/** The port an engine was started with. */
+const ENGINE_GNMI_PORT_LABEL = "clab-fcling-gnmi-port";
 const TOKEN_ENV = "FCLI_API_TOKEN";
 /** Long enough for a first pull of the image. */
 const START_TIMEOUT_MS = 10 * 60_000;
@@ -32,6 +40,7 @@ const PROBE_TIMEOUT_MS = 2_000;
 const LOG_TAIL_LINES = 12;
 /** Every API call would otherwise ask the runtime where the engine is. */
 const ADDRESS_TTL_MS = 10_000;
+const STOP_GRACE_SECONDS = "5";
 
 interface EngineContainer {
   running: boolean;
@@ -40,6 +49,7 @@ interface EngineContainer {
   startedAt?: string;
   url?: string;
   token?: string;
+  gnmiPort?: number;
 }
 
 interface EngineAddress {
@@ -50,7 +60,7 @@ interface EngineAddress {
 
 /** What `inspect` says of a container, as far as the engine needs it. */
 interface InspectedContainer {
-  Config?: { Image?: string; Env?: string[] };
+  Config?: { Image?: string; Env?: string[]; Labels?: Record<string, string> | null };
   State?: { Status?: string; Running?: boolean; ExitCode?: number; StartedAt?: string };
   NetworkSettings?: { Ports?: Record<string, Array<{ HostPort?: string }> | null> };
 }
@@ -65,13 +75,15 @@ export function parseEngineContainer(output: string): EngineContainer | undefine
   if (!container) return undefined;
   const hostPort = container.NetworkSettings?.Ports?.[`${FCLING_PORT}/tcp`]?.[0]?.HostPort;
   const token = container.Config?.Env?.find((entry) => entry.startsWith(`${TOKEN_ENV}=`));
+  const gnmiPort = Number(container.Config?.Labels?.[ENGINE_GNMI_PORT_LABEL]);
   return {
     running: container.State?.Running === true,
     exitCode: container.State?.ExitCode ?? 0,
     ...(container.Config?.Image ? { image: container.Config.Image } : {}),
     ...(container.State?.StartedAt ? { startedAt: container.State.StartedAt } : {}),
     ...(hostPort ? { url: `http://127.0.0.1:${hostPort}` } : {}),
-    ...(token ? { token: token.slice(TOKEN_ENV.length + 1) } : {})
+    ...(token ? { token: token.slice(TOKEN_ENV.length + 1) } : {}),
+    ...(isValidGnmiPort(gnmiPort) ? { gnmiPort } : {})
   };
 }
 
@@ -101,10 +113,28 @@ export class LocalFcling {
     return result.code === 0 ? parseEngineContainer(result.stdout) : undefined;
   }
 
+  private gnmiPortFile(labName: string): string {
+    return path.join(this.options.workspaceRoot, ".fcling", `${encodeURIComponent(labName)}.gnmi-port`);
+  }
+
+  /** The port chosen for a lab's nodes, else fcling's own. */
+  async gnmiPort(labName: string): Promise<number> {
+    const saved = Number(await fs.readFile(this.gnmiPortFile(labName), "utf8").catch(() => ""));
+    return isValidGnmiPort(saved) ? saved : FCLING_DEFAULT_GNMI_PORT;
+  }
+
+  private async saveGnmiPort(labName: string, port: number): Promise<void> {
+    const file = this.gnmiPortFile(labName);
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, `${port}\n`);
+  }
+
   async status(labName: string): Promise<FclingEngineStatus> {
     const container = await this.inspect(labName);
-    if (!container) return { state: "stopped" };
+    const saved = await this.gnmiPort(labName);
+    if (!container) return { state: "stopped", gnmiPort: saved };
     const known = {
+      gnmiPort: container.running ? (container.gnmiPort ?? saved) : saved,
       containerName: fclingContainerName(labName),
       ...(container.image ? { image: container.image } : {}),
       ...(container.startedAt ? { startedAt: container.startedAt } : {})
@@ -113,7 +143,7 @@ export class LocalFcling {
       return { state: (await this.answers(container)) ? "ready" : "starting", ...known };
     }
     // A clean exit is someone stopping it, not a failure.
-    if (container.exitCode === 0) return { state: "stopped" };
+    if (container.exitCode === 0) return { state: "stopped", gnmiPort: saved };
     return { state: "failed", ...known, error: await this.logTail(labName) };
   }
 
@@ -135,10 +165,15 @@ export class LocalFcling {
     return stripAnsi(`${result.stdout}${result.stderr}`).trim();
   }
 
-  start(labName: string, topology: string, mgmtNetwork: string): Promise<FclingEngineStatus> {
+  start(
+    labName: string,
+    topology: string,
+    mgmtNetwork: string,
+    gnmiPort?: number
+  ): Promise<FclingEngineStatus> {
     const pending = this.starting.get(labName);
     if (pending) return pending;
-    const started = this.startEngine(labName, topology, mgmtNetwork).finally(() => {
+    const started = this.startEngine(labName, topology, mgmtNetwork, gnmiPort).finally(() => {
       this.starting.delete(labName);
     });
     this.starting.set(labName, started);
@@ -148,14 +183,26 @@ export class LocalFcling {
   private async startEngine(
     labName: string,
     topology: string,
-    mgmtNetwork: string
+    mgmtNetwork: string,
+    gnmiPort?: number
   ): Promise<FclingEngineStatus> {
+    if (gnmiPort !== undefined) {
+      if (!isValidGnmiPort(gnmiPort)) {
+        throw new LabBackendError("The gNMI port must be between 1 and 65535.", 400);
+      }
+      await this.saveGnmiPort(labName, gnmiPort);
+    }
     const current = await this.inspect(labName);
-    if (current?.running) return this.status(labName);
+    if (current?.running && (gnmiPort === undefined || gnmiPort === current.gnmiPort)) {
+      return this.status(labName);
+    }
     this.addresses.delete(labName);
     const name = fclingContainerName(labName);
+    // A clean stop first, for the history to close.
+    if (current?.running) await this.run(["stop", "-t", STOP_GRACE_SECONDS, name]);
     // What an earlier run left behind holds the name; the history stays in its volume.
     if (current) await this.run(["rm", "-f", name]);
+    const port = await this.gnmiPort(labName);
 
     const result = await this.run(
       [
@@ -168,6 +215,8 @@ export class LocalFcling {
         name,
         "--label",
         `${ENGINE_LAB_LABEL}=${labName}`,
+        "--label",
+        `${ENGINE_GNMI_PORT_LABEL}=${port}`,
         "--network",
         mgmtNetwork,
         // The runtime picks a free port, on this machine only.
@@ -180,6 +229,7 @@ export class LocalFcling {
         "-e",
         `${TOKEN_ENV}=${randomBytes(24).toString("hex")}`,
         FCLING_IMAGE,
+        ...fclingGnmiPortArgs(port),
         "-t",
         "/topo.yml",
         "serve",

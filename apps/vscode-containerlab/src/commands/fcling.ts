@@ -2,7 +2,7 @@ import * as fs from "fs";
 
 import * as vscode from "vscode";
 import * as YAML from "yaml";
-import { FCLING_IMAGE } from "@containerlab/clab-ui/fabric/engine";
+import { FCLING_IMAGE, fclingGnmiPortArgs } from "@containerlab/clab-ui/fabric/engine";
 
 import type { ClabLabTreeNode } from "../treeView/common";
 import { connectionOf, isRemote, resolveLab } from "../backend/labBackends";
@@ -35,6 +35,21 @@ function buildNetworkFromYaml(topoPath: string): string {
   return "clab";
 }
 
+/** fcling's option for the port chosen for the lab in its Fabric view. */
+async function gnmiPortOption(node: ClabLabTreeNode): Promise<string> {
+  try {
+    const { backend, target } = await resolveLab(
+      node.labPath.absolute,
+      node.name,
+      node.connectionId
+    );
+    const { gnmiPort } = await backend.fclingEngine(target);
+    return fclingGnmiPortArgs(gnmiPort).join(" ");
+  } catch {
+    return "";
+  }
+}
+
 async function runFcling(node: ClabLabTreeNode | undefined, cmd: string): Promise<void> {
   if (!node) {
     vscode.window.showErrorMessage("No lab node selected.");
@@ -58,8 +73,9 @@ async function runFcling(node: ClabLabTreeNode | undefined, cmd: string): Promis
   const extraArgs = config.get<string>("extras.fcling.extraDockerArgs", "");
 
   const network = buildNetworkFromYaml(topo);
+  const fclingArgs = [await gnmiPortOption(node), "-t /topo.yml", cmd].filter(Boolean).join(" ");
 
-  const command = `${runtime} run --pull missing -it --network ${network} --rm -v /etc/hosts:/etc/hosts:ro -v "${topo}":/topo.yml ${extraArgs} ${FCLING_IMAGE} -t /topo.yml ${cmd}`;
+  const command = `${runtime} run --pull missing -it --network ${network} --rm -v /etc/hosts:/etc/hosts:ro -v "${topo}":/topo.yml ${extraArgs} ${FCLING_IMAGE} ${fclingArgs}`;
 
   execCommandInTerminal(command, `fcling - ${node.label}`);
 }

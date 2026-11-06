@@ -35,6 +35,7 @@ import type {
   FclingApiRequest,
   FclingApiResponse,
   FclingCommandResponse,
+  FclingEngineStartOptions,
   FclingEngineStatus,
   FclingEvent,
   GenerateTopologyRequest,
@@ -348,7 +349,7 @@ export interface LabBackend {
   /** The lab's fcling engine: `stopped` until started, and kept running for its history. */
   fclingEngine(lab: LabTarget): Promise<FclingEngineStatus>;
   /** Starts the engine, or finds it running. Pulling its image can take minutes. */
-  startFclingEngine(lab: LabTarget): Promise<FclingEngineStatus>;
+  startFclingEngine(lab: LabTarget, options?: FclingEngineStartOptions): Promise<FclingEngineStatus>;
   /** Stops the engine and keeps its history. */
   stopFclingEngine(lab: LabTarget): Promise<void>;
   /**

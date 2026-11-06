@@ -38,6 +38,7 @@ import type {
   CaptureStreamOptions,
   CaptureTarget,
   FclingApiRequest,
+  FclingEngineStartOptions,
   GenerateTopologyRequest,
   GraphExportFormat,
   ImportTopologyFromUrlResponse,
@@ -519,21 +520,23 @@ export class LocalLabBackend implements LabBackend {
   }
 
   async fcling(lab: LabTarget, command: string) {
-    const containers = await this.inspectLab(await this.fclingLabName(lab));
+    const labName = await this.fclingLabName(lab);
+    const containers = await this.inspectLab(labName);
     const network = inspectField(containers[0], "mgmt_network") || "clab";
-    return tools.fcling(this.options, await this.labTopology(lab), network, command);
+    const gnmiPort = await this.fclingEngines.gnmiPort(labName);
+    return tools.fcling(this.options, await this.labTopology(lab), network, command, gnmiPort);
   }
 
   async fclingEngine(lab: LabTarget) {
     return this.fclingEngines.status(await this.fclingLabName(lab));
   }
 
-  async startFclingEngine(lab: LabTarget) {
+  async startFclingEngine(lab: LabTarget, options?: FclingEngineStartOptions) {
     const labName = await this.fclingLabName(lab);
     const containers = await this.inspectLab(labName);
     if (containers.length === 0) throw new LabBackendError(`Lab '${labName}' is not running.`, 409);
     const network = inspectField(containers[0], "mgmt_network") || "clab";
-    return this.fclingEngines.start(labName, await this.labTopology(lab), network);
+    return this.fclingEngines.start(labName, await this.labTopology(lab), network, options?.gnmiPort);
   }
 
   async stopFclingEngine(lab: LabTarget) {

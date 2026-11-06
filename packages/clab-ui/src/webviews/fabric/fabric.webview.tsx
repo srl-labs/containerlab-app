@@ -15,7 +15,7 @@ import { MuiThemeProvider } from "../../theme/index";
 import { overlayShadow } from "../../theme/surfaces";
 
 import { FabricEngineGate } from "./FabricEngineGate";
-import { FabricHeader, FabricPastBanner } from "./FabricHeader";
+import { FabricHeader, FabricNodesDownBanner, FabricPastBanner } from "./FabricHeader";
 import { FabricHistoryView } from "./FabricHistoryView";
 import { FabricIncidentsView } from "./FabricIncidentsView";
 import { FabricLensView } from "./FabricLensView";
@@ -86,6 +86,7 @@ function FabricShell(): React.JSX.Element {
     <>
       <FabricHeader onToggleNav={toggle} />
       <FabricPastBanner />
+      <FabricNodesDownBanner />
       <Box sx={{ position: "relative", display: "flex", flex: 1, minHeight: 0 }}>
         {narrow ? (
           <>
@@ -134,8 +135,15 @@ export function FabricApp({ client, labName }: { client: FabricClient; labName: 
         }}
       >
         <FabricEngineGate client={client} labName={labName}>
-          {({ stop, check }) => (
-            <FabricProvider client={client} labName={labName} onStreamClosed={check} stopEngine={stop}>
+          {({ stop, check, gnmiPort, changeGnmiPort }) => (
+            <FabricProvider
+              client={client}
+              labName={labName}
+              onStreamClosed={check}
+              stopEngine={stop}
+              gnmiPort={gnmiPort}
+              changeGnmiPort={changeGnmiPort}
+            >
               <FabricShell />
             </FabricProvider>
           )}

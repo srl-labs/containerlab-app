@@ -40,8 +40,8 @@ describe("Fabric view", () => {
       backendCalls.push(["fclingEngine", target]);
       return { state: "ready" };
     },
-    async startFclingEngine(target: unknown) {
-      backendCalls.push(["startFclingEngine", target]);
+    async startFclingEngine(target: unknown, options: unknown) {
+      backendCalls.push(["startFclingEngine", target, options]);
       return { state: "starting" };
     },
     async stopFclingEngine(target: unknown) {
@@ -204,6 +204,17 @@ describe("Fabric view", () => {
     expect(backendCalls[0][0]).to.equal("startFclingEngine");
     expect(backendCalls[0][1].labName).to.equal("lab1");
     expect(posted).to.deep.equal([{ type: "fabric:response", requestId: 7, result: { state: "starting" } }]);
+    close();
+  });
+
+  it("passes a chosen gNMI port on to the engine", async () => {
+    const close = await open();
+    onMessage({ type: "fabric:request", requestId: 8, op: "engine-start" });
+    onMessage({ type: "fabric:request", requestId: 9, op: "engine-start", gnmiPort: 57410 });
+    await tick();
+    const starts = backendCalls.filter(([name]: unknown[]) => name === "startFclingEngine");
+    expect(starts[0][2]).to.equal(undefined);
+    expect(starts[1][2]).to.deep.equal({ gnmiPort: 57410 });
     close();
   });
 

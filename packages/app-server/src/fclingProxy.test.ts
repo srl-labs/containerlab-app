@@ -20,8 +20,8 @@ function fakeBackend(recorded: Recorded, streamFailure?: string): LabBackend {
       recorded.engine.push(`status ${labName}`);
       return { state: "ready" };
     },
-    async startFclingEngine({ labName }: { labName: string }) {
-      recorded.engine.push(`start ${labName}`);
+    async startFclingEngine({ labName }: { labName: string }, options?: { gnmiPort?: number }) {
+      recorded.engine.push(options?.gnmiPort === undefined ? `start ${labName}` : `start ${labName} port=${options.gnmiPort}`);
       return { state: "starting" };
     },
     async stopFclingEngine({ labName }: { labName: string }) {
@@ -68,6 +68,18 @@ test("the engine routes act on the named lab", async (t) => {
   assert.deepEqual((await post("engine/start", { labName: "lab1" })).json(), { state: "starting" });
   assert.equal((await post("engine/stop", { labName: "lab1" })).statusCode, 200);
   assert.deepEqual(recorded.engine, ["status lab1", "start lab1", "stop lab1"]);
+});
+
+test("starting the engine passes on a gNMI port, and refuses what is not one", async (t) => {
+  const { post, recorded } = await startProxy(t);
+  assert.equal((await post("engine/start", { labName: "lab1", gnmiPort: 57410 })).statusCode, 200);
+  assert.deepEqual(recorded.engine, ["start lab1 port=57410"]);
+
+  for (const gnmiPort of [0, 70000, 1.5, "57410"]) {
+    const answer = await post("engine/start", { labName: "lab1", gnmiPort });
+    assert.equal(answer.statusCode, 400, String(gnmiPort));
+  }
+  assert.equal(recorded.engine.length, 1);
 });
 
 test("a call without a lab is refused", async (t) => {

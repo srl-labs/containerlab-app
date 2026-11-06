@@ -11,8 +11,10 @@ import { FCLING_IMAGE } from "@containerlab/clab-ui/fabric/engine";
 import { LocalFcling, fclingContainerName, parseEngineContainer } from "./fcling.ts";
 import { LocalLabBackend } from "./localLabBackend.ts";
 import type { ResolvedLocalOptions } from "./options.ts";
+import { fcling as runReport } from "./tools.ts";
 
 interface FakeRuntime {
+  options: ResolvedLocalOptions;
   engines: LocalFcling;
   /** Every command the runtime was given. */
   commands(): Promise<string[][]>;
@@ -43,11 +45,14 @@ async function fakeRuntime(t: TestContext): Promise<FakeRuntime> {
     ].join("\n"),
     { mode: 0o755 }
   );
+  const options = {
+    runtime: "docker",
+    workspaceRoot: directory,
+    env: { PATH: `${directory}:${process.env.PATH ?? ""}` }
+  } as unknown as ResolvedLocalOptions;
   return {
-    engines: new LocalFcling({
-      runtime: "docker",
-      env: { PATH: `${directory}:${process.env.PATH ?? ""}` }
-    } as unknown as ResolvedLocalOptions),
+    options,
+    engines: new LocalFcling(options),
     async commands() {
       const text = await fs.readFile(log, "utf8").catch(() => "");
       return text
@@ -130,6 +135,73 @@ describe("LocalFcling", () => {
     assert.equal(run.filter((arg) => arg === "-e").length, 1);
   });
 
+  test("leaves the gNMI port to fcling until one is chosen", async (t) => {
+    const runtime = await fakeRuntime(t);
+    assert.equal((await runtime.engines.status("lab1")).gnmiPort, 57400);
+    await runtime.engines.start("lab1", "/labs/lab1.clab.yml", "clab");
+    const run = (await runtime.commands()).find((command) => command[0] === "run");
+    assert.match(run?.join(" ") ?? "", /--label clab-fcling-gnmi-port=57400/);
+    assert.match(run?.join(" ") ?? "", new RegExp(`${FCLING_IMAGE} -t /topo\\.yml serve`));
+  });
+
+  test("starts on a chosen gNMI port, and keeps it for the next engine and the reports", async (t) => {
+    const runtime = await fakeRuntime(t);
+    await runtime.engines.start("lab1", "/labs/lab1.clab.yml", "clab", 57410);
+    await runtime.engines.start("lab1", "/labs/lab1.clab.yml", "clab");
+    const runs = (await runtime.commands()).filter((command) => command[0] === "run");
+    assert.equal(runs.length, 2);
+    for (const run of runs) {
+      assert.match(run.join(" "), /--label clab-fcling-gnmi-port=57410/);
+      assert.match(run.join(" "), new RegExp(`${FCLING_IMAGE} -p 57410 -t /topo\\.yml serve`));
+    }
+    assert.equal(await runtime.engines.gnmiPort("lab1"), 57410);
+    assert.equal((await runtime.engines.status("lab1")).gnmiPort, 57410);
+    assert.equal(await runtime.engines.gnmiPort("lab2"), 57400);
+  });
+
+  test("a report goes to the gNMI port it is given, before its command", async (t) => {
+    const runtime = await fakeRuntime(t);
+    await runReport(runtime.options, "/t.yml", "clab", "bgp-peers -d", 57410);
+    await runReport(runtime.options, "/t.yml", "clab", "lldp", 57400);
+    const [chosen, standard] = (await runtime.commands()).map((command) => command.join(" "));
+    assert.match(chosen ?? "", new RegExp(`${FCLING_IMAGE} -p 57410 -t /topo\\.yml bgp-peers -d$`));
+    assert.match(standard ?? "", new RegExp(`${FCLING_IMAGE} -t /topo\\.yml lldp$`));
+  });
+
+  test("refuses what is not a gNMI port", async (t) => {
+    const runtime = await fakeRuntime(t);
+    await assert.rejects(runtime.engines.start("lab1", "/t.yml", "clab", 70000), /between 1 and 65535/);
+    assert.deepEqual(await runtime.commands(), []);
+  });
+
+  test("replaces a running engine on another gNMI port, and keeps its history", async (t) => {
+    const runtime = await fakeRuntime(t);
+    await runtime.setContainer({
+      ...runningContainer(1),
+      Config: { ...runningContainer(1).Config, Labels: { "clab-fcling-gnmi-port": "57400" } }
+    });
+    await runtime.engines.start("lab1", "/t.yml", "clab", 57410);
+    const commands = (await runtime.commands()).map((command) => command.join(" "));
+    const stop = commands.indexOf("stop -t 5 clab-lab1-fcling");
+    const remove = commands.indexOf("rm -f clab-lab1-fcling");
+    const run = commands.findIndex((command) => command.startsWith("run "));
+    assert.ok(stop >= 0 && stop < remove && remove < run, commands.join("\n"));
+    assert.equal(commands.some((command) => command.startsWith("volume")), false);
+  });
+
+  test("leaves a running engine alone on its own gNMI port, or when none is asked for", async (t) => {
+    const runtime = await fakeRuntime(t);
+    await runtime.setContainer({
+      ...runningContainer(1),
+      Config: { ...runningContainer(1).Config, Labels: { "clab-fcling-gnmi-port": "57410" } }
+    });
+    await runtime.engines.start("lab1", "/t.yml", "clab", 57410);
+    await runtime.engines.start("lab1", "/t.yml", "clab");
+    assert.equal((await runtime.engines.status("lab1")).gnmiPort, 57410);
+    const commands = await runtime.commands();
+    assert.equal(commands.some((command) => command[0] === "run" || command[0] === "stop"), false);
+  });
+
   test("runs the pinned image, and pulls it only when it is missing", async (t) => {
     const runtime = await fakeRuntime(t);
     await runtime.engines.start("lab1", "/labs/lab1.clab.yml", "clab");
@@ -169,10 +241,10 @@ describe("LocalFcling", () => {
 
   test("tells its states apart", async (t) => {
     const runtime = await fakeRuntime(t);
-    assert.deepEqual(await runtime.engines.status("lab1"), { state: "stopped" });
+    assert.deepEqual(await runtime.engines.status("lab1"), { state: "stopped", gnmiPort: 57400 });
 
     await runtime.setContainer({ State: { Running: false, ExitCode: 0 } });
-    assert.deepEqual(await runtime.engines.status("lab1"), { state: "stopped" });
+    assert.deepEqual(await runtime.engines.status("lab1"), { state: "stopped", gnmiPort: 57400 });
 
     await runtime.setContainer({ State: { Running: false, ExitCode: 1 } });
     const failed = await runtime.engines.status("lab1");

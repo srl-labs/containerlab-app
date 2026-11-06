@@ -27,11 +27,21 @@ The view starts one container for the lab on the lab host, on the lab's manageme
 
 Each node gives the container about 2 of its 20 gNMI sessions.
 
+## gNMI port
+
+The view looks for the nodes on gNMI port 57400, SR Linux's default. Where they listen on another port, as with nodes EDA manages, choose **gNMI port** in the view's menu. When no node can be reached, the view offers the same from a banner at its top.
+
+- One port applies to every node of the lab.
+- Changing it restarts the engine. The history stays.
+- The port is kept for that lab name, also when the lab is destroyed and deployed again, and the lab's **Run fcling** reports use it too.
+
+On a lab host running `clab-api-server`, `FCLING_GNMI_PORT` sets the port for labs without one of their own.
+
 ## Limits
 
 - Only SR Linux nodes are read. They need gNMI on, and SR Linux's default credentials.
 - It is not available on Kubernetes (c9s) lab hosts.
-- A lab host running `clab-api-server` needs a version that lists `fcling` in its features. On an older one, update the server to use the view.
+- A lab host running `clab-api-server` needs a version that lists `fcling` in its features. On an older one, update the server to use the view. Changing the gNMI port also needs a server version that reports it; on others, the view does not offer it.
 
 ## Reports without the view
 

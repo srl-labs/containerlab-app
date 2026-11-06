@@ -259,6 +259,7 @@ export interface FclingCommandResponse {
 export type {
   FclingApiRequest,
   FclingApiResponse,
+  FclingEngineStartOptions,
   FclingEngineStatus,
   FclingEvent
 } from "@containerlab/clab-ui/fabric/engine";
