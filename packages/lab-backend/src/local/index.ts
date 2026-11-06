@@ -33,6 +33,7 @@ export { declaredTopologyName } from "./topologyFiles.ts";
 export {
   findWireshark,
   launchLocalWireshark,
+  wiresharkInvocation,
   type LaunchLocalWiresharkOptions,
   type LocalWiresharkSession
 } from "./localWireshark.ts";

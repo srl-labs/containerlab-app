@@ -48,6 +48,8 @@ const COMMANDS_BY_SUPPORT: ReadonlyArray<readonly [keyof LabHostSupport, readonl
   ["shareTools", SHARE_COMMANDS],
   ["edgesharkManagement", ["containerlab.install.edgeshark", "containerlab.uninstall.edgeshark"]],
   ["edgeshark", ["containerlab.interface.captureWithEdgeshark"]],
+  // Without capture streams, the Edgeshark command is the way into Wireshark on this computer.
+  ["captureStream", ["containerlab.interface.captureWithWireshark"]],
   ["wiresharkVnc", ["containerlab.interface.captureWithEdgesharkVNC", "containerlab.capture.killAllWiresharkVNC"]]
 ];
 

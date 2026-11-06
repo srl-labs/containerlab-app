@@ -47,6 +47,7 @@ export {
 export {
   captureInterface,
   captureInterfaceWithPacketflix,
+  captureInterfaceWithWireshark,
   captureEdgesharkVNC,
   captureNodeInterfaces,
   killAllWiresharkVNCCtrs,

@@ -20,7 +20,12 @@ export interface FindWiresharkOptions {
    * `cmd.exe` and `wslpath` when unset; tests pass them.
    */
   windowsProgramFolders?: () => Promise<string[]>;
-  /** `/proc/version`, which names Microsoft under WSL; read when unset and `env` is this process's. */
+  /** OrbStack only: where the Mac's file system is mounted, `/mnt/mac` when unset; tests pass it. */
+  orbstackMacRoot?: string;
+  /**
+   * `/proc/version`, which names Microsoft under WSL and OrbStack in an
+   * OrbStack machine; read when unset and `env` is this process's.
+   */
   procVersion?: string;
 }
 
@@ -74,11 +79,49 @@ export function wiresharkCandidates(options: FindWiresharkOptions = {}): string[
  */
 async function isWsl(options: FindWiresharkOptions, env: NodeJS.ProcessEnv): Promise<boolean> {
   if (env.WSL_DISTRO_NAME || env.WSL_INTEROP) return true;
-  let version = options.procVersion;
-  if (version === undefined && options.env === undefined) {
-    version = await fs.readFile("/proc/version", "utf8").catch(() => "");
+  return /microsoft/i.test(await procVersion(options));
+}
+
+async function procVersion(options: FindWiresharkOptions): Promise<string> {
+  if (options.procVersion !== undefined) return options.procVersion;
+  if (options.env !== undefined) return "";
+  return fs.readFile("/proc/version", "utf8").catch(() => "");
+}
+
+/** Where an OrbStack machine mounts the Mac's file system. */
+const ORBSTACK_MAC_ROOT = "/mnt/mac";
+
+/** OrbStack's command that runs a program on the Mac, with stdin and stdout passed through. */
+const ORBSTACK_MAC_COMMAND = "/opt/orbstack-guest/bin/mac";
+
+/** Wireshark installed on the Mac, as seen from an OrbStack machine under `/mnt/mac`. */
+async function macWiresharkFromOrbStack(
+  options: FindWiresharkOptions,
+  env: NodeJS.ProcessEnv
+): Promise<string | undefined> {
+  const root = options.orbstackMacRoot ?? ORBSTACK_MAC_ROOT;
+  const user = env.USER ?? env.LOGNAME;
+  const candidates = [
+    "/Applications/Wireshark.app/Contents/MacOS/Wireshark",
+    ...(user ? [`/Users/${user}/Applications/Wireshark.app/Contents/MacOS/Wireshark`] : [])
+  ];
+  for (const candidate of candidates) {
+    const mounted = path.posix.join(root, candidate);
+    if (await isFile(mounted)) return mounted;
   }
-  return /microsoft/i.test(version ?? "");
+  return undefined;
+}
+
+/**
+ * The command that runs the Wireshark executable: the executable itself, or,
+ * for a Mac Wireshark under `/mnt/mac` in an OrbStack machine, OrbStack's
+ * `mac` command with the executable's path on the Mac.
+ */
+export function wiresharkInvocation(binary: string): { command: string; args: string[] } {
+  if (binary.startsWith(`${ORBSTACK_MAC_ROOT}/`)) {
+    return { command: ORBSTACK_MAC_COMMAND, args: [binary.slice(ORBSTACK_MAC_ROOT.length)] };
+  }
+  return { command: binary, args: [] };
 }
 
 /** Where Windows mounts C: when it cannot be asked (`/mnt/c` unless `wsl.conf` moves it). */
@@ -130,7 +173,9 @@ async function windowsWiresharkFromWsl(
  * The Wireshark executable: `binaryPath` when given (a path, or a name on
  * PATH), else the platform's install location, else `wireshark` on PATH,
  * else, under WSL, Wireshark installed on Windows: WSL interop runs it, and
- * it reads the capture from stdin like any other (`Wireshark.exe -k -i -`).
+ * it reads the capture from stdin like any other (`Wireshark.exe -k -i -`);
+ * else, in an OrbStack machine, Wireshark installed on the Mac, which
+ * `wiresharkInvocation` runs through OrbStack's `mac` command.
  */
 export async function findWireshark(
   binaryPath?: string,
@@ -148,8 +193,10 @@ export async function findWireshark(
   }
   const found =
     (await onPath("wireshark", env, platform)) ?? (platform === "win32" ? await onPath("Wireshark", env, platform) : undefined);
-  if (found || platform !== "linux" || !(await isWsl(options, env))) return found;
-  return windowsWiresharkFromWsl(options, env);
+  if (found || platform !== "linux") return found;
+  if (await isWsl(options, env)) return windowsWiresharkFromWsl(options, env);
+  if (/orbstack/i.test(await procVersion(options))) return macWiresharkFromOrbStack(options, env);
+  return undefined;
 }
 
 export interface LaunchLocalWiresharkOptions {
@@ -229,14 +276,15 @@ export async function launchLocalWireshark(
       503
     );
   }
-  const args = ["-k", "-i", "-"];
+  const { command, args } = wiresharkInvocation(binary);
+  args.push("-k", "-i", "-");
   const title = options.title?.trim();
   if (title) args.push("-o", `gui.window_title:${title}`);
 
   const child = await new Promise<WiresharkChild>((resolve, reject) => {
     let spawned: WiresharkChild;
     try {
-      spawned = spawn(binary, args, { env, stdio: ["pipe", "ignore", "pipe"], detached: false });
+      spawned = spawn(command, args, { env, stdio: ["pipe", "ignore", "pipe"], detached: false });
     } catch (error) {
       reject(new LabBackendError(`Failed to start Wireshark: ${(error as Error).message}`, 500, { cause: error }));
       return;

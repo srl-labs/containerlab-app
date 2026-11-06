@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 import { isInternalInterfaceName, nodeNamespaceInterfaceName } from "@containerlab/clab-ui/session";
-import { captureRoutePlan, parseCaptureMethod } from "@containerlab/clab-ui/host";
+import { captureRoutePlan, parseCaptureMethod, type CaptureMethod } from "@containerlab/clab-ui/host";
 
 import { outputChannel, dockerClient, extensionContext, username } from "../globals";
 import * as utils from "../utils";
@@ -233,6 +233,14 @@ async function pickOpenMode(
  * through that stream; resolves false when these interfaces do not, or on any
  * other lab host.
  */
+/** The capture method a named way to open a capture stands for. */
+const DELIVERY_METHODS: Record<StreamCaptureDelivery, CaptureMethod | undefined> = {
+  terminal: "local-wireshark",
+  wireshark: "local-wireshark",
+  vnc: "wireshark-vnc",
+  save: undefined
+};
+
 async function captureOnStream(
   node: ClabInterfaceTreeNode,
   allSelectedNodes: ClabInterfaceTreeNode[] | undefined,
@@ -242,7 +250,9 @@ async function captureOnStream(
   // The port name in the node; a host-side link end (clab-s-*) carries it as its alias.
   const portName = (iface: ClabInterfaceTreeNode) =>
     isHostNetnsInterface(iface.name) && iface.alias ? iface.alias : iface.name;
-  const host = await streamCaptureHost(node, selected.map(portName));
+  // A command that names where the capture goes overrides the default capture method.
+  const method = delivery ? DELIVERY_METHODS[delivery] : undefined;
+  const host = await streamCaptureHost(node, selected.map(portName), method);
   if (!host) return false;
   await captureOnStreamHost(host, {
     targets: selected.map((iface) => ({
@@ -388,6 +398,19 @@ async function buildPacketflixUri(
  * Start capture on an interface using edgeshark/packetflix.
  * This method builds a 'packetflix:' URI that calls edgeshark.
  */
+/**
+ * Capture into Wireshark on this computer, whatever the default capture
+ * method: the lab host's capture stream, else Edgeshark, whose packetflix
+ * link also opens Wireshark here.
+ */
+export async function captureInterfaceWithWireshark(
+  node: ClabInterfaceTreeNode,
+  allSelectedNodes?: ClabInterfaceTreeNode[]
+) {
+  if (await captureOnStream(node, allSelectedNodes, "wireshark")) return;
+  return captureInterfaceWithPacketflix(node, allSelectedNodes);
+}
+
 export async function captureInterfaceWithPacketflix(
   node: ClabInterfaceTreeNode,
   allSelectedNodes?: ClabInterfaceTreeNode[] // [CHANGED]

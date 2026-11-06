@@ -344,6 +344,10 @@
         }
       },
       {
+        "command": "containerlab.interface.captureWithWireshark",
+        "title": "Capture interface (Wireshark)"
+      },
+      {
         "command": "containerlab.interface.captureWithEdgeshark",
         "title": "Capture interface (Edgeshark)"
       },

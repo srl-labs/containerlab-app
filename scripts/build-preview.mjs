@@ -40,7 +40,7 @@ for (const file of await readdir(site, { recursive: true })) {
   if (!file.endsWith(".html")) continue;
   const filename = path.join(site, file);
   const html = await readFile(filename, "utf8");
-  const updated = html.replaceAll('href="https://srl-labs.github.io/containerlab-app/"', 'href="/sandbox/"');
+  const updated = html.replaceAll('href="https://containerlab.app/sandbox/"', 'href="/sandbox/"');
   if (updated !== html) await writeFile(filename, updated);
 }
 await cp(path.join(root, "apps/web-public/dist/client"), path.join(site, "sandbox"), { recursive: true });

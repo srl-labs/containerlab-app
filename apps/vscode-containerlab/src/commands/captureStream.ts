@@ -29,13 +29,15 @@ import {
 import {
   findWireshark,
   launchLocalWireshark,
+  wiresharkInvocation,
   type LocalLabBackend
 } from "@srl-labs/containerlab-lab-backend/local";
 
 import {
   captureRoutePlan,
   captureUsesStream,
-  parseCaptureMethod
+  parseCaptureMethod,
+  type CaptureMethod
 } from "@containerlab/clab-ui/host";
 
 import { outputChannel } from "../globals";
@@ -138,21 +140,33 @@ function showFallbackNotice(notice: string | undefined, hostId: string): void {
 /**
  * The node's lab host when a capture of these interfaces goes through its
  * stream; undefined when it goes through Wireshark VNC or Edgeshark, or the
- * lab host cannot be asked.
+ * lab host cannot be asked. `method` replaces the lab host's default capture
+ * method, for a command that names one.
  */
 export async function streamCaptureHost(
   node: unknown,
-  interfaceNames?: readonly string[]
+  interfaceNames?: readonly string[],
+  method?: CaptureMethod
 ): Promise<{ connection: LabConnection; info: LabHostInfo } | undefined> {
   const connection = connectionOf(node);
   const info = await labHostInfo(connection);
-  if (!info) return undefined;
-  const usesStream = captureUsesStream({
-    method: parseCaptureMethod(captureMethodSetting(connection)),
+  if (!info) {
+    outputChannel.info(`Capture on ${connection.id}: lab host info unavailable, not using its capture stream`);
+    return undefined;
+  }
+  const choice = {
+    method: method ?? parseCaptureMethod(captureMethodSetting(connection)),
     support: info.support,
     localWireshark: (await findLocalWireshark()) !== undefined,
     ...(interfaceNames ? { interfaceNames } : {})
-  });
+  };
+  const usesStream = captureUsesStream(choice);
+  outputChannel.info(
+    `Capture on ${connection.id}: ${usesStream ? "capture stream" : "Edgeshark or Wireshark VNC"} ` +
+      `(method ${choice.method}, captureStream ${info.support.captureStream}, ` +
+      `edgeshark ${info.support.edgeshark}, local Wireshark ${choice.localWireshark}, ` +
+      `interfaces ${interfaceNames?.join(",") ?? "-"})`
+  );
   return usesStream ? { connection, info } : undefined;
 }
 
@@ -281,10 +295,14 @@ function shellQuote(value: string): string {
 
 /** `containerlab -r c9s capture … -w - | wireshark -k -i -`, for a terminal. */
 export function captureTerminalCommand(captureCommand: string, wireshark: string): string {
-  return `${captureCommand} | ${shellQuote(wireshark)} -k -i -`;
+  const { command, args } = wiresharkInvocation(wireshark);
+  return `${captureCommand} | ${[command, ...args].map(shellQuote).join(" ")} -k -i -`;
 }
 
-/** Wireshark on this machine: the configured path, the usual install locations, PATH, or Windows under WSL. */
+/**
+ * Wireshark on this machine: the configured path, the usual install
+ * locations, PATH, Windows under WSL, or the Mac in an OrbStack machine.
+ */
 function findLocalWireshark(): Promise<string | undefined> {
   return findWireshark(
     vscode.workspace.getConfiguration("containerlab").get<string>("capture.wireshark.path", "") ||
@@ -477,6 +495,11 @@ async function resolveTargets(
   return { labName, targets };
 }
 
+/** Wireshark on this machine: a terminal on this machine, else the app reading the stream. */
+function isLocalWiresharkDelivery(delivery: StreamCaptureDelivery | undefined): boolean {
+  return delivery === "terminal" || delivery === "wireshark";
+}
+
 /** The way the request names, if the host has it; else asked, or the host's default. */
 async function chooseDelivery(
   request: StreamCaptureRequest,
@@ -484,6 +507,11 @@ async function chooseDelivery(
   label: string
 ): Promise<StreamCaptureDelivery | undefined> {
   if (request.delivery && choices.deliveries.includes(request.delivery)) return request.delivery;
+  // Wireshark named: on this machine a terminal pipes into it, elsewhere the app does.
+  if (isLocalWiresharkDelivery(request.delivery)) {
+    const wireshark = choices.deliveries.find(isLocalWiresharkDelivery);
+    if (wireshark) return wireshark;
+  }
   if (request.delivery === "vnc" && choices.vncUnavailable) {
     void vscode.window.showWarningMessage(choices.vncUnavailable);
     return undefined;

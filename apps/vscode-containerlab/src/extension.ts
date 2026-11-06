@@ -521,6 +521,7 @@ function registerCommands(context: vscode.ExtensionContext) {
     ["containerlab.node.copyImage", cmd.copyContainerImage],
     ["containerlab.interface.capture", cmd.captureInterface],
     ["containerlab.interface.captureWithEdgeshark", cmd.captureInterfaceWithPacketflix],
+    ["containerlab.interface.captureWithWireshark", cmd.captureInterfaceWithWireshark],
     ["containerlab.interface.captureWithEdgesharkVNC", cmd.captureEdgesharkVNC],
     ["containerlab.node.captureInterfaces", cmd.captureNodeInterfaces],
     ["containerlab.interface.setDelay", cmd.setLinkDelay],
@@ -944,8 +945,8 @@ export async function activate(context: vscode.ExtensionContext) {
     void updateActivityBadgeProxy();
   }
 
-  // Determine if local capture is allowed.
-  const isLocalCaptureAllowed = vscode.env.remoteName !== "ssh-remote" && !utils.isOrbstack();
+  // Over SSH, Wireshark would open on the lab host; an OrbStack machine opens it on its Mac.
+  const isLocalCaptureAllowed = vscode.env.remoteName !== "ssh-remote" || utils.isOrbstack();
   void vscode.commands.executeCommand(
     "setContext",
     "containerlab:isLocalCaptureAllowed",
