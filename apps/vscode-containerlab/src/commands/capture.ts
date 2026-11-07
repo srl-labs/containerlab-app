@@ -1,7 +1,11 @@
 import * as vscode from "vscode";
 
 import { isInternalInterfaceName, nodeNamespaceInterfaceName } from "@containerlab/clab-ui/session";
-import { captureRoutePlan, parseCaptureMethod, type CaptureMethod } from "@containerlab/clab-ui/host";
+import {
+  captureRoutePlan,
+  parseCaptureMethod,
+  type CaptureMethod
+} from "@containerlab/clab-ui/host";
 
 import { outputChannel, dockerClient, extensionContext, username } from "../globals";
 import * as utils from "../utils";

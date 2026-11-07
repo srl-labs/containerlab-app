@@ -151,7 +151,9 @@ export async function streamCaptureHost(
   const connection = connectionOf(node);
   const info = await labHostInfo(connection);
   if (!info) {
-    outputChannel.info(`Capture on ${connection.id}: lab host info unavailable, not using its capture stream`);
+    outputChannel.info(
+      `Capture on ${connection.id}: lab host info unavailable, not using its capture stream`
+    );
     return undefined;
   }
   const choice = {
