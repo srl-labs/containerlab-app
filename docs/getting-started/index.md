@@ -47,7 +47,7 @@ The editor, the explorer, and the lab tools are the same in every app. What diff
 
     **Needs:** nothing.
 
-    [Open the sandbox :lucide-arrow-up-right:](https://srl-labs.github.io/containerlab-app/)
+    [Open the sandbox :lucide-arrow-up-right:](https://containerlab.app/sandbox/)
 
 </div>
 
@@ -60,7 +60,7 @@ The editor, the explorer, and the lab tools are the same in every app. What diff
 | Any app with a lab host | Your home directory on the lab host | The lab host running `clab-api-server` |
 | Sandbox | Browser storage | Nowhere: design only |
 
-Not sure? Start in the [sandbox](https://srl-labs.github.io/containerlab-app/) to get a feel for the editor. On a Linux machine with containerlab, the VS Code extension and the desktop app run labs right away, with nothing else to set up. To work with labs on another machine, from macOS or Windows, or with several people on one server, set up a [lab host](../install/lab-host.md).
+Not sure? Start in the [sandbox](https://containerlab.app/sandbox/) to get a feel for the editor. On a Linux machine with containerlab, the VS Code extension and the desktop app run labs right away, with nothing else to set up. To work with labs on another machine, from macOS or Windows, or with several people on one server, set up a [lab host](../install/lab-host.md).
 
 <div class="next" markdown>
 [:lucide-arrow-right: Run your first lab](first-lab.md)

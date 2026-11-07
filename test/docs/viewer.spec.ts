@@ -5,7 +5,7 @@ test("landing example renders the real graph and links a selected node to its YA
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("./");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("The GUI for containerlab");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName(/^The GUI for containerlab/);
   await expect(page.getByText("Diagrams that speak YAML", { exact: true })).toHaveCount(0);
   await expect(page.locator(".hero-eyebrow, .hero-caption")).toHaveCount(0);
   const component = page.locator("clab-topology").first();

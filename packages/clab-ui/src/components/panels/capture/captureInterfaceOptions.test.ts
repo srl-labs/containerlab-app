@@ -241,8 +241,11 @@ test("capture commands show on c9s hosts through their capture stream", () => {
   assert.equal(hidden.includes("containerlab.interface.capture"), false);
   assert.ok(hidden.includes("containerlab.interface.captureWithEdgeshark"));
   assert.ok(hidden.includes("containerlab.interface.captureWithEdgesharkVNC"));
+  assert.equal(hidden.includes("containerlab.interface.captureWithWireshark"), false);
 
   const noCapture = effectiveSupport(capabilities, { ...base, ...containerRuntimeFeatures(false), captureStream: false });
   assert.ok(hiddenExplorerCommandsForSupport(noCapture).includes("containerlab.node.captureInterfaces"));
   assert.ok(hiddenExplorerCommandsForSupport(noCapture).includes("containerlab.interface.capture"));
+  // Without capture streams, Wireshark on this computer opens through the Edgeshark command.
+  assert.ok(hiddenExplorerCommandsForSupport(noCapture).includes("containerlab.interface.captureWithWireshark"));
 });

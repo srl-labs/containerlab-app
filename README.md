@@ -1,4 +1,10 @@
-# Containerlab Apps
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/images/wordmark-dark.svg">
+  <img alt="containerlab.app" src="docs/assets/images/wordmark-light.svg" width="480">
+</picture>
+
+---
 
 Build, run, and explore your [containerlab](https://containerlab.dev/) network labs in **VS Code**, **a web browser**, or **a desktop app**. Create topologies visually, work with your existing lab files, and go from a network diagram to running devices you can inspect and troubleshoot.
 
@@ -22,7 +28,7 @@ All three apps share the same topology editor, so you can choose the environment
 | **Desktop** | Use a dedicated application on Linux, macOS, or Windows to connect to your lab hosts. | [Download the desktop app](#desktop-app) |
 
 > [!TIP]
-> [Try the browser sandbox](https://srl-labs.github.io/containerlab-app/) without installing anything. You can edit and visualize topologies, with your workspace saved in browser storage. Deploying and interacting with real labs requires one of the apps below.
+> [Try the browser sandbox](https://containerlab.app/sandbox/) without installing anything. You can edit and visualize topologies, with your workspace saved in browser storage. Deploying and interacting with real labs requires one of the apps below.
 
 ## From topology to running lab
 

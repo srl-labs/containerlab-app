@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
 
-import { findWireshark, launchLocalWireshark, wiresharkCandidates } from "./localWireshark.ts";
+import { findWireshark, launchLocalWireshark, wiresharkCandidates, wiresharkInvocation } from "./localWireshark.ts";
 
 /**
  * A wireshark that writes its arguments and its stdin to files. With
@@ -205,4 +205,31 @@ test("under WSL, Wireshark installed on Windows is found through the program fol
     }),
     undefined
   );
+});
+
+test("in an OrbStack machine, Wireshark installed on the Mac is found and run through mac", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "find-wireshark-orb-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const procVersion = "Linux version 7.2.12-orbstack-00394-gbecdd6130068 (orbstack@builder)";
+  const options = { platform: "linux" as const, env: { PATH: "", USER: "u" }, procVersion, orbstackMacRoot: root };
+
+  assert.equal(await findWireshark(undefined, options), undefined);
+  // The Applications folder in the Mac user's home.
+  const userBundle = path.join(root, "Users/u/Applications/Wireshark.app/Contents/MacOS");
+  await fs.mkdir(userBundle, { recursive: true });
+  await fs.writeFile(path.join(userBundle, "Wireshark"), "");
+  assert.equal(await findWireshark(undefined, options), path.join(userBundle, "Wireshark"));
+  // /Applications comes first.
+  const bundle = path.join(root, "Applications/Wireshark.app/Contents/MacOS");
+  await fs.mkdir(bundle, { recursive: true });
+  await fs.writeFile(path.join(bundle, "Wireshark"), "");
+  assert.equal(await findWireshark(undefined, options), path.join(bundle, "Wireshark"));
+  // Not OrbStack: the Mac is not looked at.
+  assert.equal(await findWireshark(undefined, { ...options, procVersion: "Linux version 6.8.0-generic" }), undefined);
+
+  assert.deepEqual(wiresharkInvocation("/mnt/mac/Applications/Wireshark.app/Contents/MacOS/Wireshark"), {
+    command: "/opt/orbstack-guest/bin/mac",
+    args: ["/Applications/Wireshark.app/Contents/MacOS/Wireshark"]
+  });
+  assert.deepEqual(wiresharkInvocation("/usr/bin/wireshark"), { command: "/usr/bin/wireshark", args: [] });
 });

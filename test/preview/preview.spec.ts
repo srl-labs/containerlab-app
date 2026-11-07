@@ -9,7 +9,7 @@ test("docs, nested guides and the sandbox work in one static preview", async ({ 
     }
   });
   await page.goto("./");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("The GUI for containerlab");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName(/^The GUI for containerlab/);
   const landing = page.locator("clab-topology").first();
   await expect(landing).toHaveAttribute("data-loaded", "true");
   await expect(landing.frameLocator("iframe").locator(".react-flow__node-topology-node")).toHaveCount(8);

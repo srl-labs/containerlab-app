@@ -97,5 +97,11 @@ describe("stream capture deliveries", () => {
     expect(captureTerminalCommand("clab", "/mnt/c/Program Files/Wireshark/Wireshark.exe")).to.equal(
       "clab | '/mnt/c/Program Files/Wireshark/Wireshark.exe' -k -i -"
     );
+    // A Mac Wireshark in an OrbStack machine, run through OrbStack's mac command.
+    expect(
+      captureTerminalCommand("clab", "/mnt/mac/Applications/Wireshark.app/Contents/MacOS/Wireshark")
+    ).to.equal(
+      "clab | /opt/orbstack-guest/bin/mac /Applications/Wireshark.app/Contents/MacOS/Wireshark -k -i -"
+    );
   });
 });

@@ -175,6 +175,7 @@ const COMMAND_LABELS: Record<string, string> = {
   "containerlab.node.copyKind": "Copy Node Kind",
   "containerlab.node.copyImage": "Copy Node Image",
   "containerlab.interface.capture": "Capture",
+  "containerlab.interface.captureWithWireshark": "Capture With Wireshark",
   "containerlab.interface.captureWithEdgeshark": "Capture With Edgeshark",
   "containerlab.interface.captureWithEdgesharkVNC": "Capture With Edgeshark VNC",
   "containerlab.interface.setDelay": "Set Delay",
@@ -795,6 +796,7 @@ function appendInterfaceActions(
 ): void {
   if (isLocalCaptureAllowed) {
     pushAction(actions, seen, registry, "containerlab.interface.capture", [item]);
+    pushAction(actions, seen, registry, "containerlab.interface.captureWithWireshark", [item]);
   }
   pushAction(actions, seen, registry, "containerlab.interface.captureWithEdgeshark", [item]);
   pushAction(actions, seen, registry, "containerlab.interface.captureWithEdgesharkVNC", [item]);

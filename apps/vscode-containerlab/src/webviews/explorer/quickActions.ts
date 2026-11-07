@@ -4,6 +4,7 @@ const CONTAINER_QUICK_ACTION_COMMANDS = ["containerlab.node.attachShell", "conta
 const LAB_QUICK_ACTION_COMMANDS = ["containerlab.lab.openFile"];
 const INTERFACE_CAPTURE_COMMANDS = [
   "containerlab.interface.capture",
+  "containerlab.interface.captureWithWireshark",
   "containerlab.interface.captureWithEdgeshark",
   "containerlab.interface.captureWithEdgesharkVNC"
 ];
