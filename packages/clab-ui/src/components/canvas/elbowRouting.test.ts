@@ -6,6 +6,7 @@ import {
   fitPortPositions,
   getPointAlongPolyline,
   parseLinkStyle,
+  routeCurveLinks,
   routeElbowLinks,
   type ElbowLinkInput
 } from "./elbowRouting";
@@ -24,6 +25,20 @@ function link(id: string, source: string, target: string, from: [number, number]
     sourceRect: rect(...from),
     targetRect: rect(...to)
   } satisfies ElbowLinkInput;
+}
+
+function distanceToPolyline(point: { x: number; y: number }, points: { x: number; y: number }[]) {
+  let best = Infinity;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const along = ((point.x - a.x) * dx + (point.y - a.y) * dy) / (dx * dx + dy * dy);
+    const t = Math.max(0, Math.min(1, along));
+    best = Math.min(best, Math.hypot(point.x - (a.x + dx * t), point.y - (a.y + dy * t)));
+  }
+  return best;
 }
 
 function isOrthogonal(points: { x: number; y: number }[]): boolean {
@@ -199,4 +214,78 @@ test("bends get tighter where neighbouring links run close", () => {
     assert.ok(route.cornerRadius < 8, `radius ${route.cornerRadius}`);
     assert.ok(route.cornerRadius >= 2);
   }
+});
+
+test("curved links between facing nodes run straight", () => {
+  const routes = routeCurveLinks([link("a", "s", "t", [0, 0], [0, 200])]);
+  assert.deepEqual(routes.get("a")?.points, [
+    { x: 20, y: 40 },
+    { x: 20, y: 200 }
+  ]);
+});
+
+test("curved links leave and meet the nodes head on past their labels", () => {
+  const route = routeCurveLinks(
+    [
+      {
+        ...link("a", "s", "t", [0, 0], [200, 300]),
+        sourceLabelLength: 30,
+        targetLabelLength: 30
+      }
+    ],
+    { bottomClearance: 16 }
+  ).get("a");
+  assert.ok(route);
+  assert.equal(route.sourceSide, "bottom");
+  assert.equal(route.targetSide, "top");
+  const [start, sourceExit] = route.points;
+  const [end, targetExit] = [...route.points].reverse();
+  assert.deepEqual(start, { x: 20, y: 40 });
+  assert.deepEqual(end, { x: 220, y: 300 });
+  // node bottom 40 + name 16 + label 30 + air 6, then target top 300 - label 30 - air 6
+  assert.deepEqual(sourceExit, { x: 20, y: 40 + 16 + 36 });
+  assert.deepEqual(targetExit, { x: 220, y: 300 - 36 });
+  assert.ok(route.points.every((point) => point.y >= 40 && point.y <= 300));
+});
+
+test("parallel curved links follow each other at a constant distance", () => {
+  const routes = routeCurveLinks([
+    link("p1", "a", "b", [0, 0], [200, 200]),
+    link("p2", "b", "a", [200, 200], [0, 0]),
+    link("p3", "a", "b", [0, 0], [200, 200])
+  ]);
+  const p1 = routes.get("p1")?.points;
+  const p2 = routes.get("p2")?.points;
+  const p3 = routes.get("p3")?.points;
+  assert.ok(p1 && p2 && p3);
+  // p2 was drawn the other way, so it starts on b.
+  assert.equal(p2[0].y, 200);
+  for (const [line, other] of [
+    [p1, p2],
+    [p2, p3]
+  ]) {
+    for (const point of line) {
+      const gap = distanceToPolyline(point, other);
+      assert.ok(Math.abs(gap - 12) < 0.5, `gap ${gap}`);
+    }
+  }
+});
+
+test("bundled curves keep the port spacing of each side", () => {
+  // The spine's bottom side is crowded with links to other leaves; the leaf's top is not.
+  const inputs = [
+    link("p1", "spine", "leaf", [400, 0], [0, 300]),
+    link("p2", "spine", "leaf", [400, 0], [0, 300]),
+    ...Array.from({ length: 10 }, (_, i) =>
+      link(`l${i}`, "spine", `other${i}`, [400, 0], [100 + i * 80, 300])
+    )
+  ];
+  const routes = routeCurveLinks(inputs);
+  const p1 = routes.get("p1")?.points;
+  const p2 = routes.get("p2")?.points;
+  assert.ok(p1 && p2);
+  const startGap = Math.abs(p1[0].x - p2[0].x);
+  const endGap = Math.abs((p1.at(-1)?.x ?? 0) - (p2.at(-1)?.x ?? 0));
+  assert.ok(startGap < 12, `start gap ${startGap}`);
+  assert.ok(Math.abs(endGap - 12) < 0.01, `end gap ${endGap}`);
 });

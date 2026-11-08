@@ -14,6 +14,7 @@ export type ElbowSide = "top" | "right" | "bottom" | "left";
 
 type Axis = "horizontal" | "vertical";
 
+/** Route of an elbow or a curved link. */
 export interface ElbowRoute {
   points: XYPosition[];
   sourceSide: ElbowSide;
@@ -55,6 +56,16 @@ const FLOW_MIN_GAP = MIN_STUB * 2;
 // Air on each side of an endpoint label before the link may bend.
 const LABEL_AIR = 3;
 const OVERLAP_EPSILON = 1;
+// Share of the gap that each straight end of a curve may take, so it keeps room to turn.
+const CURVE_STUB_SHARE = 1 / 3;
+// How far a curve's handles reach, as a share of the run between its straight ends.
+const CURVE_TENSION = 0.5;
+// Spacing of the points that trace a curve.
+const CURVE_STEP = 3;
+const MIN_CURVE_STEPS = 8;
+const SAME_POINT_EPSILON = 0.01;
+// Keeps an offset point from shooting out where the polyline turns sharply.
+const MIN_MITER_COS = 0.3;
 
 interface Route {
   id: string;
@@ -522,15 +533,11 @@ function toPolyline(route: Route): XYPosition[] {
   return [start, { x: start.x, y: route.mid }, { x: end.x, y: route.mid }, end];
 }
 
-/**
- * Route links as right-angle elbows. Each link leaves the side of its node that
- * faces the other node; links sharing a side spread out along it, and middle
- * segments that would overlap get separate tracks.
- */
-export function routeElbowLinks(
+/** Sides and ports for every link, shared by elbow and curved links. */
+function createPortedRoutes(
   inputs: ElbowLinkInput[],
-  options: ElbowRouteOptions = {}
-): Map<string, ElbowRoute> {
+  options: ElbowRouteOptions
+): { routes: Route[]; inputById: Map<string, ElbowLinkInput> } {
   const portGap = options.portGap ?? DEFAULT_PORT_GAP;
   const bottomClearance = options.bottomClearance ?? 0;
   const links = inputs.filter((input) => input.source !== input.target);
@@ -543,6 +550,19 @@ export function routeElbowLinks(
   }
 
   assignPorts(routes, inputById, portGap);
+  return { routes, inputById };
+}
+
+/**
+ * Route links as right-angle elbows. Each link leaves the side of its node that
+ * faces the other node; links sharing a side spread out along it, and middle
+ * segments that would overlap get separate tracks.
+ */
+export function routeElbowLinks(
+  inputs: ElbowLinkInput[],
+  options: ElbowRouteOptions = {}
+): Map<string, ElbowRoute> {
+  const { routes } = createPortedRoutes(inputs, options);
   assignTracks(routes);
 
   const result = new Map<string, ElbowRoute>();
@@ -553,6 +573,210 @@ export function routeElbowLinks(
       targetSide: route.targetSide,
       cornerRadius: getCornerRadius(route)
     });
+  }
+  return result;
+}
+
+function getSideDirection(side: ElbowSide): XYPosition {
+  switch (side) {
+    case "top":
+      return { x: 0, y: -1 };
+    case "bottom":
+      return { x: 0, y: 1 };
+    case "left":
+      return { x: -1, y: 0 };
+    case "right":
+      return { x: 1, y: 0 };
+  }
+}
+
+function getPointOnLine(side: ElbowSide, port: number, line: number): XYPosition {
+  return isHorizontalSide(side) ? { x: port, y: line } : { x: line, y: port };
+}
+
+/** Where the straight run out of each end gives way to the curve. */
+function getCurveExitLines(route: Route): { source: number; target: number } {
+  const sourceLine = getSideLine(route.sourceRect, route.sourceSide);
+  const targetLine = getSideLine(route.targetRect, route.targetSide);
+  const gap = targetLine - sourceLine;
+  const limit = Math.abs(gap) * CURVE_STUB_SHARE;
+  return {
+    source: sourceLine + Math.sign(gap) * Math.min(route.sourceClearance, limit),
+    target: targetLine - Math.sign(gap) * Math.min(route.targetClearance, limit)
+  };
+}
+
+function getCubicPoint([p0, p1, p2, p3]: XYPosition[], t: number): XYPosition {
+  const u = 1 - t;
+  const a = u * u * u;
+  const b = 3 * u * u * t;
+  const c = 3 * u * t * t;
+  const d = t * t * t;
+  return {
+    x: a * p0.x + b * p1.x + c * p2.x + d * p3.x,
+    y: a * p0.y + b * p1.y + c * p2.y + d * p3.y
+  };
+}
+
+function dropRepeatedPoints(points: XYPosition[]): XYPosition[] {
+  return points.filter(
+    (point, i) => i === 0 || distance(points[i - 1], point) > SAME_POINT_EPSILON
+  );
+}
+
+/**
+ * A straight run out of each node, past its name and label, joined by a
+ * Bézier that leaves and meets both runs head on. Traced as a polyline so
+ * labels and parallel links can follow it.
+ */
+function getCurvePolyline(route: Route, sourcePort: number, targetPort: number): XYPosition[] {
+  const start = getPortPoint(route.sourceRect, route.sourceSide, sourcePort);
+  const end = getPortPoint(route.targetRect, route.targetSide, targetPort);
+  if (Math.abs(sourcePort - targetPort) < ALIGN_EPSILON) return [start, end];
+
+  const exits = getCurveExitLines(route);
+  const from = getPointOnLine(route.sourceSide, sourcePort, exits.source);
+  const to = getPointOnLine(route.targetSide, targetPort, exits.target);
+  const reach = Math.abs(exits.target - exits.source) * CURVE_TENSION;
+  const out = getSideDirection(route.sourceSide);
+  const back = getSideDirection(route.targetSide);
+  const handles = [
+    from,
+    { x: from.x + out.x * reach, y: from.y + out.y * reach },
+    { x: to.x + back.x * reach, y: to.y + back.y * reach },
+    to
+  ];
+  const steps = Math.max(MIN_CURVE_STEPS, Math.ceil(distance(from, to) / CURVE_STEP));
+  const points = [start];
+  for (let i = 0; i <= steps; i++) points.push(getCubicPoint(handles, i / steps));
+  points.push(end);
+  return dropRepeatedPoints(points);
+}
+
+function getNormal(from: XYPosition, to: XYPosition): XYPosition {
+  const length = distance(from, to) || 1;
+  return { x: -(to.y - from.y) / length, y: (to.x - from.x) / length };
+}
+
+/**
+ * The polyline moved sideways, mitred at each point. The distance holds along
+ * each straight end and eases from one to the other along the curve between.
+ */
+function offsetPolyline(
+  points: XYPosition[],
+  sourceOffset: number,
+  targetOffset: number
+): XYPosition[] {
+  if (points.length < 2 || (sourceOffset === 0 && targetOffset === 0)) return points;
+  const last = points.length - 1;
+  const travelled = [0];
+  for (let i = 1; i <= last; i++) {
+    travelled.push(travelled[i - 1] + distance(points[i - 1], points[i]));
+  }
+  // The first and last segments are the straight ends.
+  const curveStart = last > 1 ? travelled[1] : 0;
+  const curveEnd = last > 1 ? travelled[last - 1] : travelled[last];
+  const span = curveEnd - curveStart;
+  return points.map((point, i) => {
+    const share = span > 0 ? Math.min(1, Math.max(0, (travelled[i] - curveStart) / span)) : 0;
+    const eased = share * share * (3 - 2 * share);
+    const offset = sourceOffset + (targetOffset - sourceOffset) * eased;
+    const before = getNormal(points[Math.max(i - 1, 0)], points[Math.max(i, 1)]);
+    const after = getNormal(points[Math.min(i, last - 1)], points[Math.min(i + 1, last)]);
+    const sumX = before.x + after.x;
+    const sumY = before.y + after.y;
+    const length = Math.hypot(sumX, sumY) || 1;
+    const miter = { x: sumX / length, y: sumY / length };
+    const reach = offset / Math.max(MIN_MITER_COS, miter.x * before.x + miter.y * before.y);
+    return { x: point.x + miter.x * reach, y: point.y + miter.y * reach };
+  });
+}
+
+/** Links between the same two nodes, whichever way they were drawn. */
+function groupBundles(routes: Route[], inputs: Map<string, ElbowLinkInput>): Route[][] {
+  const bundles = new Map<string, Route[]>();
+  for (const route of routes) {
+    const input = inputs.get(route.id);
+    if (!input) continue;
+    const key =
+      input.source < input.target
+        ? `${input.source}\u0000${input.target}`
+        : `${input.target}\u0000${input.source}`;
+    const bundle = bundles.get(key);
+    if (bundle) bundle.push(route);
+    else bundles.set(key, [route]);
+  }
+  return [...bundles.values()];
+}
+
+function getMean(values: number[]): number {
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+/**
+ * One curve through the middle of a bundle, which each of its links follows
+ * side by side instead of fanning out. Each straight end keeps the port
+ * spacing of its side, so a crowded side does not squeeze the other.
+ */
+function routeCurveBundle(
+  bundle: Route[],
+  inputs: Map<string, ElbowLinkInput>,
+  result: Map<string, ElbowRoute>
+): void {
+  const lead = bundle[0];
+  const leadSource = inputs.get(lead.id)?.source;
+  // Ends seen from the lead link, whichever way each link was drawn.
+  const members = bundle.map((route) => {
+    const forward = inputs.get(route.id)?.source === leadSource;
+    return {
+      route,
+      forward,
+      sourcePort: forward ? route.sourcePort : route.targetPort,
+      targetPort: forward ? route.targetPort : route.sourcePort,
+      sourceClearance: forward ? route.sourceClearance : route.targetClearance,
+      targetClearance: forward ? route.targetClearance : route.sourceClearance
+    };
+  });
+  const center = getCurvePolyline(
+    {
+      ...lead,
+      sourceClearance: Math.max(...members.map((member) => member.sourceClearance)),
+      targetClearance: Math.max(...members.map((member) => member.targetClearance))
+    },
+    getMean(members.map((member) => member.sourcePort)),
+    getMean(members.map((member) => member.targetPort))
+  );
+
+  // Keep the order the ports were given.
+  const normal = getNormal(center[0], center[1]);
+  const along = isHorizontalSide(lead.sourceSide) ? normal.x : normal.y;
+  members.sort((a, b) => a.sourcePort - b.sourcePort || a.route.id.localeCompare(b.route.id));
+  members.forEach((member, index) => {
+    const slot = (index - (members.length - 1) / 2) * along;
+    const points = offsetPolyline(center, slot * lead.sourcePitch, slot * lead.targetPitch);
+    result.set(member.route.id, {
+      points: member.forward ? points : [...points].reverse(),
+      sourceSide: member.route.sourceSide,
+      targetSide: member.route.targetSide,
+      cornerRadius: 0
+    });
+  });
+}
+
+/**
+ * Route links as curves. Each link leaves the side of its node that faces the
+ * other node in a straight run long enough for its label, then turns in a
+ * Bézier that meets the other end head on. Links between the same two nodes
+ * follow one curve side by side.
+ */
+export function routeCurveLinks(
+  inputs: ElbowLinkInput[],
+  options: ElbowRouteOptions = {}
+): Map<string, ElbowRoute> {
+  const { routes, inputById } = createPortedRoutes(inputs, options);
+  const result = new Map<string, ElbowRoute>();
+  for (const bundle of groupBundles(routes, inputById)) {
+    routeCurveBundle(bundle, inputById, result);
   }
   return result;
 }
