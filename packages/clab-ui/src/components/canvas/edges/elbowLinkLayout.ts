@@ -1,5 +1,5 @@
 /**
- * Shared elbow routes for the canvas, and where elbow link labels go.
+ * Shared elbow and curve routes for the canvas, and where their link labels go.
  */
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 
@@ -9,6 +9,7 @@ import {
   getElbowLoopPolyline,
   getPointAlongPolyline,
   getPolylineLength,
+  routeCurveLinks,
   routeElbowLinks,
   type ElbowRoute,
   type ElbowRouteOptions,
@@ -28,10 +29,17 @@ interface RouteCache {
   edgesRef: Edge[] | null;
   nodesRef: Node[] | null;
   key: string;
+  curved: boolean;
   routes: Map<string, ElbowRoute>;
 }
 
-let routeCache: RouteCache = { edgesRef: null, nodesRef: null, key: "", routes: new Map() };
+let routeCache: RouteCache = {
+  edgesRef: null,
+  nodesRef: null,
+  key: "",
+  curved: false,
+  routes: new Map()
+};
 
 /**
  * Routes depend on every link, so they are computed once per graph change and
@@ -43,9 +51,15 @@ export function getCachedElbowRoutes(
   getRect: (node: Node) => NodeRect,
   getLabelLengths: (edge: Edge) => { source: number; target: number },
   key: string,
-  options: ElbowRouteOptions
+  options: ElbowRouteOptions,
+  curved = false
 ): Map<string, ElbowRoute> {
-  if (routeCache.edgesRef === edges && routeCache.nodesRef === nodes && routeCache.key === key) {
+  if (
+    routeCache.edgesRef === edges &&
+    routeCache.nodesRef === nodes &&
+    routeCache.key === key &&
+    routeCache.curved === curved
+  ) {
     return routeCache.routes;
   }
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
@@ -66,8 +80,8 @@ export function getCachedElbowRoutes(
       targetLabelLength: labelLengths.target
     });
   }
-  const routes = routeElbowLinks(inputs, options);
-  routeCache = { edgesRef: edges, nodesRef: nodes, key, routes };
+  const routes = curved ? routeCurveLinks(inputs, options) : routeElbowLinks(inputs, options);
+  routeCache = { edgesRef: edges, nodesRef: nodes, key, curved, routes };
   return routes;
 }
 
@@ -120,7 +134,8 @@ export function placeElbowLabel(
   points: XYPosition[],
   side: ElbowSide,
   label: ElbowLabelInput,
-  nameClearance: number
+  nameClearance: number,
+  curved = false
 ): ElbowLabelPlacement {
   const vertical = side === "top" || side === "bottom";
   const half = estimateLabelLength(label) / 2;
@@ -128,9 +143,11 @@ export function placeElbowLabel(
   const wanted = clearance + LABEL_GAP + half;
 
   // Stay on the first run so the label does not wrap round a bend; a straight
-  // link shares its length with the label at the other end.
+  // link shares its length with the label at the other end. A curve leaves
+  // its first run without a corner to keep clear of.
   const firstRun = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
-  const room = points.length > 2 ? firstRun - BEND_MARGIN : getPolylineLength(points) / 2;
+  const bendMargin = curved ? 0 : BEND_MARGIN;
+  const room = points.length > 2 ? firstRun - bendMargin : getPolylineLength(points) / 2;
   const distance = Math.max(Math.min(wanted, room - half), Math.min(half, room));
   const point = getPointAlongPolyline(points, distance);
   return { x: point.x, y: point.y, rotation: vertical ? -90 : 0 };

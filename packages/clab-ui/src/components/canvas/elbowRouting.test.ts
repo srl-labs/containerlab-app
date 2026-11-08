@@ -48,6 +48,7 @@ function isOrthogonal(points: { x: number; y: number }[]): boolean {
 test("parseLinkStyle accepts only known styles", () => {
   assert.equal(parseLinkStyle("elbow"), "elbow");
   assert.equal(parseLinkStyle("straight"), "straight");
+  assert.equal(parseLinkStyle("curve"), "curve");
   assert.equal(parseLinkStyle("curved"), null);
   assert.equal(parseLinkStyle(undefined), null);
 });

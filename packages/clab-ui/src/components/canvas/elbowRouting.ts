@@ -2,12 +2,12 @@ import type { XYPosition } from "@xyflow/react";
 
 import type { NodeRect } from "./edgeGeometry";
 
-export type LinkStyle = "straight" | "elbow";
+export type LinkStyle = "straight" | "elbow" | "curve";
 
 export const DEFAULT_LINK_STYLE: LinkStyle = "straight";
 
 export function parseLinkStyle(value: unknown): LinkStyle | null {
-  return value === "straight" || value === "elbow" ? value : null;
+  return value === "straight" || value === "elbow" || value === "curve" ? value : null;
 }
 
 export type ElbowSide = "top" | "right" | "bottom" | "left";
