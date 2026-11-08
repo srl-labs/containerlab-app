@@ -222,7 +222,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
       ) : null}
       <SettingsField
         title="Link style"
-        description="Straight lines, or elbows with right-angle bends."
+        description="Straight lines, elbows with right-angle bends, or smooth curves."
       >
         <TextField
           slotProps={{ select: { inputProps: { "aria-label": "Link style" } } }}
@@ -238,6 +238,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
         >
           <MenuItem value="straight">Straight</MenuItem>
           <MenuItem value="elbow">Elbow</MenuItem>
+          <MenuItem value="curve">Curve</MenuItem>
         </TextField>
       </SettingsField>
       {hasSeveralMgmtNetworks ? (
