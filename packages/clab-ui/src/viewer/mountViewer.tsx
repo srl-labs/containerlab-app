@@ -31,7 +31,8 @@ export function mountViewer(container: Element, options: MountViewerOptions): Ro
     isLocked: true,
     selectedNode: null,
     selectedEdge: null,
-    ...(resolved.linkStyle !== undefined ? { linkStyle: resolved.linkStyle } : {})
+    ...(resolved.linkStyle !== undefined ? { linkStyle: resolved.linkStyle } : {}),
+    ...(resolved.linkCurvature !== undefined ? { linkCurvature: resolved.linkCurvature } : {})
   });
   useCanvasStore.setState({
     linkSourceNode: null,

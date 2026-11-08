@@ -7,6 +7,8 @@ export interface ViewerOptions {
   linkLabels?: "show-all" | "on-select" | "hide";
   /** Straight lines, right-angle elbows, or curves; defaults to the style saved in the annotations. */
   linkStyle?: "straight" | "elbow" | "curve";
+  /** How far curved links swing out, from 0.2 to 1; defaults to the curvature saved in the annotations. */
+  linkCurvature?: number;
   /** Highlight a hovered link and both of its nodes, and fade the other links. Off by default. */
   linkHover?: boolean;
   zoomOnScroll?: boolean;

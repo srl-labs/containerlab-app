@@ -38,7 +38,7 @@ class TopologyPreprocessor(Preprocessor):
             "link-style": {"straight", "elbow", "curve"},
             "loading": {"eager", "lazy"},
         }
-        allowed = {"title", "file", "annotations", "view", "height", "filename", "fit-padding"} | toggles | choices.keys()
+        allowed = {"title", "file", "annotations", "view", "height", "filename", "fit-padding", "link-curvature"} | toggles | choices.keys()
         unknown = options.keys() - allowed
         if unknown:
             raise ValueError(f"Unknown clab fence options: {', '.join(sorted(unknown))}")
@@ -61,6 +61,8 @@ class TopologyPreprocessor(Preprocessor):
                 raise ValueError(f"Unknown {option}: {options[option]}")
         if "fit-padding" in options and not 0 <= float(options["fit-padding"]) <= 2:
             raise ValueError("fit-padding must be between 0 and 2")
+        if "link-curvature" in options and not 0.2 <= float(options["link-curvature"]) <= 1:
+            raise ValueError("link-curvature must be between 0.2 and 1")
         height = int(options.get("height", "460"))
         if not 240 <= height <= 1000:
             raise ValueError("Topology height must be between 240 and 1000 pixels")
@@ -69,7 +71,7 @@ class TopologyPreprocessor(Preprocessor):
         attrs = {"title": title, "view": view, "filename": filename, "height": str(height)}
         if options.get("borderless") == "true":
             attrs["borderless"] = ""
-        for option in sorted((toggles - {"borderless"} | choices.keys() | {"fit-padding"}) & options.keys()):
+        for option in sorted((toggles - {"borderless"} | choices.keys() | {"fit-padding", "link-curvature"}) & options.keys()):
             attrs[option] = options[option]
         if "annotations" in options:
             annotations = self.read_asset(options["annotations"])

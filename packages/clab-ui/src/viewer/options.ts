@@ -1,4 +1,5 @@
 import type { ReactFlowInstance } from "@xyflow/react";
+import { LINK_CURVATURE_RANGE } from "../components/canvas/elbowRouting";
 import { isRecord } from "../core/utilities/typeHelpers";
 import type { ViewerOptions as PublicViewerOptions } from "./publicTypes";
 
@@ -25,6 +26,10 @@ function isFitPadding(value: unknown): boolean {
   return value === undefined || (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 2);
 }
 
+function isLinkCurvature(value: unknown): boolean {
+  return value === undefined || (typeof value === "number" && Number.isFinite(value) && value >= LINK_CURVATURE_RANGE.min && value <= LINK_CURVATURE_RANGE.max);
+}
+
 function isAppearance(value: unknown): boolean {
   return value === undefined || (isRecord(value) && Object.values(value).every(value => typeof value === "string"));
 }
@@ -40,5 +45,5 @@ export function isViewerOptions(value: unknown): value is ViewerOptions | undefi
   if (options.background !== undefined && !["dots", "lines", "none"].includes(String(options.background))) return false;
   if (options.linkLabels !== undefined && !["show-all", "on-select", "hide"].includes(String(options.linkLabels))) return false;
   if (options.linkStyle !== undefined && !["straight", "elbow", "curve"].includes(String(options.linkStyle))) return false;
-  return isFitPadding(options.fitPadding) && isAppearance(options.appearance);
+  return isFitPadding(options.fitPadding) && isLinkCurvature(options.linkCurvature) && isAppearance(options.appearance);
 }
