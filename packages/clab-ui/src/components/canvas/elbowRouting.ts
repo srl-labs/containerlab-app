@@ -10,6 +10,16 @@ export function parseLinkStyle(value: unknown): LinkStyle | null {
   return value === "straight" || value === "elbow" || value === "curve" ? value : null;
 }
 
+/** How far curved links swing out: low values run almost diagonal, high ones in an S. */
+export const LINK_CURVATURE_RANGE = { min: 0.2, max: 1, step: 0.05 };
+
+export const DEFAULT_LINK_CURVATURE = 0.5;
+
+export function parseLinkCurvature(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.min(LINK_CURVATURE_RANGE.max, Math.max(LINK_CURVATURE_RANGE.min, value));
+}
+
 export type ElbowSide = "top" | "right" | "bottom" | "left";
 
 type Axis = "horizontal" | "vertical";
@@ -56,8 +66,6 @@ const FLOW_MIN_GAP = MIN_STUB * 2;
 // Air on each side of an endpoint label before the link may bend.
 const LABEL_AIR = 3;
 const OVERLAP_EPSILON = 1;
-// How far a curve's handles reach, as a share of the gap between the nodes.
-const CURVE_TENSION = 0.5;
 // A handle reaches at least this far past the label, so the curve leaves the
 // node almost straight and the label lies along it.
 const CURVE_LABEL_REACH = 1.3;
@@ -96,6 +104,8 @@ export interface ElbowRouteOptions {
   portGap?: number;
   /** Room under each node kept free of bends, for the node name. */
   bottomClearance?: number;
+  /** How far the handles of curved links reach, as a share of the gap between the nodes. */
+  curvature?: number;
 }
 
 interface PortRequest {
@@ -594,8 +604,8 @@ function getSideDirection(side: ElbowSide): XYPosition {
 }
 
 /** Handle length at one end: past the name and label, but short of the other node. */
-function getCurveReach(gap: number, clearance: number): number {
-  const reach = Math.max(gap * CURVE_TENSION, clearance * CURVE_LABEL_REACH);
+function getCurveReach(gap: number, clearance: number, curvature: number): number {
+  const reach = Math.max(gap * curvature, clearance * CURVE_LABEL_REACH);
   return Math.min(gap * MAX_CURVE_REACH, reach);
 }
 
@@ -621,7 +631,12 @@ function dropRepeatedPoints(points: XYPosition[]): XYPosition[] {
  * A Bézier that leaves one port and meets the other head on. Traced as a
  * polyline so labels and parallel links can follow it.
  */
-function getCurvePolyline(route: Route, sourcePort: number, targetPort: number): XYPosition[] {
+function getCurvePolyline(
+  route: Route,
+  sourcePort: number,
+  targetPort: number,
+  curvature: number
+): XYPosition[] {
   const start = getPortPoint(route.sourceRect, route.sourceSide, sourcePort);
   const end = getPortPoint(route.targetRect, route.targetSide, targetPort);
   if (Math.abs(sourcePort - targetPort) < ALIGN_EPSILON) return [start, end];
@@ -629,8 +644,8 @@ function getCurvePolyline(route: Route, sourcePort: number, targetPort: number):
   const gap = Math.abs(
     getSideLine(route.targetRect, route.targetSide) - getSideLine(route.sourceRect, route.sourceSide)
   );
-  const sourceReach = getCurveReach(gap, route.sourceClearance);
-  const targetReach = getCurveReach(gap, route.targetClearance);
+  const sourceReach = getCurveReach(gap, route.sourceClearance, curvature);
+  const targetReach = getCurveReach(gap, route.targetClearance, curvature);
   const out = getSideDirection(route.sourceSide);
   const back = getSideDirection(route.targetSide);
   const handles = [
@@ -710,6 +725,7 @@ function getMean(values: number[]): number {
 function routeCurveBundle(
   bundle: Route[],
   inputs: Map<string, ElbowLinkInput>,
+  curvature: number,
   result: Map<string, ElbowRoute>
 ): void {
   const lead = bundle[0];
@@ -733,7 +749,8 @@ function routeCurveBundle(
       targetClearance: Math.max(...members.map((member) => member.targetClearance))
     },
     getMean(members.map((member) => member.sourcePort)),
-    getMean(members.map((member) => member.targetPort))
+    getMean(members.map((member) => member.targetPort)),
+    curvature
   );
 
   // Keep the order the ports were given.
@@ -763,9 +780,10 @@ export function routeCurveLinks(
   options: ElbowRouteOptions = {}
 ): Map<string, ElbowRoute> {
   const { routes, inputById } = createPortedRoutes(inputs, options);
+  const curvature = options.curvature ?? DEFAULT_LINK_CURVATURE;
   const result = new Map<string, ElbowRoute>();
   for (const bundle of groupBundles(routes, inputById)) {
-    routeCurveBundle(bundle, inputById, result);
+    routeCurveBundle(bundle, inputById, curvature, result);
   }
   return result;
 }

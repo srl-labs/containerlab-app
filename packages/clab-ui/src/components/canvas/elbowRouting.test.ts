@@ -5,6 +5,7 @@ import {
   buildRoundedPolylinePath,
   fitPortPositions,
   getPointAlongPolyline,
+  parseLinkCurvature,
   parseLinkStyle,
   routeCurveLinks,
   routeElbowLinks,
@@ -51,6 +52,14 @@ test("parseLinkStyle accepts only known styles", () => {
   assert.equal(parseLinkStyle("curve"), "curve");
   assert.equal(parseLinkStyle("curved"), null);
   assert.equal(parseLinkStyle(undefined), null);
+});
+
+test("parseLinkCurvature keeps the curvature in range", () => {
+  assert.equal(parseLinkCurvature(0.7), 0.7);
+  assert.equal(parseLinkCurvature(0), 0.2);
+  assert.equal(parseLinkCurvature(3), 1);
+  assert.equal(parseLinkCurvature("0.7"), null);
+  assert.equal(parseLinkCurvature(Number.NaN), null);
 });
 
 test("aligned nodes get one straight segment", () => {
@@ -300,4 +309,18 @@ test("bundled curves keep the port spacing of each side", () => {
   const endGap = Math.abs((p1.at(-1)?.x ?? 0) - (p2.at(-1)?.x ?? 0));
   assert.ok(startGap < 12, `start gap ${startGap}`);
   assert.ok(Math.abs(endGap - 12) < 0.01, `end gap ${endGap}`);
+});
+
+test("a higher curvature bends curved links into a deeper S", () => {
+  const input = link("a", "s", "t", [0, 0], [200, 300]);
+  // How far the link has moved sideways a quarter of the way down the gap.
+  const sideways = (curvature: number) => {
+    const points = routeCurveLinks([input], { curvature }).get("a")?.points;
+    assert.ok(points);
+    const quarter = points.find((point) => point.y >= 40 + 260 / 4);
+    assert.ok(quarter);
+    return quarter.x - 20;
+  };
+  assert.ok(sideways(1) < sideways(0.5), `${sideways(1)} vs ${sideways(0.5)}`);
+  assert.ok(sideways(0.5) < sideways(0.2), `${sideways(0.5)} vs ${sideways(0.2)}`);
 });

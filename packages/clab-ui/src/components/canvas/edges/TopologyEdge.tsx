@@ -24,6 +24,7 @@ import {
   useAnimateTraffic,
   useTelemetryLabelSettings,
   useDeploymentState,
+  useLinkCurvature,
   useLinkStyle,
   useNodeBoxSpacing,
   useNodeStyle,
@@ -1132,7 +1133,8 @@ function useEdgeGeometry(
   edgeData: EdgeDataLike | undefined,
   labelMode: EdgeLabelMode,
   telemetryConfig: TelemetryLabelRenderConfig | null,
-  linkStyle: LinkStyle
+  linkStyle: LinkStyle,
+  linkCurvature: number
 ) {
   // Elbow and curved links follow routes shared by every link.
   const isRouted = linkStyle !== "straight";
@@ -1186,6 +1188,7 @@ function useEdgeGeometry(
       ].join("|"),
     [labelMode, interfaceScale, telemetryConfig]
   );
+  const shapeKey = `${nodeIconSize}|${nodeStyle}|${nodeBoxSpacing}|${elbowPortGap}|${labelKey}`;
   const elbowRoutes = useMemo(
     () =>
       isRouted
@@ -1194,8 +1197,8 @@ function useEdgeGeometry(
             graphNodes,
             getRoutingRectForShape,
             getLabelLengths,
-            `${nodeIconSize}|${nodeStyle}|${nodeBoxSpacing}|${elbowPortGap}|${labelKey}`,
-            { portGap: elbowPortGap, bottomClearance },
+            `${shapeKey}|${linkCurvature}`,
+            { portGap: elbowPortGap, bottomClearance, curvature: linkCurvature },
             linkStyle === "curve"
           )
         : undefined,
@@ -1206,12 +1209,10 @@ function useEdgeGeometry(
       graphNodes,
       getRoutingRectForShape,
       getLabelLengths,
-      nodeIconSize,
-      nodeStyle,
-      nodeBoxSpacing,
+      shapeKey,
       elbowPortGap,
-      labelKey,
-      bottomClearance
+      bottomClearance,
+      linkCurvature
     ]
   );
 
@@ -1506,6 +1507,7 @@ const TopologyEdgeComponent: React.FC<EdgeProps> = ({ id, source, target, data, 
   const nodeStyle = useNodeStyle();
   const nodeBoxSpacing = useNodeBoxSpacing();
   const linkStyle = useLinkStyle();
+  const linkCurvature = useLinkCurvature();
   const gridBgColor = useTopoViewerStore((state) =>
     state.gridBgColor !== null && state.gridBgColor.length > 0 ? state.gridBgColor : null
   );
@@ -1577,7 +1579,8 @@ const TopologyEdgeComponent: React.FC<EdgeProps> = ({ id, source, target, data, 
     edgeData,
     labelMode,
     telemetryConfig,
-    linkStyle
+    linkStyle,
+    linkCurvature
   );
   const { hoverState, onMouseEnter, onMouseLeave } = useLinkHover(id, source, target);
   const labelPlacements = useEndpointLabelPlacements(

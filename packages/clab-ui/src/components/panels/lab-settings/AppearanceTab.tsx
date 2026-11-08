@@ -4,12 +4,13 @@ import type { Edge } from "@xyflow/react";
 import Box from "@mui/material/Box";
 import InputAdornment from "@mui/material/InputAdornment";
 import MenuItem from "@mui/material/MenuItem";
+import Slider from "@mui/material/Slider";
 import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { parseNodeBoxSpacing, parseNodeStyle } from "../../canvas/nodeBox";
-import { parseLinkStyle } from "../../canvas/elbowRouting";
+import { LINK_CURVATURE_RANGE, parseLinkStyle } from "../../canvas/elbowRouting";
 import { getMgmtNetworks } from "../../../core/types/labSettings";
 import { parseMgmtNetworkBadgeMode } from "../../../core/utilities/mgmtNetworks";
 import { SettingsField } from "../../../settings/SettingsField";
@@ -87,6 +88,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
   const nodeStyle = useTopoViewerStore((state) => state.nodeStyle);
   const nodeBoxSpacing = useTopoViewerStore((state) => state.nodeBoxSpacing);
   const linkStyle = useTopoViewerStore((state) => state.linkStyle);
+  const linkCurvature = useTopoViewerStore((state) => state.linkCurvature);
   const mgmtNetworkBadge = useTopoViewerStore((state) => state.mgmtNetworkBadge);
   const showNodeCpu = useTopoViewerStore((state) => state.showNodeCpu);
   const hasSeveralMgmtNetworks = useTopoViewerStore(
@@ -107,6 +109,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
   const setNodeStyle = useTopoViewerStore((state) => state.setNodeStyle);
   const setNodeBoxSpacing = useTopoViewerStore((state) => state.setNodeBoxSpacing);
   const setLinkStyle = useTopoViewerStore((state) => state.setLinkStyle);
+  const setLinkCurvature = useTopoViewerStore((state) => state.setLinkCurvature);
   const animateTraffic = useTopoViewerStore((state) => state.animateTraffic);
   const setAnimateTraffic = useTopoViewerStore((state) => state.setAnimateTraffic);
   const setMgmtNetworkBadge = useTopoViewerStore((state) => state.setMgmtNetworkBadge);
@@ -241,6 +244,29 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
           <MenuItem value="curve">Curve</MenuItem>
         </TextField>
       </SettingsField>
+      {linkStyle === "curve" ? (
+        <SettingsField
+          title="Curvature"
+          description="How far curved links swing out: almost diagonal at the low end, an S at the high end."
+        >
+          <Slider
+            size="small"
+            value={linkCurvature}
+            min={LINK_CURVATURE_RANGE.min}
+            max={LINK_CURVATURE_RANGE.max}
+            step={LINK_CURVATURE_RANGE.step}
+            disabled={isReadOnly}
+            valueLabelDisplay="auto"
+            valueLabelFormat={(value) => `${Math.round(value * 100)}%`}
+            onChange={(_event, next: number | number[]) => {
+              if (isReadOnly) return;
+              setLinkCurvature(Array.isArray(next) ? next[0] : next);
+            }}
+            slotProps={{ input: { "aria-label": "Curvature" } }}
+            data-testid="lab-settings-link-curvature"
+          />
+        </SettingsField>
+      ) : null}
       {hasSeveralMgmtNetworks ? (
         <SettingsField
           title="Management network badge"

@@ -44,7 +44,12 @@ import {
   parseNodeBoxSpacing,
   parseNodeStyle
 } from "../components/canvas/nodeBox";
-import { DEFAULT_LINK_STYLE, parseLinkStyle } from "../components/canvas/elbowRouting";
+import {
+  DEFAULT_LINK_CURVATURE,
+  DEFAULT_LINK_STYLE,
+  parseLinkCurvature,
+  parseLinkStyle
+} from "../components/canvas/elbowRouting";
 import {
   DEFAULT_MGMT_NETWORK_BADGE,
   parseMgmtNetworkBadgeMode
@@ -658,6 +663,7 @@ function buildInitialTopoViewerData(
   const nodeStyle = parseNodeStyle(viewerSettings.nodeStyle);
   const nodeBoxSpacing = parseNodeBoxSpacing(viewerSettings.nodeBoxSpacing);
   const linkStyle = parseLinkStyle(viewerSettings.linkStyle);
+  const linkCurvature = parseLinkCurvature(viewerSettings.linkCurvature);
   const mgmtNetworkBadge = parseMgmtNetworkBadgeMode(viewerSettings.mgmtNetworkBadge);
   const telemetryNodeSizePx = parseTelemetryNodeSizePx(viewerSettings.telemetryNodeSizePx);
   const telemetryInterfaceSizePercent = parseTelemetryInterfaceSizePercent(
@@ -691,6 +697,7 @@ function buildInitialTopoViewerData(
     nodeStyle: nodeStyle ?? DEFAULT_NODE_STYLE,
     nodeBoxSpacing: nodeBoxSpacing ?? DEFAULT_NODE_BOX_SPACING,
     linkStyle: linkStyle ?? DEFAULT_LINK_STYLE,
+    linkCurvature: linkCurvature ?? DEFAULT_LINK_CURVATURE,
     mgmtNetworkBadge: mgmtNetworkBadge ?? DEFAULT_MGMT_NETWORK_BADGE,
     showNodeCpu: viewerSettings.showNodeCpu === true,
     ...(telemetryNodeSizePx !== null ? { telemetryNodeSizePx } : {}),
