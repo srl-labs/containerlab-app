@@ -225,7 +225,7 @@ test("curved links between facing nodes run straight", () => {
   ]);
 });
 
-test("curved links leave and meet the nodes head on past their labels", () => {
+test("curved links leave and meet the nodes head on", () => {
   const route = routeCurveLinks(
     [
       {
@@ -239,14 +239,25 @@ test("curved links leave and meet the nodes head on past their labels", () => {
   assert.ok(route);
   assert.equal(route.sourceSide, "bottom");
   assert.equal(route.targetSide, "top");
-  const [start, sourceExit] = route.points;
-  const [end, targetExit] = [...route.points].reverse();
+  const [start, next] = route.points;
+  const [end, previous] = [...route.points].reverse();
   assert.deepEqual(start, { x: 20, y: 40 });
   assert.deepEqual(end, { x: 220, y: 300 });
-  // node bottom 40 + name 16 + label 30 + air 6, then target top 300 - label 30 - air 6
-  assert.deepEqual(sourceExit, { x: 20, y: 40 + 16 + 36 });
-  assert.deepEqual(targetExit, { x: 220, y: 300 - 36 });
+  assert.ok(Math.abs(next.x - start.x) < 0.1 && next.y > start.y);
+  assert.ok(Math.abs(previous.x - end.x) < 0.1 && previous.y < end.y);
   assert.ok(route.points.every((point) => point.y >= 40 && point.y <= 300));
+});
+
+test("curved links run straighter past a long label before turning", () => {
+  // A short gap, where the label and not the gap sets how far the curve runs out.
+  const input = link("a", "s", "t", [0, 0], [100, 150]);
+  const labelEnd = 40 + 60 + 6;
+  const drift = (labelLength: number) => {
+    const points = routeCurveLinks([{ ...input, sourceLabelLength: labelLength }]).get("a")?.points;
+    assert.ok(points);
+    return Math.max(...points.filter((point) => point.y <= labelEnd).map((point) => point.x - 20));
+  };
+  assert.ok(drift(60) < drift(0) * 0.8, `${drift(60)} vs ${drift(0)}`);
 });
 
 test("parallel curved links follow each other at a constant distance", () => {

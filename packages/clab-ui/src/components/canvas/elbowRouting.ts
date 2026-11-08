@@ -56,10 +56,13 @@ const FLOW_MIN_GAP = MIN_STUB * 2;
 // Air on each side of an endpoint label before the link may bend.
 const LABEL_AIR = 3;
 const OVERLAP_EPSILON = 1;
-// Share of the gap that each straight end of a curve may take, so it keeps room to turn.
-const CURVE_STUB_SHARE = 1 / 3;
-// How far a curve's handles reach, as a share of the run between its straight ends.
+// How far a curve's handles reach, as a share of the gap between the nodes.
 const CURVE_TENSION = 0.5;
+// A handle reaches at least this far past the label, so the curve leaves the
+// node almost straight and the label lies along it.
+const CURVE_LABEL_REACH = 1.3;
+// Longest handle, as a share of the gap, so the curve still turns.
+const MAX_CURVE_REACH = 0.9;
 // Spacing of the points that trace a curve.
 const CURVE_STEP = 3;
 const MIN_CURVE_STEPS = 8;
@@ -590,20 +593,10 @@ function getSideDirection(side: ElbowSide): XYPosition {
   }
 }
 
-function getPointOnLine(side: ElbowSide, port: number, line: number): XYPosition {
-  return isHorizontalSide(side) ? { x: port, y: line } : { x: line, y: port };
-}
-
-/** Where the straight run out of each end gives way to the curve. */
-function getCurveExitLines(route: Route): { source: number; target: number } {
-  const sourceLine = getSideLine(route.sourceRect, route.sourceSide);
-  const targetLine = getSideLine(route.targetRect, route.targetSide);
-  const gap = targetLine - sourceLine;
-  const limit = Math.abs(gap) * CURVE_STUB_SHARE;
-  return {
-    source: sourceLine + Math.sign(gap) * Math.min(route.sourceClearance, limit),
-    target: targetLine - Math.sign(gap) * Math.min(route.targetClearance, limit)
-  };
+/** Handle length at one end: past the name and label, but short of the other node. */
+function getCurveReach(gap: number, clearance: number): number {
+  const reach = Math.max(gap * CURVE_TENSION, clearance * CURVE_LABEL_REACH);
+  return Math.min(gap * MAX_CURVE_REACH, reach);
 }
 
 function getCubicPoint([p0, p1, p2, p3]: XYPosition[], t: number): XYPosition {
@@ -625,31 +618,30 @@ function dropRepeatedPoints(points: XYPosition[]): XYPosition[] {
 }
 
 /**
- * A straight run out of each node, past its name and label, joined by a
- * Bézier that leaves and meets both runs head on. Traced as a polyline so
- * labels and parallel links can follow it.
+ * A Bézier that leaves one port and meets the other head on. Traced as a
+ * polyline so labels and parallel links can follow it.
  */
 function getCurvePolyline(route: Route, sourcePort: number, targetPort: number): XYPosition[] {
   const start = getPortPoint(route.sourceRect, route.sourceSide, sourcePort);
   const end = getPortPoint(route.targetRect, route.targetSide, targetPort);
   if (Math.abs(sourcePort - targetPort) < ALIGN_EPSILON) return [start, end];
 
-  const exits = getCurveExitLines(route);
-  const from = getPointOnLine(route.sourceSide, sourcePort, exits.source);
-  const to = getPointOnLine(route.targetSide, targetPort, exits.target);
-  const reach = Math.abs(exits.target - exits.source) * CURVE_TENSION;
+  const gap = Math.abs(
+    getSideLine(route.targetRect, route.targetSide) - getSideLine(route.sourceRect, route.sourceSide)
+  );
+  const sourceReach = getCurveReach(gap, route.sourceClearance);
+  const targetReach = getCurveReach(gap, route.targetClearance);
   const out = getSideDirection(route.sourceSide);
   const back = getSideDirection(route.targetSide);
   const handles = [
-    from,
-    { x: from.x + out.x * reach, y: from.y + out.y * reach },
-    { x: to.x + back.x * reach, y: to.y + back.y * reach },
-    to
+    start,
+    { x: start.x + out.x * sourceReach, y: start.y + out.y * sourceReach },
+    { x: end.x + back.x * targetReach, y: end.y + back.y * targetReach },
+    end
   ];
-  const steps = Math.max(MIN_CURVE_STEPS, Math.ceil(distance(from, to) / CURVE_STEP));
-  const points = [start];
+  const steps = Math.max(MIN_CURVE_STEPS, Math.ceil(distance(start, end) / CURVE_STEP));
+  const points: XYPosition[] = [];
   for (let i = 0; i <= steps; i++) points.push(getCubicPoint(handles, i / steps));
-  points.push(end);
   return dropRepeatedPoints(points);
 }
 
@@ -659,8 +651,8 @@ function getNormal(from: XYPosition, to: XYPosition): XYPosition {
 }
 
 /**
- * The polyline moved sideways, mitred at each point. The distance holds along
- * each straight end and eases from one to the other along the curve between.
+ * The polyline moved sideways, mitred at each point. The distance eases from
+ * the source offset to the target offset along the way.
  */
 function offsetPolyline(
   points: XYPosition[],
@@ -673,12 +665,9 @@ function offsetPolyline(
   for (let i = 1; i <= last; i++) {
     travelled.push(travelled[i - 1] + distance(points[i - 1], points[i]));
   }
-  // The first and last segments are the straight ends.
-  const curveStart = last > 1 ? travelled[1] : 0;
-  const curveEnd = last > 1 ? travelled[last - 1] : travelled[last];
-  const span = curveEnd - curveStart;
+  const span = travelled[last];
   return points.map((point, i) => {
-    const share = span > 0 ? Math.min(1, Math.max(0, (travelled[i] - curveStart) / span)) : 0;
+    const share = span > 0 ? travelled[i] / span : 0;
     const eased = share * share * (3 - 2 * share);
     const offset = sourceOffset + (targetOffset - sourceOffset) * eased;
     const before = getNormal(points[Math.max(i - 1, 0)], points[Math.max(i, 1)]);
@@ -715,8 +704,8 @@ function getMean(values: number[]): number {
 
 /**
  * One curve through the middle of a bundle, which each of its links follows
- * side by side instead of fanning out. Each straight end keeps the port
- * spacing of its side, so a crowded side does not squeeze the other.
+ * side by side instead of fanning out. Each end keeps the port spacing of
+ * its side, so a crowded side does not squeeze the other.
  */
 function routeCurveBundle(
   bundle: Route[],
@@ -765,9 +754,9 @@ function routeCurveBundle(
 
 /**
  * Route links as curves. Each link leaves the side of its node that faces the
- * other node in a straight run long enough for its label, then turns in a
- * Bézier that meets the other end head on. Links between the same two nodes
- * follow one curve side by side.
+ * other node in a Bézier that meets the other end head on, running almost
+ * straight past its label first. Links between the same two nodes follow one
+ * curve side by side.
  */
 export function routeCurveLinks(
   inputs: ElbowLinkInput[],

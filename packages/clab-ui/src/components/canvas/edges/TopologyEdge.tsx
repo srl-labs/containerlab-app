@@ -45,6 +45,7 @@ import {
   getBubbleLength,
   getCachedElbowRoutes,
   getNodeNameClearance,
+  placeCurveLabel,
   placeElbowBubble,
   placeElbowLabel,
   type ElbowLabelPlacement
@@ -1403,20 +1404,19 @@ function useEndpointLabelPlacements(
     }
     const metrics = getDefaultLabelMetrics(interfaceScale);
     const nameClearance = getNodeNameClearance(isBoxed);
+    const placeLabel = curved ? placeCurveLabel : placeElbowLabel;
     return {
-      source: placeElbowLabel(
+      source: placeLabel(
         route.points,
         route.sourceSide,
         { text: sourceLabel ?? "", ...metrics },
-        nameClearance,
-        curved
+        nameClearance
       ),
-      target: placeElbowLabel(
+      target: placeLabel(
         reversed,
         route.targetSide,
         { text: targetLabel ?? "", ...metrics },
-        nameClearance,
-        curved
+        nameClearance
       )
     };
   }, [

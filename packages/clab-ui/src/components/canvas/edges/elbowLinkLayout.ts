@@ -22,6 +22,8 @@ const LABEL_GAP = 3;
 // Keep labels clear of the rounded bend at the end of their segment.
 const BEND_MARGIN = CORNER_RADIUS;
 const LABEL_CHAR_WIDTH_RATIO = 0.6;
+// Distance either side of a curve label's center that sets which way it turns.
+const TANGENT_SPAN = 3;
 // Room under an icon that the node name takes.
 const NODE_NAME_HEIGHT = 16;
 
@@ -134,8 +136,7 @@ export function placeElbowLabel(
   points: XYPosition[],
   side: ElbowSide,
   label: ElbowLabelInput,
-  nameClearance: number,
-  curved = false
+  nameClearance: number
 ): ElbowLabelPlacement {
   const vertical = side === "top" || side === "bottom";
   const half = estimateLabelLength(label) / 2;
@@ -143,14 +144,40 @@ export function placeElbowLabel(
   const wanted = clearance + LABEL_GAP + half;
 
   // Stay on the first run so the label does not wrap round a bend; a straight
-  // link shares its length with the label at the other end. A curve leaves
-  // its first run without a corner to keep clear of.
+  // link shares its length with the label at the other end.
   const firstRun = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
-  const bendMargin = curved ? 0 : BEND_MARGIN;
-  const room = points.length > 2 ? firstRun - bendMargin : getPolylineLength(points) / 2;
+  const room = points.length > 2 ? firstRun - BEND_MARGIN : getPolylineLength(points) / 2;
   const distance = Math.max(Math.min(wanted, room - half), Math.min(half, room));
   const point = getPointAlongPolyline(points, distance);
   return { x: point.x, y: point.y, rotation: vertical ? -90 : 0 };
+}
+
+/** Turn an angle so the text never reads upside down. */
+function getReadableAngle(degrees: number): number {
+  if (degrees >= 90) return degrees - 180;
+  if (degrees < -90) return degrees + 180;
+  return degrees;
+}
+
+/**
+ * Put a plain label on a curved link, just past the node (and the name under
+ * an icon), turned to follow the curve where it sits.
+ */
+export function placeCurveLabel(
+  points: XYPosition[],
+  side: ElbowSide,
+  label: ElbowLabelInput,
+  nameClearance: number
+): ElbowLabelPlacement {
+  const half = estimateLabelLength(label) / 2;
+  const clearance = side === "bottom" ? nameClearance : 0;
+  // A short link shares its length with the label at the other end.
+  const distance = Math.min(clearance + LABEL_GAP + half, getPolylineLength(points) / 2);
+  const point = getPointAlongPolyline(points, distance);
+  const before = getPointAlongPolyline(points, distance - TANGENT_SPAN);
+  const after = getPointAlongPolyline(points, distance + TANGENT_SPAN);
+  const angle = (Math.atan2(after.y - before.y, after.x - before.x) * 180) / Math.PI;
+  return { x: point.x, y: point.y, rotation: getReadableAngle(angle) };
 }
 
 /** Telemetry bubbles sit right where the link leaves the node. */
