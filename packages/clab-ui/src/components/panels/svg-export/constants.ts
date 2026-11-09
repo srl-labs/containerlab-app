@@ -52,6 +52,14 @@ export const EDGE_STYLE = {
   opacity: 0.5
 } as const;
 
+/** Elbow and curved links (matches TopologyEdge.tsx ELBOW_*): thinner and solid, outlined in the background color. */
+export const ROUTED_EDGE_STYLE = {
+  strokeWidth: 2.5,
+  casingWidth: 1.5,
+  /** Share of the link color in the stroke; the rest is the background. */
+  colorShare: 0.7
+} as const;
+
 /** Control point step size for parallel edge bezier curves */
 export const CONTROL_POINT_STEP_SIZE = 40;
 

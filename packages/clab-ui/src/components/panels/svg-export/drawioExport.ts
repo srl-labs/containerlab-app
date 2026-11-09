@@ -27,7 +27,7 @@ import {
   resolveGroupPaint,
   type AnnotationData
 } from "./annotationsToSvg";
-import { EDGE_STYLE, NODE_LABEL, escapeXml, resolveCssColor } from "./constants";
+import { NODE_LABEL, escapeXml, resolveCssColor } from "./constants";
 import { layoutEdges, type EdgeLayout, type EndpointLabelLayout } from "./edgesToSvg";
 import type { GraphSvgRenderOptions } from "./graphSvg";
 import {
@@ -422,7 +422,8 @@ function endpointLabelCell(link: EdgeLayout, label: EndpointLabelLayout, id: str
       verticalAlign: "middle",
       spacing: 0,
       resizable: 0,
-      connectable: 0
+      connectable: 0,
+      rotation: label.rotation !== 0 ? round(label.rotation) : undefined
     },
     label.shape === "bubble" ? "ellipse" : undefined
   );
@@ -458,14 +459,15 @@ function linkCell(link: EdgeLayout, frame: Frame, rectOf: (id: string) => Rect |
   const targetRect = rectOf(link.target);
   const style = cellStyle({
     html: 1,
-    rounded: 0,
-    // A curved link with one point draws the same curve as the canvas: that point is its control point.
-    curved: link.bends.length > 0 ? 1 : undefined,
+    ...cornerStyle(link.shape === "elbow" ? link.cornerRadius : 0),
+    // A curved link with one point draws the same curve as the canvas: that point is its control
+    // point. A curved link with many points runs smoothly along them.
+    curved: link.shape !== "elbow" && link.bends.length > 0 ? 1 : undefined,
     startArrow: "none",
     endArrow: "none",
     strokeColor: link.strokeColor,
-    strokeWidth: EDGE_STYLE.strokeWidth,
-    opacity: Math.round(EDGE_STYLE.opacity * 100),
+    strokeWidth: link.strokeWidth,
+    opacity: Math.round(link.opacity * 100),
     ...(link.startPinned && sourceRect ? pinnedEnd("exit", link.start, sourceRect) : {}),
     ...(link.endPinned && targetRect ? pinnedEnd("entry", link.end, targetRect) : {})
   });
@@ -796,7 +798,8 @@ export function buildDrawioXml(options: DrawioExportOptions): string {
     options.nodes,
     options.includeEdgeLabels,
     options.annotationNodeTypes,
-    options.renderOptions
+    // Elbow and curved links blend into the page, as they do into the canvas.
+    { ...options.renderOptions, linkBackground: options.background }
   );
   for (const link of links) {
     const frame = commonFrame(

@@ -15,11 +15,33 @@ import {
   type NodeBoxSpacing,
   type NodeStyle
 } from "../../canvas/nodeBox";
+import {
+  DEFAULT_LINK_CURVATURE,
+  DEFAULT_LINK_STYLE,
+  getElbowLoopPolyline,
+  parseLinkCurvature,
+  type ElbowRoute,
+  type LinkStyle
+} from "../../canvas/elbowRouting";
+import {
+  ELBOW_CORNER_RADIUS,
+  buildElbowPath,
+  computeLinkRoutes,
+  estimateLabelLength,
+  getBubbleLength,
+  getLinkPortGap,
+  getNodeNameClearance,
+  placeRouteBubbles,
+  placeRouteLabels,
+  type ElbowLabelInput,
+  type RouteLabelPlacements
+} from "../../canvas/edges/elbowLinkLayout";
 import type { EdgeInfo } from "../../../stores/canvasStore";
 // Despite the hook-style name, useEdgeInfo is a plain cached function
 // (no React state) and is safe to call outside of components.
 import { useEdgeInfo as buildEdgeInfo } from "../../../stores/canvasStore";
 import { DEFAULT_ENDPOINT_LABEL_OFFSET } from "../../../annotations/endpointLabelOffset";
+import { mix, toOpaqueHex } from "../../../theme/themeColor";
 import {
   INTERFACE_SELECT_AUTO,
   resolveTelemetryInterfaceLabel
@@ -30,6 +52,7 @@ import {
   EDGE_COLOR,
   EDGE_STYLE,
   EDGE_LABEL,
+  ROUTED_EDGE_STYLE,
   TELEMETRY_EDGE_LABEL,
   CONTROL_POINT_STEP_SIZE,
   escapeXml,
@@ -67,6 +90,14 @@ export interface EdgeSvgRenderOptions {
   /** Boxed nodes attach links to the box outline instead of the icon. */
   nodeStyle?: NodeStyle;
   nodeBoxSpacing?: NodeBoxSpacing;
+  /** Elbow and curved links follow the same routes as on the canvas. */
+  linkStyle?: LinkStyle;
+  linkCurvature?: number;
+  /**
+   * Color behind the links. Elbow and curved links blend into it and cut a gap
+   * in it where they cross other links; without it they are see-through.
+   */
+  linkBackground?: string;
 }
 
 type InterfaceSide = "top" | "right" | "bottom" | "left";
@@ -84,6 +115,14 @@ interface InterfaceAnchor {
 
 type NodeInterfaceAnchorMap = Map<string, Map<string, InterfaceAnchor>>;
 
+/** Where an endpoint label goes; labels on elbow and curved links turn to read along them. */
+interface LabelPosition {
+  x: number;
+  y: number;
+  /** Degrees */
+  rotation?: number;
+}
+
 interface EndpointAssignment {
   endpoint: string;
   sortKey: number;
@@ -98,6 +137,10 @@ interface ResolvedEdgeRenderOptions {
   telemetryStyleLabels: boolean;
   nodeStyle: NodeStyle;
   nodeBoxSpacing: NodeBoxSpacing;
+  linkStyle: LinkStyle;
+  linkCurvature: number;
+  /** `#rrggbb`, or null when the links sit on a transparent background */
+  linkBackground: string | null;
   /** Theme colors for the default-style pill labels */
   defaultLabelBackground: string;
   defaultLabelForeground: string;
@@ -151,6 +194,9 @@ function resolveEdgeRenderOptions(renderOptions?: EdgeSvgRenderOptions): Resolve
     telemetryStyleLabels: renderOptions?.telemetryStyleLabels === true,
     nodeStyle: renderOptions?.nodeStyle ?? DEFAULT_NODE_STYLE,
     nodeBoxSpacing: renderOptions?.nodeBoxSpacing ?? DEFAULT_NODE_BOX_SPACING,
+    linkStyle: renderOptions?.linkStyle ?? DEFAULT_LINK_STYLE,
+    linkCurvature: parseLinkCurvature(renderOptions?.linkCurvature) ?? DEFAULT_LINK_CURVATURE,
+    linkBackground: toOpaqueHex(renderOptions?.linkBackground),
     defaultLabelBackground: resolveCssColor(
       "var(--topoviewer-edge-label-background)",
       EDGE_LABEL.backgroundColor
@@ -597,13 +643,15 @@ function buildDefaultEndpointLabelSvg(
   text: string,
   x: number,
   y: number,
-  renderOptions: ResolvedEdgeRenderOptions
+  renderOptions: ResolvedEdgeRenderOptions,
+  rotation = 0
 ): string {
   if (!text) return "";
 
   const { fontSize, fontFamily, bgWidth, bgHeight } = getDefaultLabelMetrics(text, renderOptions);
 
-  let svg = `<g class="edge-label">`;
+  const transform = rotation !== 0 ? ` transform="rotate(${rotation} ${x} ${y})"` : "";
+  let svg = `<g class="edge-label"${transform}>`;
 
   svg += `<rect x="${x - bgWidth / 2}" y="${y - bgHeight / 2}" width="${bgWidth}" height="${bgHeight}" `;
   svg += `fill="${renderOptions.defaultLabelBackground}" rx="${EDGE_LABEL.borderRadius}" ry="${EDGE_LABEL.borderRadius}"/>`;
@@ -622,15 +670,15 @@ function buildDefaultEndpointLabelSvg(
 
 function buildEndpointLabelSvg(
   endpoint: string,
-  x: number,
-  y: number,
+  position: LabelPosition,
   renderOptions: ResolvedEdgeRenderOptions
 ): string {
+  const { x, y } = position;
   const text = resolveDisplayInterfaceLabel(endpoint, renderOptions);
   if (renderOptions.telemetryStyleLabels) {
     return buildTelemetryEndpointLabelSvg(text, x, y, renderOptions.interfaceScale);
   }
-  return buildDefaultEndpointLabelSvg(text, x, y, renderOptions);
+  return buildDefaultEndpointLabelSvg(text, x, y, renderOptions, position.rotation);
 }
 
 /**
@@ -778,6 +826,8 @@ interface EdgeRenderContext {
   includeLabels: boolean;
   renderOptions: ResolvedEdgeRenderOptions;
   interfaceAnchors?: NodeInterfaceAnchorMap;
+  /** Elbow or curve routes of the links between two different nodes */
+  routes?: Map<string, ElbowRoute>;
 }
 
 /**
@@ -785,51 +835,59 @@ interface EdgeRenderContext {
  */
 function buildEdgeLabels(
   ctx: EdgeRenderContext,
-  sourceLabelPos: { x: number; y: number },
-  targetLabelPos: { x: number; y: number }
+  sourceLabelPos: LabelPosition,
+  targetLabelPos: LabelPosition
 ): string {
   if (!ctx.includeLabels) return "";
   const sourceEndpoint = normalizeEndpoint(ctx.edgeData?.sourceEndpoint);
   const targetEndpoint = normalizeEndpoint(ctx.edgeData?.targetEndpoint);
   let svg = "";
   if (sourceEndpoint !== null) {
-    svg += buildEndpointLabelSvg(
-      sourceEndpoint,
-      sourceLabelPos.x,
-      sourceLabelPos.y,
-      ctx.renderOptions
-    );
+    svg += buildEndpointLabelSvg(sourceEndpoint, sourceLabelPos, ctx.renderOptions);
   }
   if (targetEndpoint !== null) {
-    svg += buildEndpointLabelSvg(
-      targetEndpoint,
-      targetLabelPos.x,
-      targetLabelPos.y,
-      ctx.renderOptions
-    );
+    svg += buildEndpointLabelSvg(targetEndpoint, targetLabelPos, ctx.renderOptions);
   }
   return svg;
+}
+
+/** A loop, drawn as a rounded rectangle with elbow links and as a curve otherwise. */
+function resolveLoopGeometry(ctx: EdgeRenderContext, sourceNode: Node, loopIndex: number) {
+  const rect = getNodeLinkRect(sourceNode, ctx.renderOptions);
+  const { loop: labelOffset } = resolveEdgeLabelOffsets(ctx.edgeData, ctx.renderOptions);
+  if (ctx.renderOptions.linkStyle === "elbow") {
+    const points = getElbowLoopPolyline(rect, loopIndex, LOOP_EDGE_SIZE);
+    const labelX = points[1].x;
+    const centerY = rect.y + rect.height / 2;
+    return {
+      path: buildElbowPath(points),
+      start: points[0],
+      end: points[points.length - 1],
+      bends: points.slice(1, -1),
+      shape: "elbow" as const,
+      sourceLabelPos: { x: labelX, y: centerY - labelOffset },
+      targetLabelPos: { x: labelX, y: centerY + labelOffset }
+    };
+  }
+  const loop = buildLoopEdgePath(rect.x, rect.y, rect.width, rect.height, loopIndex, labelOffset);
+  return {
+    path: loop.path,
+    start: loop.start,
+    end: loop.end,
+    bends: loop.controlPoints,
+    shape: "plain" as const,
+    sourceLabelPos: loop.sourceLabelPos,
+    targetLabelPos: loop.targetLabelPos
+  };
 }
 
 /**
  * Render a loop edge (self-referencing) to SVG
  */
 function renderLoopEdge(ctx: EdgeRenderContext, sourceNode: Node, loopIndex: number): string {
-  const rect = getNodeLinkRect(sourceNode, ctx.renderOptions);
-  const { loop: loopLabelOffset } = resolveEdgeLabelOffsets(ctx.edgeData, ctx.renderOptions);
-
-  const { path, sourceLabelPos, targetLabelPos } = buildLoopEdgePath(
-    rect.x,
-    rect.y,
-    rect.width,
-    rect.height,
-    loopIndex,
-    loopLabelOffset
-  );
-
+  const { path, sourceLabelPos, targetLabelPos } = resolveLoopGeometry(ctx, sourceNode, loopIndex);
   let svg = `<g class="export-edge loop-edge" data-id="${escapeXml(ctx.edgeId)}">`;
-  svg += `<path d="${path}" fill="none" stroke="${ctx.strokeColor}" `;
-  svg += `stroke-width="${EDGE_STYLE.strokeWidth}" opacity="${EDGE_STYLE.opacity}"/>`;
+  svg += buildEdgePathSvg(ctx, path);
   svg += buildEdgeLabels(ctx, sourceLabelPos, targetLabelPos);
   svg += `</g>`;
   return svg;
@@ -911,6 +969,171 @@ function resolveRegularEdgeGeometry(
   return { points, path, controlPoint, sourceAnchor, targetAnchor, sourceLabelPos, targetLabelPos };
 }
 
+// ============================================================================
+// Elbow and Curved Links
+// ============================================================================
+
+/** Plain label metrics, as the canvas estimates how far a label reaches along its link. */
+function getRouteLabelMetrics(renderOptions: ResolvedEdgeRenderOptions): {
+  fontSize: number;
+  horizontalPadding: number;
+} {
+  const { interfaceScale } = renderOptions;
+  return {
+    fontSize: Math.max(8, EDGE_LABEL.fontSize * interfaceScale),
+    horizontalPadding: Math.max(2, EDGE_LABEL.paddingX * interfaceScale)
+  };
+}
+
+function getRouteLabelInput(
+  endpoint: unknown,
+  renderOptions: ResolvedEdgeRenderOptions
+): ElbowLabelInput {
+  const normalized = normalizeEndpoint(endpoint);
+  const text = normalized === null ? "" : resolveDisplayInterfaceLabel(normalized, renderOptions);
+  return { text, ...getRouteLabelMetrics(renderOptions) };
+}
+
+/** How far an endpoint label reaches along its link. Matches TopologyEdge.tsx. */
+function measureRouteLabel(endpoint: unknown, renderOptions: ResolvedEdgeRenderOptions): number {
+  const label = getRouteLabelInput(endpoint, renderOptions);
+  if (!label.text) return 0;
+  if (renderOptions.telemetryStyleLabels) {
+    return getBubbleLength(getTelemetryLabelMetrics(label.text, renderOptions.interfaceScale).radius);
+  }
+  return estimateLabelLength(label);
+}
+
+/** The canvas routes for elbow and curved links; none for straight links. */
+function computeExportRoutes(
+  edges: Edge[],
+  nodes: Node[],
+  renderOptions: ResolvedEdgeRenderOptions,
+  includeLabels: boolean
+): Map<string, ElbowRoute> | undefined {
+  if (renderOptions.linkStyle === "straight") return undefined;
+  const labelHeight = renderOptions.telemetryStyleLabels
+    ? TELEMETRY_EDGE_LABEL.minRadius * 2 * renderOptions.interfaceScale
+    : getRouteLabelMetrics(renderOptions).fontSize * EDGE_LABEL.lineHeight;
+  return computeLinkRoutes(
+    edges,
+    nodes,
+    (node) => getNodeLinkRect(node, renderOptions),
+    (edge) => {
+      if (!includeLabels) return { source: 0, target: 0 };
+      const data = edge.data as TopologyEdgeData | undefined;
+      return {
+        source: measureRouteLabel(data?.sourceEndpoint, renderOptions),
+        target: measureRouteLabel(data?.targetEndpoint, renderOptions)
+      };
+    },
+    {
+      portGap: getLinkPortGap(labelHeight),
+      bottomClearance: getNodeNameClearance(renderOptions.nodeStyle === "boxed"),
+      curvature: renderOptions.linkCurvature
+    },
+    renderOptions.linkStyle === "curve"
+  );
+}
+
+/** Endpoint labels along a route, placed as the canvas places them. */
+function placeRoutedLabels(ctx: EdgeRenderContext, route: ElbowRoute): RouteLabelPlacements {
+  const { renderOptions, edgeData } = ctx;
+  if (renderOptions.telemetryStyleLabels) {
+    return placeRouteBubbles(route, resolveEdgeLabelOffsets(edgeData, renderOptions));
+  }
+  return placeRouteLabels(
+    route,
+    {
+      source: getRouteLabelInput(edgeData?.sourceEndpoint, renderOptions),
+      target: getRouteLabelInput(edgeData?.targetEndpoint, renderOptions)
+    },
+    getNodeNameClearance(renderOptions.nodeStyle === "boxed"),
+    renderOptions.linkStyle === "curve"
+  );
+}
+
+interface EdgeStroke {
+  color: string;
+  width: number;
+  opacity: number;
+  /** Background-colored outline drawn under the link */
+  casing?: { color: string; width: number };
+}
+
+/**
+ * Elbow and curved links are solid: the link color blended into the
+ * background, outlined in it. On a transparent background they are
+ * see-through instead, which looks the same where links do not cross.
+ */
+function getEdgeStroke(ctx: EdgeRenderContext): EdgeStroke {
+  const { linkStyle, linkBackground } = ctx.renderOptions;
+  if (linkStyle === "straight") {
+    return { color: ctx.strokeColor, width: EDGE_STYLE.strokeWidth, opacity: EDGE_STYLE.opacity };
+  }
+  const width = ROUTED_EDGE_STYLE.strokeWidth;
+  if (linkBackground === null) {
+    return { color: ctx.strokeColor, width, opacity: ROUTED_EDGE_STYLE.colorShare };
+  }
+  return {
+    color: mix(ctx.strokeColor, linkBackground, 1 - ROUTED_EDGE_STYLE.colorShare),
+    width,
+    opacity: 1,
+    casing: { color: linkBackground, width: width + ROUTED_EDGE_STYLE.casingWidth * 2 }
+  };
+}
+
+function buildEdgePathSvg(ctx: EdgeRenderContext, path: string): string {
+  const stroke = getEdgeStroke(ctx);
+  let svg = "";
+  if (stroke.casing) {
+    svg += `<path d="${path}" fill="none" stroke="${stroke.casing.color}" `;
+    svg += `stroke-width="${stroke.casing.width}"/>`;
+  }
+  svg += `<path d="${path}" fill="none" stroke="${stroke.color}" `;
+  svg += `stroke-width="${stroke.width}" opacity="${stroke.opacity}"/>`;
+  return svg;
+}
+
+/** Path and label positions of an edge between two different nodes. */
+function resolveEdgeGeometry(
+  ctx: EdgeRenderContext,
+  sourceNode: Node,
+  targetNode: Node,
+  parallelInfo: { index: number; total: number; isCanonicalDirection: boolean } | undefined
+) {
+  const route = ctx.routes?.get(ctx.edgeId);
+  if (route) {
+    const labels = placeRoutedLabels(ctx, route);
+    return {
+      path: buildElbowPath(route.points, route.cornerRadius),
+      start: route.points[0],
+      end: route.points[route.points.length - 1],
+      points: route.points,
+      shape: ctx.renderOptions.linkStyle === "curve" ? ("curve" as const) : ("elbow" as const),
+      cornerRadius: route.cornerRadius,
+      // Ends sit on the ports the routes spread along each side.
+      startPinned: true,
+      endPinned: true,
+      sourceLabelPos: labels.source,
+      targetLabelPos: labels.target
+    };
+  }
+  const geometry = resolveRegularEdgeGeometry(ctx, sourceNode, targetNode, parallelInfo);
+  return {
+    path: geometry.path,
+    start: { x: geometry.points.sx, y: geometry.points.sy },
+    end: { x: geometry.points.tx, y: geometry.points.ty },
+    points: geometry.controlPoint ? [geometry.controlPoint] : [],
+    shape: "plain" as const,
+    cornerRadius: 0,
+    startPinned: geometry.sourceAnchor !== undefined,
+    endPinned: geometry.targetAnchor !== undefined,
+    sourceLabelPos: geometry.sourceLabelPos,
+    targetLabelPos: geometry.targetLabelPos
+  };
+}
+
 /**
  * Render a regular edge (between two different nodes) to SVG
  */
@@ -920,7 +1143,7 @@ function renderRegularEdge(
   targetNode: Node,
   parallelInfo: { index: number; total: number; isCanonicalDirection: boolean } | undefined
 ): string {
-  const { path, sourceLabelPos, targetLabelPos } = resolveRegularEdgeGeometry(
+  const { path, sourceLabelPos, targetLabelPos } = resolveEdgeGeometry(
     ctx,
     sourceNode,
     targetNode,
@@ -928,8 +1151,7 @@ function renderRegularEdge(
   );
 
   let svg = `<g class="export-edge" data-id="${escapeXml(ctx.edgeId)}">`;
-  svg += `<path d="${path}" fill="none" stroke="${ctx.strokeColor}" `;
-  svg += `stroke-width="${EDGE_STYLE.strokeWidth}" opacity="${EDGE_STYLE.opacity}"/>`;
+  svg += buildEdgePathSvg(ctx, path);
   svg += buildEdgeLabels(ctx, sourceLabelPos, targetLabelPos);
   svg += `</g>`;
   return svg;
@@ -944,6 +1166,7 @@ function edgeToSvg(
   edgeInfo: EdgeInfo,
   includeLabels: boolean,
   interfaceAnchors: NodeInterfaceAnchorMap | undefined,
+  routes: Map<string, ElbowRoute> | undefined,
   renderOptions: ResolvedEdgeRenderOptions
 ): string {
   const sourceNode = nodeMap.get(edge.source);
@@ -956,7 +1179,8 @@ function edgeToSvg(
     edgeData,
     includeLabels,
     renderOptions,
-    interfaceAnchors
+    interfaceAnchors,
+    routes
   };
 
   // Handle loop edges (self-referencing)
@@ -982,7 +1206,8 @@ function prepareEdges(
   edges: Edge[],
   nodes: Node[],
   annotationNodeTypes: Set<string> | undefined,
-  resolvedRenderOptions: ResolvedEdgeRenderOptions
+  resolvedRenderOptions: ResolvedEdgeRenderOptions,
+  includeLabels: boolean
 ) {
   const skipTypes =
     annotationNodeTypes ??
@@ -1006,11 +1231,14 @@ function prepareEdges(
 
   // Build edge info for parallel/loop detection (same grouping/ordering as the canvas)
   const edgeInfo = buildEdgeInfo(validEdges);
-  const interfaceAnchors = resolvedRenderOptions.telemetryStyleLabels
-    ? buildInterfaceAnchorMap(validEdges, nodeMap, resolvedRenderOptions)
-    : undefined;
+  // Elbow and curved links place telemetry bubbles on their own ports instead.
+  const routes = computeExportRoutes(validEdges, nodes, resolvedRenderOptions, includeLabels);
+  const interfaceAnchors =
+    resolvedRenderOptions.telemetryStyleLabels && !routes
+      ? buildInterfaceAnchorMap(validEdges, nodeMap, resolvedRenderOptions)
+      : undefined;
 
-  return { validEdges, nodeMap, edgeInfo, interfaceAnchors };
+  return { validEdges, nodeMap, edgeInfo, interfaceAnchors, routes };
 }
 
 /**
@@ -1025,11 +1253,12 @@ export function renderEdgesToSvg(
   renderOptions?: EdgeSvgRenderOptions
 ): string {
   const resolvedRenderOptions = resolveEdgeRenderOptions(renderOptions);
-  const { validEdges, nodeMap, edgeInfo, interfaceAnchors } = prepareEdges(
+  const { validEdges, nodeMap, edgeInfo, interfaceAnchors, routes } = prepareEdges(
     edges,
     nodes,
     annotationNodeTypes,
-    resolvedRenderOptions
+    resolvedRenderOptions,
+    includeLabels
   );
 
   let svg = "";
@@ -1040,6 +1269,7 @@ export function renderEdgesToSvg(
       edgeInfo,
       includeLabels,
       interfaceAnchors,
+      routes,
       resolvedRenderOptions
     );
   }
@@ -1067,6 +1297,8 @@ export interface EndpointLabelLayout {
   background: string;
   outline?: string;
   outlineWidth?: number;
+  /** Degrees; labels on elbow and curved links turn to read along them. */
+  rotation: number;
 }
 
 /** An edge in flow coordinates, for exports that draw edges themselves. */
@@ -1075,8 +1307,18 @@ export interface EdgeLayout {
   source: string;
   target: string;
   strokeColor: string;
+  strokeWidth: number;
+  opacity: number;
   start: { x: number; y: number };
   end: { x: number; y: number };
+  /**
+   * How the path runs through `bends`. A plain link curves around its one
+   * control point, if it has one. An elbow link runs straight from bend to
+   * bend with rounded corners. A curved link passes smoothly near its bends.
+   */
+  shape: "plain" | "elbow" | "curve";
+  /** Corner radius of an elbow link */
+  cornerRadius: number;
   /** Points the path bends around: none for a straight link. */
   bends: { x: number; y: number }[];
   /** Whether an end sits at a fixed point, instead of wherever it meets the node outline. */
@@ -1087,7 +1329,7 @@ export interface EdgeLayout {
 
 function layoutEndpointLabel(
   endpoint: unknown,
-  position: { x: number; y: number },
+  { rotation = 0, ...position }: LabelPosition,
   renderOptions: ResolvedEdgeRenderOptions
 ): EndpointLabelLayout | null {
   const normalized = normalizeEndpoint(endpoint);
@@ -1108,7 +1350,8 @@ function layoutEndpointLabel(
       color: TELEMETRY_EDGE_LABEL.textStrokeColor,
       background: TELEMETRY_EDGE_LABEL.backgroundColor,
       outline: TELEMETRY_EDGE_LABEL.outlineColor,
-      outlineWidth: TELEMETRY_EDGE_LABEL.bubbleStrokeWidth
+      outlineWidth: TELEMETRY_EDGE_LABEL.bubbleStrokeWidth,
+      rotation: 0
     };
   }
   if (!text) return null;
@@ -1122,8 +1365,24 @@ function layoutEndpointLabel(
     fontSize,
     bold: false,
     color: renderOptions.defaultLabelForeground,
-    background: renderOptions.defaultLabelBackground
+    background: renderOptions.defaultLabelBackground,
+    rotation
   };
+}
+
+// Room between the points kept from a curve, so the exported link stays easy to edit.
+const CURVE_BEND_SPACING = 12;
+
+/** Every few points of a traced curve: drawn smoothly, they still follow it closely. */
+function thinCurve(points: { x: number; y: number }[]): { x: number; y: number }[] {
+  const kept: { x: number; y: number }[] = [];
+  let last = points[0];
+  for (const point of points.slice(1, -1)) {
+    if (Math.hypot(point.x - last.x, point.y - last.y) < CURVE_BEND_SPACING) continue;
+    kept.push(point);
+    last = point;
+  }
+  return kept;
 }
 
 function layoutEdge(
@@ -1132,24 +1391,21 @@ function layoutEdge(
   nodeMap: Map<string, Node>,
   edgeInfo: EdgeInfo,
   ctx: EdgeRenderContext
-): Omit<EdgeLayout, "id" | "source" | "target" | "strokeColor" | "labels"> & {
-  sourceLabelPos: { x: number; y: number };
-  targetLabelPos: { x: number; y: number };
+): Pick<
+  EdgeLayout,
+  "start" | "end" | "shape" | "cornerRadius" | "bends" | "startPinned" | "endPinned"
+> & {
+  sourceLabelPos: LabelPosition;
+  targetLabelPos: LabelPosition;
 } | null {
   if (edge.source === edge.target) {
-    const rect = getNodeLinkRect(sourceNode, ctx.renderOptions);
-    const loop = buildLoopEdgePath(
-      rect.x,
-      rect.y,
-      rect.width,
-      rect.height,
-      edgeInfo.getLoopInfo(edge.id)?.loopIndex ?? 0,
-      resolveEdgeLabelOffsets(ctx.edgeData, ctx.renderOptions).loop
-    );
+    const loop = resolveLoopGeometry(ctx, sourceNode, edgeInfo.getLoopInfo(edge.id)?.loopIndex ?? 0);
     return {
       start: loop.start,
       end: loop.end,
-      bends: loop.controlPoints,
+      shape: loop.shape,
+      cornerRadius: loop.shape === "elbow" ? ELBOW_CORNER_RADIUS : 0,
+      bends: loop.bends,
       startPinned: true,
       endPinned: true,
       sourceLabelPos: loop.sourceLabelPos,
@@ -1159,18 +1415,23 @@ function layoutEdge(
 
   const targetNode = nodeMap.get(edge.target);
   if (!targetNode) return null;
-  const geometry = resolveRegularEdgeGeometry(
+  const geometry = resolveEdgeGeometry(
     ctx,
     sourceNode,
     targetNode,
     edgeInfo.getParallelInfo(edge.id) ?? undefined
   );
+  let bends = geometry.points;
+  if (geometry.shape === "elbow") bends = geometry.points.slice(1, -1);
+  if (geometry.shape === "curve") bends = thinCurve(geometry.points);
   return {
-    start: { x: geometry.points.sx, y: geometry.points.sy },
-    end: { x: geometry.points.tx, y: geometry.points.ty },
-    bends: geometry.controlPoint ? [geometry.controlPoint] : [],
-    startPinned: geometry.sourceAnchor !== undefined,
-    endPinned: geometry.targetAnchor !== undefined,
+    start: geometry.start,
+    end: geometry.end,
+    shape: geometry.shape,
+    cornerRadius: geometry.cornerRadius,
+    bends,
+    startPinned: geometry.startPinned,
+    endPinned: geometry.endPinned,
     sourceLabelPos: geometry.sourceLabelPos,
     targetLabelPos: geometry.targetLabelPos
   };
@@ -1185,11 +1446,12 @@ export function layoutEdges(
   renderOptions?: EdgeSvgRenderOptions
 ): EdgeLayout[] {
   const resolved = resolveEdgeRenderOptions(renderOptions);
-  const { validEdges, nodeMap, edgeInfo, interfaceAnchors } = prepareEdges(
+  const { validEdges, nodeMap, edgeInfo, interfaceAnchors, routes } = prepareEdges(
     edges,
     nodes,
     annotationNodeTypes,
-    resolved
+    resolved,
+    includeLabels
   );
 
   const layouts: EdgeLayout[] = [];
@@ -1197,14 +1459,16 @@ export function layoutEdges(
     const sourceNode = nodeMap.get(edge.source);
     if (!sourceNode) continue;
     const edgeData = edge.data as TopologyEdgeData | undefined;
-    const geometry = layoutEdge(edge, sourceNode, nodeMap, edgeInfo, {
+    const ctx: EdgeRenderContext = {
       edgeId: edge.id,
       strokeColor: getEdgeColor(edgeData?.linkStatus),
       edgeData,
       includeLabels,
       renderOptions: resolved,
-      interfaceAnchors
-    });
+      interfaceAnchors,
+      routes
+    };
+    const geometry = layoutEdge(edge, sourceNode, nodeMap, edgeInfo, ctx);
     if (!geometry) continue;
     const { sourceLabelPos, targetLabelPos, ...path } = geometry;
     const labels = includeLabels
@@ -1213,11 +1477,14 @@ export function layoutEdges(
           layoutEndpointLabel(edgeData?.targetEndpoint, targetLabelPos, resolved)
         ].filter((label) => label !== null)
       : [];
+    const stroke = getEdgeStroke(ctx);
     layouts.push({
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      strokeColor: getEdgeColor(edgeData?.linkStatus),
+      strokeColor: stroke.color,
+      strokeWidth: stroke.width,
+      opacity: stroke.opacity,
       labels,
       ...path
     });

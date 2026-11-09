@@ -45,10 +45,10 @@ import {
   estimateLabelLength,
   getBubbleLength,
   getCachedElbowRoutes,
+  getLinkPortGap,
   getNodeNameClearance,
-  placeCurveLabel,
-  placeElbowBubble,
-  placeElbowLabel,
+  placeRouteBubbles,
+  placeRouteLabels,
   type ElbowLabelPlacement
 } from "./elbowLinkLayout";
 import { DEFAULT_ENDPOINT_LABEL_OFFSET } from "../../../annotations/endpointLabelOffset";
@@ -120,8 +120,6 @@ const CANVAS_BACKGROUND =
 const EDGE_OPACITY_DIMMED = 0.15;
 const LABEL_OPACITY_DIMMED = 0.3;
 const LABEL_LINE_HEIGHT = 1.2;
-// Room between elbow links on one side: a label's height plus a little air
-const ELBOW_LABEL_PORT_AIR = 2;
 
 // Node icon dimensions (edges connect to icon center, not the label)
 const NODE_ICON_SIZE = 40;
@@ -1165,10 +1163,11 @@ function useEdgeGeometry(
   );
   // Links on one side sit far enough apart for a label or bubble each.
   const interfaceScale = telemetryConfig?.interfaceScale ?? 1;
-  const elbowPortGap =
+  const elbowPortGap = getLinkPortGap(
     labelMode === "telemetry-style"
-      ? TELEMETRY_LABEL_MIN_RADIUS_PX * 2 * interfaceScale + ELBOW_LABEL_PORT_AIR
-      : getDefaultLabelMetrics(interfaceScale).fontSize * LABEL_LINE_HEIGHT + ELBOW_LABEL_PORT_AIR;
+      ? TELEMETRY_LABEL_MIN_RADIUS_PX * 2 * interfaceScale
+      : getDefaultLabelMetrics(interfaceScale).fontSize * LABEL_LINE_HEIGHT
+  );
   const bottomClearance = getNodeNameClearance(nodeStyle === "boxed");
   const getRoutingRectForShape = useCallback(
     (node: Node) => getRoutingRect(node, nodeShape),
@@ -1396,30 +1395,17 @@ function useEndpointLabelPlacements(
         target: { ...geometry.targetLabelPos, rotation: 0 }
       };
     }
-    const reversed = [...route.points].reverse();
-    if (labelMode === "telemetry-style") {
-      return {
-        source: placeElbowBubble(route.points, labelOffsets.source),
-        target: placeElbowBubble(reversed, labelOffsets.target)
-      };
-    }
+    if (labelMode === "telemetry-style") return placeRouteBubbles(route, labelOffsets);
     const metrics = getDefaultLabelMetrics(interfaceScale);
-    const nameClearance = getNodeNameClearance(isBoxed);
-    const placeLabel = curved ? placeCurveLabel : placeElbowLabel;
-    return {
-      source: placeLabel(
-        route.points,
-        route.sourceSide,
-        { text: sourceLabel ?? "", ...metrics },
-        nameClearance
-      ),
-      target: placeLabel(
-        reversed,
-        route.targetSide,
-        { text: targetLabel ?? "", ...metrics },
-        nameClearance
-      )
-    };
+    return placeRouteLabels(
+      route,
+      {
+        source: { text: sourceLabel ?? "", ...metrics },
+        target: { text: targetLabel ?? "", ...metrics }
+      },
+      getNodeNameClearance(isBoxed),
+      curved
+    );
   }, [
     geometry,
     labelMode,
