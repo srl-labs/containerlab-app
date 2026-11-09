@@ -33,7 +33,7 @@ Choose a lab and change its settings. The preview updates as you go. To reuse th
 </fieldset>
 <fieldset class="studio-group">
 <legend>Links</legend>
-<div class="studio-field"><span>Shape</span><div class="studio-segmented" role="radiogroup" aria-label="Link style"><label><input type="radio" name="link-style" value="straight"><span>Straight</span></label><label><input type="radio" name="link-style" value="elbow"><span>Elbow</span></label></div></div>
+<div class="studio-field"><span>Shape</span><div class="studio-segmented" role="radiogroup" aria-label="Link style"><label><input type="radio" name="link-style" value="straight"><span>Straight</span></label><label><input type="radio" name="link-style" value="elbow"><span>Elbow</span></label><label><input type="radio" name="link-style" value="curve"><span>Curve</span></label></div></div>
 <div class="studio-field"><span>Interface names</span><div class="studio-segmented" role="radiogroup" aria-label="Interface names"><label><input type="radio" name="link-labels" value="hide" checked><span>Hidden</span></label><label><input type="radio" name="link-labels" value="on-select"><span>On select</span></label><label><input type="radio" name="link-labels" value="show-all"><span>Always</span></label></div></div>
 <label class="studio-switch"><span>Telemetry style</span><input type="checkbox" role="switch" name="telemetry"></label>
 <label class="studio-switch"><span>Highlight on hover</span><input type="checkbox" role="switch" name="link-hover" checked></label>

@@ -1,5 +1,5 @@
 /**
- * Shared elbow routes for the canvas, and where elbow link labels go.
+ * Shared elbow and curve routes for the canvas, and where their link labels go.
  */
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 
@@ -9,18 +9,23 @@ import {
   getElbowLoopPolyline,
   getPointAlongPolyline,
   getPolylineLength,
+  routeCurveLinks,
   routeElbowLinks,
   type ElbowRoute,
   type ElbowRouteOptions,
   type ElbowSide
 } from "../elbowRouting";
 
-const CORNER_RADIUS = 8;
+export const ELBOW_CORNER_RADIUS = 8;
 // Room between the node, or the name under it, and the first label.
 const LABEL_GAP = 3;
 // Keep labels clear of the rounded bend at the end of their segment.
-const BEND_MARGIN = CORNER_RADIUS;
+const BEND_MARGIN = ELBOW_CORNER_RADIUS;
 const LABEL_CHAR_WIDTH_RATIO = 0.6;
+// Distance either side of a curve label's center that sets which way it turns.
+const TANGENT_SPAN = 3;
+// Air between the labels of links that leave one side of a node.
+const LABEL_PORT_AIR = 2;
 // Room under an icon that the node name takes.
 const NODE_NAME_HEIGHT = 16;
 
@@ -28,26 +33,30 @@ interface RouteCache {
   edgesRef: Edge[] | null;
   nodesRef: Node[] | null;
   key: string;
+  curved: boolean;
   routes: Map<string, ElbowRoute>;
 }
 
-let routeCache: RouteCache = { edgesRef: null, nodesRef: null, key: "", routes: new Map() };
+let routeCache: RouteCache = {
+  edgesRef: null,
+  nodesRef: null,
+  key: "",
+  curved: false,
+  routes: new Map()
+};
 
 /**
- * Routes depend on every link, so they are computed once per graph change and
- * shared by all links. `key` names everything else the routes depend on.
+ * Elbow or curve routes for every link between two different nodes. Exports
+ * call this directly; the canvas goes through getCachedElbowRoutes.
  */
-export function getCachedElbowRoutes(
+export function computeLinkRoutes(
   edges: Edge[],
   nodes: Node[],
   getRect: (node: Node) => NodeRect,
   getLabelLengths: (edge: Edge) => { source: number; target: number },
-  key: string,
-  options: ElbowRouteOptions
+  options: ElbowRouteOptions,
+  curved: boolean
 ): Map<string, ElbowRoute> {
-  if (routeCache.edgesRef === edges && routeCache.nodesRef === nodes && routeCache.key === key) {
-    return routeCache.routes;
-  }
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
   const inputs = [];
   for (const edge of edges) {
@@ -66,9 +75,38 @@ export function getCachedElbowRoutes(
       targetLabelLength: labelLengths.target
     });
   }
-  const routes = routeElbowLinks(inputs, options);
-  routeCache = { edgesRef: edges, nodesRef: nodes, key, routes };
+  return curved ? routeCurveLinks(inputs, options) : routeElbowLinks(inputs, options);
+}
+
+/**
+ * Routes depend on every link, so they are computed once per graph change and
+ * shared by all links. `key` names everything else the routes depend on.
+ */
+export function getCachedElbowRoutes(
+  edges: Edge[],
+  nodes: Node[],
+  getRect: (node: Node) => NodeRect,
+  getLabelLengths: (edge: Edge) => { source: number; target: number },
+  key: string,
+  options: ElbowRouteOptions,
+  curved = false
+): Map<string, ElbowRoute> {
+  if (
+    routeCache.edgesRef === edges &&
+    routeCache.nodesRef === nodes &&
+    routeCache.key === key &&
+    routeCache.curved === curved
+  ) {
+    return routeCache.routes;
+  }
+  const routes = computeLinkRoutes(edges, nodes, getRect, getLabelLengths, options, curved);
+  routeCache = { edgesRef: edges, nodesRef: nodes, key, curved, routes };
   return routes;
+}
+
+/** Room between links on one side of a node: a label's height plus a little air. */
+export function getLinkPortGap(labelHeight: number): number {
+  return labelHeight + LABEL_PORT_AIR;
 }
 
 /** Room kept under icons for the node name; boxed nodes hold the name inside. */
@@ -76,7 +114,7 @@ export function getNodeNameClearance(isBoxed: boolean): number {
   return isBoxed ? 0 : NODE_NAME_HEIGHT;
 }
 
-export function buildElbowPath(points: XYPosition[], cornerRadius = CORNER_RADIUS): string {
+export function buildElbowPath(points: XYPosition[], cornerRadius = ELBOW_CORNER_RADIUS): string {
   return buildRoundedPolylinePath(points, cornerRadius);
 }
 
@@ -116,7 +154,7 @@ export function getBubbleLength(radius: number): number {
  * name under an icon), turned to read along the link. Labels on one side then
  * sit side by side at the port spacing instead of overlapping.
  */
-export function placeElbowLabel(
+function placeElbowLabel(
   points: XYPosition[],
   side: ElbowSide,
   label: ElbowLabelInput,
@@ -136,8 +174,66 @@ export function placeElbowLabel(
   return { x: point.x, y: point.y, rotation: vertical ? -90 : 0 };
 }
 
+/** Turn an angle so the text never reads upside down. */
+function getReadableAngle(degrees: number): number {
+  if (degrees >= 90) return degrees - 180;
+  if (degrees < -90) return degrees + 180;
+  return degrees;
+}
+
+/**
+ * Put a plain label on a curved link, just past the node (and the name under
+ * an icon), turned to follow the curve where it sits.
+ */
+export function placeCurveLabel(
+  points: XYPosition[],
+  side: ElbowSide,
+  label: ElbowLabelInput,
+  nameClearance: number
+): ElbowLabelPlacement {
+  const half = estimateLabelLength(label) / 2;
+  const clearance = side === "bottom" ? nameClearance : 0;
+  // A short link shares its length with the label at the other end.
+  const distance = Math.min(clearance + LABEL_GAP + half, getPolylineLength(points) / 2);
+  const point = getPointAlongPolyline(points, distance);
+  const before = getPointAlongPolyline(points, distance - TANGENT_SPAN);
+  const after = getPointAlongPolyline(points, distance + TANGENT_SPAN);
+  const angle = (Math.atan2(after.y - before.y, after.x - before.x) * 180) / Math.PI;
+  return { x: point.x, y: point.y, rotation: getReadableAngle(angle) };
+}
+
 /** Telemetry bubbles sit right where the link leaves the node. */
-export function placeElbowBubble(points: XYPosition[], offset: number): ElbowLabelPlacement {
+function placeElbowBubble(points: XYPosition[], offset: number): ElbowLabelPlacement {
   const point = getPointAlongPolyline(points, offset);
   return { x: point.x, y: point.y, rotation: 0 };
+}
+
+export interface RouteLabelPlacements {
+  source: ElbowLabelPlacement;
+  target: ElbowLabelPlacement;
+}
+
+/** Plain endpoint labels of an elbow or curved link, each near its own node. */
+export function placeRouteLabels(
+  route: ElbowRoute,
+  labels: { source: ElbowLabelInput; target: ElbowLabelInput },
+  nameClearance: number,
+  curved: boolean
+): RouteLabelPlacements {
+  const placeLabel = curved ? placeCurveLabel : placeElbowLabel;
+  return {
+    source: placeLabel(route.points, route.sourceSide, labels.source, nameClearance),
+    target: placeLabel([...route.points].reverse(), route.targetSide, labels.target, nameClearance)
+  };
+}
+
+/** Telemetry bubbles of an elbow or curved link, `offsets` along it from each end. */
+export function placeRouteBubbles(
+  route: ElbowRoute,
+  offsets: { source: number; target: number }
+): RouteLabelPlacements {
+  return {
+    source: placeElbowBubble(route.points, offsets.source),
+    target: placeElbowBubble([...route.points].reverse(), offsets.target)
+  };
 }

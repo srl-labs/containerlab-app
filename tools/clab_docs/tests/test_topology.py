@@ -39,6 +39,11 @@ class TopologyTests(unittest.TestCase):
         self.assertIn('link-style="elbow"', html)
         self.assertIn('link-hover="true"', html)
 
+    def test_link_curvature_passes_through(self):
+        html = self.render('```clab link-style="curve" link-curvature="0.8"\n' + SOURCE + '```')
+        self.assertIn('link-style="curve"', html)
+        self.assertIn('link-curvature="0.8"', html)
+
     def test_documented_fences_are_not_executed(self):
         html = self.render('````markdown\n```clab\n' + SOURCE + '```\n````')
         self.assertNotIn('<clab-topology ', html)
@@ -57,6 +62,8 @@ class TopologyTests(unittest.TestCase):
             '```clab link-hover="sometimes"\n' + SOURCE + '```',
             '```clab fit-padding="NaN"\n' + SOURCE + '```',
             '```clab fit-padding="3"\n' + SOURCE + '```',
+            '```clab link-curvature="NaN"\n' + SOURCE + '```',
+            '```clab link-curvature="2"\n' + SOURCE + '```',
             '```clab\nname: no-topology\n```',
             '```clab\ntopology: [\n```',
             '```clab\n' + SOURCE,

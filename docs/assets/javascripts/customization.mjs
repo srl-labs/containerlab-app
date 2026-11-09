@@ -138,7 +138,7 @@ class ClabCustomizer extends HTMLElement {
     const styles = {
       palette: labs[settings.lab].palette,
       "node-style": saved.nodeStyle === "boxed" ? "boxed" : "icon",
-      "link-style": saved.linkStyle === "elbow" ? "elbow" : "straight"
+      "link-style": ["elbow", "curve"].includes(saved.linkStyle) ? saved.linkStyle : "straight"
     };
     for (const [name, value] of Object.entries(styles)) {
       this.form.querySelector(`[name='${name}'][value='${value}']`).checked = true;

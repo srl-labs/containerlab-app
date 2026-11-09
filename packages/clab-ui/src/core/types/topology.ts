@@ -311,7 +311,9 @@ export interface TopologyAnnotations {
     lastNonTelemetryLinkLabelMode?: "show-all" | "on-select" | "hide";
     nodeStyle?: "icon" | "boxed";
     nodeBoxSpacing?: "default" | "narrow";
-    linkStyle?: "straight" | "elbow";
+    linkStyle?: "straight" | "elbow" | "curve";
+    /** How far curved links swing out, from 0.2 to 1. */
+    linkCurvature?: number;
     mgmtNetworkBadge?: "always" | "hover";
     /** CPU usage badge on running nodes; shown only when true. */
     showNodeCpu?: boolean;

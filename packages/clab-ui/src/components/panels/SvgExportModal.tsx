@@ -41,6 +41,8 @@ import {
 import { type ClabUiHost, useClabUiHost } from "../../host";
 import { useEdges } from "../../stores/graphStore";
 import {
+  useLinkCurvature,
+  useLinkStyle,
   useNodeBoxSpacing,
   useNodeStyle,
   useTelemetryLabelSettings,
@@ -410,6 +412,8 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
   const telemetryLabelSettings = useTelemetryLabelSettings();
   const nodeStyle = useNodeStyle();
   const nodeBoxSpacing = useNodeBoxSpacing();
+  const linkStyle = useLinkStyle();
+  const linkCurvature = useLinkCurvature();
   const [exportFormat, setExportFormat] = useState<ExportFormat>("svg");
   const isDrawio = exportFormat === "drawio";
   const [borderZoom, setBorderZoom] = useState(100);
@@ -556,9 +560,19 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
       telemetryStyleLabels: linkLabelMode === "telemetry-style",
       nodeStyle,
       nodeBoxSpacing,
+      linkStyle,
+      linkCurvature,
       iconInk
     }),
-    [telemetryLabelSettings, linkLabelMode, nodeStyle, nodeBoxSpacing, iconInk]
+    [
+      telemetryLabelSettings,
+      linkLabelMode,
+      nodeStyle,
+      nodeBoxSpacing,
+      linkStyle,
+      linkCurvature,
+      iconInk
+    ]
   );
 
   const prepareSvgExport = useCallback((): PreparedSvgExport => {
@@ -574,7 +588,11 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
           telemetryStyleLabels: true,
           iconInk
         }
-      : canvasRenderOptions;
+      : {
+          ...canvasRenderOptions,
+          // A transparent export leaves elbow and curved links see-through.
+          ...(backgroundOption === "custom" ? { linkBackground: customBackgroundColor } : {})
+        };
     const graphSvg = buildGraphSvg(
       rfInstance,
       borderZoom,

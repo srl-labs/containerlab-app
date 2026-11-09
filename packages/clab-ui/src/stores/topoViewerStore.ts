@@ -19,7 +19,11 @@ import {
   type NodeBoxSpacing,
   type NodeStyle
 } from "../components/canvas/nodeBox";
-import { DEFAULT_LINK_STYLE, type LinkStyle } from "../components/canvas/elbowRouting";
+import {
+  DEFAULT_LINK_CURVATURE,
+  DEFAULT_LINK_STYLE,
+  type LinkStyle
+} from "../components/canvas/elbowRouting";
 import {
   DEFAULT_MGMT_NETWORK_BADGE,
   type MgmtNetworkBadgeMode
@@ -90,6 +94,8 @@ export interface TopoViewerState {
   nodeStyle: NodeStyle;
   nodeBoxSpacing: NodeBoxSpacing;
   linkStyle: LinkStyle;
+  /** How far curved links swing out */
+  linkCurvature: number;
   mgmtNetworkBadge: MgmtNetworkBadgeMode;
   /** CPU usage badge on the running nodes of a deployed lab */
   showNodeCpu: boolean;
@@ -150,6 +156,7 @@ export interface TopoViewerActions {
   setNodeStyle: (style: NodeStyle) => void;
   setNodeBoxSpacing: (spacing: NodeBoxSpacing) => void;
   setLinkStyle: (style: LinkStyle) => void;
+  setLinkCurvature: (curvature: number) => void;
   setMgmtNetworkBadge: (mode: MgmtNetworkBadgeMode) => void;
   setShowNodeCpu: (enabled: boolean) => void;
   setTelemetryNodeSizePx: (value: number) => void;
@@ -233,6 +240,7 @@ const initialState: TopoViewerState = {
   nodeStyle: DEFAULT_NODE_STYLE,
   nodeBoxSpacing: DEFAULT_NODE_BOX_SPACING,
   linkStyle: DEFAULT_LINK_STYLE,
+  linkCurvature: DEFAULT_LINK_CURVATURE,
   mgmtNetworkBadge: DEFAULT_MGMT_NETWORK_BADGE,
   showNodeCpu: false,
   telemetryNodeSizePx: 40,
@@ -503,6 +511,10 @@ export const useTopoViewerStore = createWithEqualityFn<TopoViewerStore>((set, ge
     set({ linkStyle });
   },
 
+  setLinkCurvature: (linkCurvature) => {
+    set({ linkCurvature });
+  },
+
   setMgmtNetworkBadge: (mgmtNetworkBadge) => {
     set({ mgmtNetworkBadge });
   },
@@ -757,8 +769,11 @@ export const useNodeStyle = () => useTopoViewerStore((state) => state.nodeStyle)
 /** Get the room between box outlines and their icon and name in the boxed style */
 export const useNodeBoxSpacing = () => useTopoViewerStore((state) => state.nodeBoxSpacing);
 
-/** Get how links are drawn: straight lines or right-angle elbows */
+/** Get how links are drawn: straight lines, right-angle elbows, or curves */
 export const useLinkStyle = () => useTopoViewerStore((state) => state.linkStyle);
+
+/** Get how far curved links swing out */
+export const useLinkCurvature = () => useTopoViewerStore((state) => state.linkCurvature);
 
 /** Whether links animate their live traffic */
 export const useAnimateTraffic = () => useTopoViewerStore((state) => state.animateTraffic);

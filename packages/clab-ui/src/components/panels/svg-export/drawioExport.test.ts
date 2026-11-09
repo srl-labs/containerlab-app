@@ -163,6 +163,38 @@ describe("buildDrawioXml", () => {
     assert.equal(cell.match(/<mxPoint /g)?.length, 2);
   });
 
+  it("draws elbow links with rounded bends, and their labels along them", () => {
+    const xml = exportXml({
+      nodes: [topologyNode("a", 0, 0), topologyNode("b", 200, 300)],
+      edges: [link("l1", "a", "b")],
+      renderOptions: { linkStyle: "elbow" },
+      background: "#000000"
+    });
+    const cell = cellXml(xml, "link-l1");
+    const style = styleOf(cell);
+    assert.equal(style.rounded, "1");
+    assert.equal(style.curved, undefined);
+    assert.equal(style.strokeWidth, "2.5");
+    assert.equal(style.opacity, "100");
+    assert.equal(style.exitY, "1", "leaves the bottom of the node");
+    assert.equal(style.entryY, "0", "enters the top of the other");
+    assert.equal(cell.match(/<mxPoint /g)?.length, 2);
+    assert.equal(styleOf(cellXml(xml, "link-l1-label-0")).rotation, "-90");
+  });
+
+  it("draws curved links smoothly along points of the curve", () => {
+    const xml = exportXml({
+      nodes: [topologyNode("a", 0, 0), topologyNode("b", 200, 300)],
+      edges: [link("l1", "a", "b")],
+      renderOptions: { linkStyle: "curve", linkCurvature: 0.8 }
+    });
+    const cell = cellXml(xml, "link-l1");
+    const style = styleOf(cell);
+    assert.equal(style.curved, "1");
+    assert.equal(style.rounded, "0");
+    assert.ok((cell.match(/<mxPoint /g)?.length ?? 0) > 4);
+  });
+
   it("nests group members, with coordinates relative to the group", () => {
     const outer = group("outer", 0, 0);
     const inner = group("inner", 50, 60, { parentId: "outer", width: 100, height: 100 });
