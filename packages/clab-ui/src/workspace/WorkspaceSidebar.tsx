@@ -5,6 +5,7 @@ import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
 import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutlineOutlined";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
@@ -70,8 +71,18 @@ function OverviewRailItem({ overview, pinned }: { overview: OverviewEntry | unde
   );
 }
 
+/** Shows or hides the images view, which the host renders in the document area. */
+function ImagesRailItem({ images, pinned }: { images: OverviewEntry | undefined; pinned: boolean }) {
+  if (!images) return null;
+  return (
+    <WorkspaceRailItem pinned={pinned} label="Images" active={images.active} controls="images-view" testId="workspace-images-button" onClick={images.onToggle}>
+      <Inventory2OutlinedIcon fontSize="small" />
+    </WorkspaceRailItem>
+  );
+}
+
 /** Standalone rail around the same explorer view VS Code shows in its sidebar. */
-export function WorkspaceSidebar({ colorScheme, hideLogo = false, onColorSchemeChange, onOpenSettings, overview, tabs }: {
+export function WorkspaceSidebar({ colorScheme, hideLogo = false, images, onColorSchemeChange, onOpenSettings, overview, tabs }: {
   colorScheme: "light" | "dark";
   /** Omit the rail's logo row when the host already shows the logo, such as in a title bar. */
   hideLogo?: boolean;
@@ -79,6 +90,8 @@ export function WorkspaceSidebar({ colorScheme, hideLogo = false, onColorSchemeC
   onOpenSettings: () => void;
   /** A page in the document area that lists every lab; the host renders it as the App's content. */
   overview?: OverviewEntry;
+  /** A page in the document area that manages images; the host renders it as the App's content. */
+  images?: OverviewEntry;
   tabs?: ReactNode;
 }) {
   const [view, setView] = useState<SidebarView>("labs");
@@ -165,6 +178,7 @@ export function WorkspaceSidebar({ colorScheme, hideLogo = false, onColorSchemeC
             <WorkspaceRailItem key={id} pinned={pinned} label={label} active={open && view === id} expanded={open && view === id} controls="workspace-explorer" onClick={() => selectView(id)}>{icon}</WorkspaceRailItem>
           ))}
           <OverviewRailItem overview={overview} pinned={pinned} />
+          <ImagesRailItem images={images} pinned={pinned} />
 
           {tabs ? <Divider sx={{ mx: 1.5, my: 0.5 }} /> : null}
           <Box sx={{
