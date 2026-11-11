@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1.7
+
+# Images-explorer variant of the web image: the upstream runtime plus the
+# packages `climg` needs. The upstream Dockerfile stays untouched; this file
+# layers on its final stage.
+#
+#   docker build -t containerlab-web:base .
+#   docker build -f Dockerfile.images -t containerlab-web:images-dev .
+#
+# Start it with scripts/run-images-container.sh. climg itself, vrnetlab, its
+# config and state are bind-mounted from the host, not baked in.
+ARG BASE=containerlab-web:base
+FROM ${BASE}
+
+# GNU bash sed grep coreutils: vrnetlab Makefiles use `sed -r` and GNU regex,
+# busybox can change `make version-test` output. docker-cli is already in the
+# base; listed again so the climg package set is complete in one place.
+USER root
+RUN apk add --no-cache python3 py3-yaml make patch bash sed grep coreutils \
+    docker-cli py3-pexpect openssh-client
+
+# The server runs as root and drops to WEB_LOCAL_CLIMG_USER for every climg job.
