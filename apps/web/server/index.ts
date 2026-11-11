@@ -6,6 +6,7 @@ import {
   shouldVerifyApiTls,
   createContainerlabAppServer,
   createLocalEndpoints,
+  enableImages,
   normalizeBasePath,
   parseAllowedHosts,
   resolveLocalBackendConfig,
@@ -79,6 +80,15 @@ const WEB_LOCAL_UNAVAILABLE =
 
 async function start(): Promise<void> {
   const localEndpoints = createWebLocalEndpoints();
+  // The image manager (climg) belongs to this machine's endpoint, never to a cluster.
+  const thisMachine = localEndpoints.find((endpoint) => endpoint.backend.options.runtime !== "c9s");
+  if (thisMachine) {
+    for (const message of await enableImages(thisMachine, process.env, {
+      log: (line) => console.info(`[images] ${line}`)
+    })) {
+      console.warn(`[images] ${message}`);
+    }
+  }
   const app = await createContainerlabAppServer({
     basePath: BASE_PATH,
     defaultClabApiUrl: DEFAULT_CLAB_API_URL,

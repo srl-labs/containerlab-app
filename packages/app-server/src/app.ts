@@ -32,6 +32,7 @@ import {
   setSessionCookie,
 } from "./middleware.ts";
 import type { LocalWiresharkOptions } from "./captureStreamProxy.ts";
+import type { ImagesHandle } from "./images/setup.ts";
 import { registerStandaloneProxies } from "./registerProxies.ts";
 import { createStandaloneTopologySessionManager } from "./topologySessionManager.ts";
 import { normalizeBasePath } from "./basePath.ts";
@@ -68,6 +69,8 @@ export interface LocalEndpointOptions {
    * settings for the edit form. It is listed even while its checks fail.
    */
   cluster?: ClusterHostSettings;
+  /** The image manager (`climg`) of this host, or why it is off; set by `enableImages`. */
+  images?: ImagesHandle;
 }
 
 export interface CreateStandaloneAppOptions {
@@ -411,7 +414,7 @@ export async function createStandaloneApp(
         resolveEndpoint,
         listEndpoints,
         topologySessions,
-        options.localWireshark ? { localWireshark: options.localWireshark } : {},
+        { ...(options.localWireshark ? { localWireshark: options.localWireshark } : {}), locals },
       );
 
       scoped.get<{ Querystring: { fresh?: string } }>("/api/config", async (request, reply) => {

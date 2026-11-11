@@ -177,6 +177,11 @@ export interface LocalUiStoreOptions {
   clabDirectory?: string;
   /** Lab workspace root; a lab's icons live in `<lab>/.clab-icons`. */
   workspaceRoot: string;
+  /**
+   * Replaces how the custom nodes file is written (the Images feature: an atomic
+   * write with the owner and mode `climg` needs). Default: a plain write at 0640.
+   */
+  writeFile?: (file: string, content: string) => Promise<void>;
 }
 
 /**
@@ -203,8 +208,13 @@ export function createLocalUiStore(options: LocalUiStoreOptions): EndpointUiStor
   };
   const save = async (nodes: CustomNode[]): Promise<CustomNodesResponse> => {
     const normalized = normalizeCustomNodes(nodes);
-    await fs.mkdir(path.dirname(customNodesFile), { recursive: true, mode: 0o750 });
-    await fs.writeFile(customNodesFile, `${JSON.stringify(normalized, null, 2)}\n`, { mode: 0o640 });
+    const content = `${JSON.stringify(normalized, null, 2)}\n`;
+    if (options.writeFile) {
+      await options.writeFile(customNodesFile, content);
+    } else {
+      await fs.mkdir(path.dirname(customNodesFile), { recursive: true, mode: 0o750 });
+      await fs.writeFile(customNodesFile, content, { mode: 0o640 });
+    }
     return response(normalized);
   };
 

@@ -5,6 +5,7 @@ export {
   type LocalEndpointOptions
 } from "./app.ts";
 export { parseAllowedHosts } from "./hostGuard.ts";
+export { enableImages } from "./images/setup.ts";
 export { createLocalUiStore, type LocalUiStoreOptions } from "./localUiStore.ts";
 export type { ClusterHostsOptions } from "./labHostRoutes.ts";
 export {
