@@ -75,7 +75,8 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
     entry: ["src/index.ts"]
   },
   "packages/app-server": {
-    entry: ["src/**/*.test.ts"],
+    // The fake climg is spawned by the Images tests.
+    entry: ["src/**/*.test.ts", "src/images/fixtures/fake-climg.mjs"],
     // The TLS certificate generator invokes the operating system's OpenSSL.
     ignoreBinaries: ["openssl"]
   },
@@ -92,6 +93,7 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
       "test/ui-harness/settings.tsx",
       "test/ui-harness/explorer.tsx",
       "test/ui-harness/overview.tsx",
+      "test/ui-harness/images.tsx",
       "test/ui-harness/webviews.tsx",
       "viewer-assets/component.mjs",
       "src/**/*.test.{ts,tsx}",

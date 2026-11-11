@@ -46,6 +46,32 @@ These run labs on the web app's own host, without `clab-api-server`; see [Run la
 | `WEB_LOCAL_WIRESHARK_IMAGE` | `ghcr.io/srl-labs/wireshark-vnc-docker:latest` | Image of the Wireshark VNC containers. With `c9s` it needs the capture pipe (`CLABWIRE_CAPTURE_PIPE`). |
 | `WEB_LOCAL_SUDO` | `false` | Run containerlab with `sudo -n`. |
 
+### Images
+
+The **Images** entry under Overview searches [LabHub](https://labhub.srlinux.dev) for router images, pulls or uploads them, builds [vrnetlab](https://github.com/srl-labs/vrnetlab) images and writes the matching Node Templates to `<WEB_LOCAL_WORKSPACE>/ui/custom-nodes.json`. It drives the [`climg`](https://github.com/dathtd119/climg) command line tool and is off unless `WEB_LOCAL_CLIMG_PATH` is set. It needs [labs on the web app's host](#labs-on-the-web-apps-host) (`WEB_LOCAL_LABS`) and does not appear for lab hosts or with `c9s`.
+
+Install `climg` on the host (or mount it into the container) first:
+
+```bash
+pipx install git+https://github.com/dathtd119/climg
+```
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `WEB_LOCAL_CLIMG_PATH` | unset: Images is off | Absolute path of the `climg` executable, for example the output of `command -v climg`. The only program the app runs for Images. |
+| `WEB_LOCAL_CLIMG_CONFIG` | unset: `climg`'s own config | Absolute path of the `climg` config file, passed as `CLIMG_CONFIG`. |
+| `WEB_LOCAL_CLIMG_STATE` | unset: the state folder of the `climg` config | Absolute path of the `climg` state folder, passed as `CLIMG_STATE`. |
+| `WEB_LOCAL_CLIMG_USER` | unset: the app's own user | `uid:gid` that `climg` runs as. Required when the app runs as root, for example in the Docker image, and must not be `0:0`. |
+| `WEB_LOCAL_CLIMG_HOME` | home of that user in `/etc/passwd` | Absolute path passed to `climg` as `HOME`. Set it when the container's user database differs from the host's. |
+| `WEB_LOCAL_IMAGES_UPLOAD_MAX` | `20G` | Largest image upload, in bytes or with a `K`, `M`, `G`, `T` suffix. |
+| `WEB_LOCAL_IMAGES_MAX_RUNNING` | `1` | Pull and build jobs that run at once; the others wait in a queue. |
+| `WEB_LOCAL_IMAGES_MAX_QUEUED` | `20` | Jobs that may wait; starting one more is refused. `0` means no waiting. |
+
+!!! warning "climg runs as the configured user"
+    Without sign-in, every browser that can open the app can pull, upload and build images and edit the Node Templates, and the app runs `climg` as `WEB_LOCAL_CLIMG_USER` (or its own user) to do so. Vrnetlab builds use Docker, so that user needs Docker access. Use an unprivileged user and keep the app on `localhost` or a trusted network.
+
+To run the Docker image with `climg`, build `Dockerfile.images` on top of the web image and start it with `scripts/run-images-container.sh`; the script's header lists its settings (`CLIMG_PATH` and `VRNETLAB` are required).
+
 ## Desktop app
 
 Set these in the environment that starts the app.
