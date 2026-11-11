@@ -48,7 +48,7 @@ These run labs on the web app's own host, without `clab-api-server`; see [Run la
 
 ### Images
 
-The **Images** entry under Overview searches [LabHub](https://labhub.srlinux.dev) for router images, pulls or uploads them, builds [vrnetlab](https://github.com/srl-labs/vrnetlab) images and writes the matching Node Templates to `<WEB_LOCAL_WORKSPACE>/ui/custom-nodes.json`. It drives the [`climg`](https://github.com/dathtd119/climg) command line tool and is off unless `WEB_LOCAL_CLIMG_PATH` is set. It needs [labs on the web app's host](#labs-on-the-web-apps-host) (`WEB_LOCAL_LABS`) and does not appear for lab hosts or with `c9s`.
+The **Images** entry under Overview searches the LabHub image index for router images, pulls or uploads them, builds [vrnetlab](https://github.com/srl-labs/vrnetlab) images and writes the matching Node Templates to `<WEB_LOCAL_WORKSPACE>/ui/custom-nodes.json`. It drives the [`climg`](https://github.com/dathtd119/climg) command line tool and is off unless `WEB_LOCAL_CLIMG_PATH` is set. It needs [labs on the web app's host](#labs-on-the-web-apps-host) (`WEB_LOCAL_LABS`) and does not appear for lab hosts or with `c9s`.
 
 Install `climg` on the host (or mount it into the container) first:
 
