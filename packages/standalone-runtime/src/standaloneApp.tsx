@@ -41,6 +41,7 @@ import {
   StandaloneLabHostUnavailable,
   useActiveTabUnavailable,
 } from "./components/StandaloneConnectionBanner";
+import { StandaloneImagesView } from "./components/StandaloneImagesView";
 import { StandaloneLabsOverview } from "./components/StandaloneLabsOverview";
 import { replaceLabDeepLink } from "./labDeepLink";
 import {
@@ -1741,7 +1742,8 @@ function StandaloneApp() {
     const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
     return activeTab?.kind ?? null;
   });
-  const overviewOpen = useWorkspaceViewStore((state) => state.overviewOpen);
+  const documentView = useWorkspaceViewStore((state) => state.documentView);
+  const setDocumentView = useWorkspaceViewStore((state) => state.setDocumentView);
   const activeTabUnavailable = useActiveTabUnavailable();
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
@@ -2121,7 +2123,15 @@ function StandaloneApp() {
 
   // The overview and other documents replace the canvas, which stays mounted beneath them.
   const renderDocumentContent = () => {
-    if (overviewOpen) return <StandaloneLabsOverview actions={labsOverviewActions} />;
+    if (documentView === "overview") return <StandaloneLabsOverview actions={labsOverviewActions} />;
+    if (documentView === "images") {
+      return (
+        <StandaloneImagesView
+          onTemplatesChanged={() => { void refreshCustomNodesForAuthenticatedUser().catch(() => {}); }}
+          onClose={() => setDocumentView("editor")}
+        />
+      );
+    }
     if (activeLabTabKind === "file") {
       return <StandaloneFileEditor onClose={closeLabTabAndActivateNext} />;
     }
@@ -2165,14 +2175,18 @@ function StandaloneApp() {
               onColorSchemeChange={handleThemeChange}
               onOpenSettings={() => setSettingsOpen(true)}
               overview={{
-                active: overviewOpen,
-                onToggle: () => useWorkspaceViewStore.getState().setOverviewOpen(!overviewOpen),
+                active: documentView === "overview",
+                onToggle: () => setDocumentView(documentView === "overview" ? "editor" : "overview"),
+              }}
+              images={{
+                active: documentView === "images",
+                onToggle: () => setDocumentView(documentView === "images" ? "editor" : "images"),
               }}
               tabs={
                 tabOrientation === "vertical" ? (
                   <StandaloneLabTabs
                     orientation="vertical"
-                    showSelection={!overviewOpen}
+                    showSelection={documentView === "editor"}
                     onActivate={selectLabTab}
                     onClose={closeLabTabAndActivateNext}
                   />
@@ -2185,7 +2199,7 @@ function StandaloneApp() {
               <StandaloneConnectionBanner />
               {tabOrientation === "horizontal" ? (
                 <StandaloneLabTabs
-                  showSelection={!overviewOpen}
+                  showSelection={documentView === "editor"}
                   onActivate={selectLabTab}
                   onClose={closeLabTabAndActivateNext}
                 />
@@ -2193,7 +2207,7 @@ function StandaloneApp() {
             </>
           ),
           content: renderDocumentContent(),
-          emptyState: <StandaloneLabEmptyState onCreateLab={explorerBridge.createTopologyFile} />,
+          emptyState: documentView === "editor" ? <StandaloneLabEmptyState onCreateLab={explorerBridge.createTopologyFile} /> : null,
         }}
       />
       <>
