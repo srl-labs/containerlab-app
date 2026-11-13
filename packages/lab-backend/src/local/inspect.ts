@@ -22,6 +22,8 @@ export interface ClabContainerRecord {
   ipv6_address: string;
   lab_name: string;
   nodeName: string;
+  /** The topology node of a sub-container, e.g. a distributed SR-SIM node's CPM or card. */
+  rootNodeName?: string;
   labPath: string;
   absLabPath: string;
   group: string;
@@ -65,6 +67,7 @@ function toClabContainerRecord(container: Docker.ContainerInfo): ClabContainerRe
     ipv6_address: address(network?.GlobalIPv6Address, network?.GlobalIPv6PrefixLen),
     lab_name: labels.containerlab ?? "",
     nodeName: labels["clab-node-name"] ?? "",
+    ...(labels["clab-root-node-name"] ? { rootNodeName: labels["clab-root-node-name"] } : {}),
     labPath,
     absLabPath: labPath,
     group: labels["clab-node-group"] ?? "",

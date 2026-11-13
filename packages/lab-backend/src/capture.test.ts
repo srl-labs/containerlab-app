@@ -97,6 +97,28 @@ test("capture targets map inspect names to nodes, in order and without duplicate
   );
 });
 
+test("capture targets of a distributed SR-SIM node's containers go to the node", () => {
+  // Docker labels of an SR-7s: its CPM and card are sub-containers of node dist.
+  const records = [
+    { name: "clab-srsimcap-dist-1", nodeName: "dist-1", rootNodeName: "dist" },
+    { name: "clab-srsimcap-dist-a", nodeName: "dist-a", rootNodeName: "dist" },
+    { name: "clab-srsimcap-integ", nodeName: "integ" }
+  ];
+  const targets = captureNodeTargets(
+    "srsimcap",
+    [
+      { containerName: "clab-srsimcap-dist-a", interfaceName: "1/1/c1/1" },
+      { containerName: "clab-srsimcap-dist-1", interfaceName: "1/1/c1/1" },
+      { containerName: "clab-srsimcap-integ", interfaceName: "1/1/c1/1" }
+    ],
+    records
+  );
+  assert.deepEqual(targets, [
+    { node: "dist", interface: "1/1/c1/1" },
+    { node: "integ", interface: "1/1/c1/1" }
+  ]);
+});
+
 test("capture limits take Go durations and the lab hosts' ranges", () => {
   assert.equal(captureDuration("5s"), "5s");
   assert.equal(captureDuration(" 1m30s "), "1m30s");

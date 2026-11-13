@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.27.1] - Unreleased
+
+- Fix packet capture on distributed SR-SIM nodes, such as an SR-7s, from the explorer and the topology canvas: containerlab rejected their containers as no node of the lab, and Edgeshark could not find the container or the SR OS port the canvas named. Link impairments set from the canvas find these nodes too.
+
 ## [0.27.0] - 2026-11-07
 
 - Packet capture on Docker and Podman no longer needs **Edgeshark**: lab links open in Wireshark on this computer or Wireshark VNC, or save as a `.pcapng`, with containerlab 0.83.0 or newer, or a current clab-api-server. Edgeshark stays available as a capture method, and for interfaces that are no lab links, such as `eth0`.
