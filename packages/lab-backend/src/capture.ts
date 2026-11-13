@@ -48,11 +48,15 @@ export function captureLimits(options: { duration?: string; packetLimit?: number
   };
 }
 
-/** The topology node of an inspect record (`nodeName`), if the record says. */
-function recordNodeName(record: { name: string }): string | undefined {
-  const value = (record as { nodeName?: unknown; node_name?: unknown }).nodeName ??
-    (record as { node_name?: unknown }).node_name;
-  return typeof value === "string" && value ? value : undefined;
+/**
+ * The topology node of an inspect record, if the record says: the root node of
+ * a sub-container (a distributed SR-SIM node's CPM or card), else `nodeName`.
+ */
+export function recordNodeName(record: { name: string }): string | undefined {
+  const fields = record as { rootNodeName?: unknown; nodeName?: unknown; node_name?: unknown };
+  return [fields.rootNodeName, fields.nodeName, fields.node_name].find(
+    (value): value is string => typeof value === "string" && value !== ""
+  );
 }
 
 /**

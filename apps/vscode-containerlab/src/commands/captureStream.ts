@@ -21,6 +21,7 @@ import { Readable } from "stream";
 import * as vscode from "vscode";
 import {
   describeCaptureGap,
+  recordNodeName,
   type CaptureInterface,
   type CaptureTarget,
   type LabBackend,
@@ -182,11 +183,8 @@ async function resolveNode(
   for (const [labName, containers] of Object.entries(labs)) {
     if (knownLab !== undefined && knownLab !== "" && labName !== knownLab) continue;
     for (const container of containers) {
-      const nodeName = (container as { nodeName?: unknown }).nodeName;
-      const node =
-        typeof nodeName === "string" && nodeName
-          ? nodeName
-          : container.name.replace(`${labName}-`, "");
+      // A distributed SR-SIM node's CPM and cards capture as the node itself.
+      const node = recordNodeName(container) ?? container.name.replace(`${labName}-`, "");
       if (container.name === name || node === name || container.name === `${labName}-${name}`) {
         return { labName, node };
       }

@@ -67,25 +67,39 @@ function createDefaultContainerNode(nodeName: string): ClabContainerTreeNode {
   };
 }
 
+/** A port the canvas names, matched to a running container of the lab when there is one. */
+interface ResolvedInterface {
+  /** The interface in the container, e.g. a host-side link end (clab-s-*). */
+  name: string;
+  /** The port name users know, e.g. the SR OS port 1/1/c1/1. */
+  alias: string;
+  container?: ClabContainerTreeNode;
+}
+
 /**
- * Creates an interface object for capture command execution.
+ * Creates an interface object for capture command execution. It names the
+ * container the port is in, as Edgeshark and the capture stream look it up.
  */
 function createInterfaceObject(
   nodeName: string,
-  interfaceName: string,
-  alias?: string
+  intf: ResolvedInterface,
+  requestedName: string
 ): ClabInterfaceTreeNode {
+  const { container } = intf;
   return {
-    label: interfaceName,
-    parentName: nodeName,
-    cID: nodeName,
-    name: interfaceName,
+    label: intf.name,
+    parentName: container?.name ?? nodeName,
+    cID: container?.cID ?? nodeName,
+    name: intf.name,
     type: "",
-    alias: alias ?? "",
+    alias: intf.alias || (requestedName !== intf.name ? requestedName : ""),
     mac: "",
     mtu: 0,
     ifIndex: 0,
-    state: ""
+    state: "",
+    ...(container?.labName !== undefined && container.labName !== ""
+      ? { labName: container.labName }
+      : {})
   };
 }
 
@@ -105,6 +119,37 @@ function onTopologyHost(iface: ClabInterfaceTreeNode, yamlFilePath: string): Cla
  * Executes VS Code commands for SSH, shell attach, and logs.
  */
 class NodeCommandService {
+  /** Containers of the lab the topology file runs as; none when it is not running. */
+  private async labContainers(yamlFilePath: string): Promise<ClabContainerTreeNode[]> {
+    if (yamlFilePath.length === 0) {
+      return [];
+    }
+    const labsData = await runningLabsProvider.discoverInspectLabs();
+    if (labsData === undefined) {
+      return [];
+    }
+    const currentLab = Object.values(labsData).find(
+      (lab) => isClabLabTreeNode(lab) && lab.labPath.absolute === yamlFilePath
+    );
+    return currentLab !== undefined && isClabLabTreeNode(currentLab)
+      ? flattenContainers(currentLab.containers)
+      : [];
+  }
+
+  /**
+   * Containers a node name from the canvas stands for, the likeliest first:
+   * the container itself, else the components of a distributed SR-SIM node.
+   */
+  private matchContainers(
+    containers: ClabContainerTreeNode[],
+    nodeName: string
+  ): ClabContainerTreeNode[] {
+    const direct = containers.filter(
+      (c) => c.name === nodeName || c.name_short === nodeName || labelToString(c.label) === nodeName
+    );
+    return direct.length > 0 ? direct : this.distributedSrosContainers(containers, nodeName);
+  }
+
   /**
    * Gets a container node by name from the running labs.
    */
@@ -112,81 +157,43 @@ class NodeCommandService {
     nodeName: string,
     yamlFilePath: string
   ): Promise<ClabContainerTreeNode | undefined> {
-    const labsData = await runningLabsProvider.discoverInspectLabs();
-    if (labsData === undefined || yamlFilePath.length === 0) {
-      return undefined;
-    }
-
-    // Only search in the current lab
-    const currentLab = Object.values(labsData).find((lab) => {
-      if (!isClabLabTreeNode(lab)) {
-        return false;
-      }
-      return lab.labPath.absolute === yamlFilePath;
-    });
-
-    if (currentLab === undefined || !isClabLabTreeNode(currentLab)) {
-      return undefined;
-    }
-
-    const containers: ClabContainerTreeNode[] = flattenContainers(currentLab.containers);
-    const directMatch = containers.find(
-      (c: ClabContainerTreeNode) =>
-        c.name === nodeName || c.name_short === nodeName || labelToString(c.label) === nodeName
-    );
-    if (directMatch) {
-      return directMatch;
-    }
-
-    // Check for distributed SROS container
-    return this.resolveDistributedSrosContainer(containers, nodeName);
+    return this.matchContainers(await this.labContainers(yamlFilePath), nodeName).at(0);
   }
 
   /**
-   * Resolves distributed SROS containers by finding the appropriate component.
+   * Components of a distributed SR-SIM node, CPM A first. The node is named as
+   * in the topology (sr1) or with the lab's container prefix (clab-lab-sr1).
    */
-  private resolveDistributedSrosContainer(
+  private distributedSrosContainers(
     containers: ClabContainerTreeNode[],
     nodeName: string
-  ): ClabContainerTreeNode | undefined {
-    const normalizedTarget = nodeName.toLowerCase();
-    const candidates = containers
-      .filter((container) => container.kind === "nokia_srsim")
-      .map((container) => ({ container, info: this.extractSrosComponentInfo(container) }))
-      .filter(
-        (
-          entry
-        ): entry is { container: ClabContainerTreeNode; info: { base: string; slot: string } } => {
-          return !!entry.info && entry.info.base.toLowerCase() === normalizedTarget;
-        }
-      );
-
-    if (!candidates.length) {
-      return undefined;
-    }
-
-    candidates.sort((a, b) => {
-      const slotOrder = this.srosSlotPriority(a.info.slot) - this.srosSlotPriority(b.info.slot);
-      if (slotOrder !== 0) {
-        return slotOrder;
+  ): ClabContainerTreeNode[] {
+    const target = nodeName.toLowerCase();
+    const candidates = containers.flatMap((container) => {
+      if (container.kind !== "nokia_srsim") {
+        return [];
       }
-      return a.info.slot.localeCompare(b.info.slot, undefined, { sensitivity: "base" });
+      const info = [container.name_short, container.name]
+        .map((name) => this.extractSrosComponentInfo(name))
+        .find((entry) => entry?.base.toLowerCase() === target);
+      return info ? [{ container, slot: info.slot }] : [];
     });
 
-    return candidates[0].container;
+    candidates.sort(
+      (a, b) =>
+        this.srosSlotPriority(a.slot) - this.srosSlotPriority(b.slot) ||
+        a.slot.localeCompare(b.slot, undefined, { sensitivity: "base" })
+    );
+    return candidates.map((entry) => entry.container);
   }
 
   /**
-   * Extracts SROS component info from container name.
+   * Splits an SR-SIM component container name into node and slot (sr1-a).
    */
   private extractSrosComponentInfo(
-    container: ClabContainerTreeNode
+    containerName: string | undefined
   ): { base: string; slot: string } | undefined {
-    const rawLabel = (container.name_short || container.name || "").trim();
-    if (!rawLabel) {
-      return undefined;
-    }
-
+    const rawLabel = (containerName ?? "").trim();
     const lastDash = rawLabel.lastIndexOf("-");
     if (lastDash === -1) {
       return undefined;
@@ -297,49 +304,29 @@ class NodeCommandService {
   }
 
   /**
-   * Resolves the actual interface name from a logical name using the running labs data.
-   */
-  async resolveInterfaceName(
-    nodeName: string,
-    interfaceName: string,
-    yamlFilePath: string
-  ): Promise<string> {
-    const [resolved] = await this.resolveInterfaces(nodeName, [interfaceName], yamlFilePath);
-    return resolved.name;
-  }
-
-  /**
    * Resolves logical names (e.g. aliases) to the node's live interfaces in one inspect pass.
-   * Each result keeps the alias, the port name users know for host-side link interfaces.
+   * Each result keeps the alias, the port name users know for host-side link interfaces,
+   * and the container the port is in: a distributed SR-SIM node is several containers.
+   * With `nodeNamespace` the names are ports inside the node and stay as they are.
    */
   async resolveInterfaces(
     nodeName: string,
     interfaceNames: string[],
-    yamlFilePath: string
-  ): Promise<Array<{ name: string; alias: string }>> {
-    const unresolved = interfaceNames.map((name) => ({ name, alias: "" }));
-    const treeData = await runningLabsProvider.discoverInspectLabs();
-    if (!treeData) return unresolved;
-
-    const currentLab = Object.values(treeData).find((lab) => {
-      if (!isClabLabTreeNode(lab)) {
-        return false;
-      }
-      return lab.labPath.absolute === yamlFilePath;
-    });
-
-    if (currentLab === undefined || !isClabLabTreeNode(currentLab)) {
-      return unresolved;
-    }
-
-    const container = flattenContainers(currentLab.containers).find(
-      (c) => c.name === nodeName || c.name_short === nodeName || labelToString(c.label) === nodeName
-    );
+    yamlFilePath: string,
+    nodeNamespace = false
+  ): Promise<ResolvedInterface[]> {
+    const containers = this.matchContainers(await this.labContainers(yamlFilePath), nodeName);
     return interfaceNames.map((interfaceName) => {
-      const intf = container?.interfaces.find(
-        (i: ClabInterfaceTreeNode) => i.name === interfaceName || i.alias === interfaceName
-      );
-      return intf ? { name: intf.name, alias: intf.alias } : { name: interfaceName, alias: "" };
+      if (!nodeNamespace) {
+        for (const container of containers) {
+          const intf = container.interfaces.find(
+            (i: ClabInterfaceTreeNode) => i.name === interfaceName || i.alias === interfaceName
+          );
+          if (intf) return { name: intf.name, alias: intf.alias, container };
+        }
+      }
+      const container = containers.at(0);
+      return { name: interfaceName, alias: "", ...(container ? { container } : {}) };
     });
   }
 
@@ -358,9 +345,11 @@ class NodeCommandService {
         [target.interfaceName],
         yamlFilePath
       );
-      const alias = intf.alias || (target.interfaceName !== intf.name ? target.interfaceName : "");
       ifaces.push(
-        onTopologyHost(createInterfaceObject(target.nodeName, intf.name, alias), yamlFilePath)
+        onTopologyHost(
+          createInterfaceObject(target.nodeName, intf, target.interfaceName),
+          yamlFilePath
+        )
       );
     }
     await vscode.commands.executeCommand("containerlab.interface.capture", ifaces[0], ifaces);
@@ -399,19 +388,14 @@ class NodeCommandService {
             payloadObj.interfaceNames && payloadObj.interfaceNames.length > 0
               ? payloadObj.interfaceNames
               : [interfaceName];
-          const resolved = payloadObj.nodeNamespace
-            ? requested.map((name) => ({ name, alias: "" }))
-            : await this.resolveInterfaces(nodeName, requested, yamlFilePath);
-          const actualNames = resolved.map((intf) => intf.name);
+          const resolved = await this.resolveInterfaces(
+            nodeName,
+            requested,
+            yamlFilePath,
+            payloadObj.nodeNamespace === true
+          );
           const ifaces = resolved.map((intf, index) =>
-            onTopologyHost(
-              createInterfaceObject(
-                nodeName,
-                intf.name,
-                intf.alias || (requested[index] !== intf.name ? requested[index] : "")
-              ),
-              yamlFilePath
-            )
+            onTopologyHost(createInterfaceObject(nodeName, intf, requested[index]), yamlFilePath)
           );
           if (ifaces.length > 1) {
             await vscode.commands.executeCommand(
@@ -423,7 +407,7 @@ class NodeCommandService {
             await vscode.commands.executeCommand("containerlab.interface.capture", ifaces[0]);
           }
           return {
-            result: `Capture executed for ${nodeName}/${actualNames.join(", ")}`,
+            result: `Capture executed for ${ifaces.map((intf) => `${intf.parentName}/${intf.name}`).join(", ")}`,
             error: null
           };
         } catch (innerError) {
@@ -438,16 +422,8 @@ class NodeCommandService {
           if (!data || !(data instanceof Object))
             return { result: null, error: `Invalid netem data: ${data}` };
 
-          const actualInterfaceName = await this.resolveInterfaceName(
-            nodeName,
-            interfaceName,
-            yamlFilePath
-          );
-          const iface = createInterfaceObject(
-            nodeName,
-            actualInterfaceName,
-            interfaceName !== actualInterfaceName ? interfaceName : ""
-          );
+          const [intf] = await this.resolveInterfaces(nodeName, [interfaceName], yamlFilePath);
+          const iface = createInterfaceObject(nodeName, intf, interfaceName);
           await vscode.commands.executeCommand("containerlab.interface.setImpairment", iface, data);
           return { result: `Link impairment set for ${nodeName}:${interfaceName}`, error: null };
         } catch (innerError) {
