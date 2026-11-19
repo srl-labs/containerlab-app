@@ -703,6 +703,9 @@ export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
 const terminalOutputListeners = new Map<string, (text: string) => void>();
 const pendingTerminalOutput = new Map<string, string>();
 const terminalPaneCloseListeners = new Map<string, () => void>();
+// Text to type into a shell pane, kept until its session connects.
+const terminalInputListeners = new Map<string, (text: string) => void>();
+const pendingTerminalInput = new Map<string, string>();
 
 function appendTerminalOutput(paneId: string, text: string): void {
   const listener = terminalOutputListeners.get(paneId);
@@ -714,6 +717,32 @@ function appendTerminalOutput(paneId: string, text: string): void {
   if (findPaneLocation(useRuntimeUiStore.getState().terminals, paneId)) {
     pendingTerminalOutput.set(paneId, (pendingTerminalOutput.get(paneId) ?? "") + text);
   }
+}
+
+/** Types text into a shell pane's session, once it has connected. */
+function sendTerminalInput(paneId: string, text: string): void {
+  const listener = terminalInputListeners.get(paneId);
+  if (listener) {
+    listener(text);
+    return;
+  }
+  if (findPaneLocation(useRuntimeUiStore.getState().terminals, paneId)) {
+    const pending = pendingTerminalInput.get(paneId);
+    pendingTerminalInput.set(paneId, pending === undefined ? text : `${pending}\n${text}`);
+  }
+}
+
+/** Receives the text to type into a pane's session, starting with anything that came early. */
+export function subscribeTerminalInput(paneId: string, listener: (text: string) => void): () => void {
+  terminalInputListeners.set(paneId, listener);
+  const pending = pendingTerminalInput.get(paneId);
+  if (pending !== undefined) {
+    pendingTerminalInput.delete(paneId);
+    listener(pending);
+  }
+  return () => {
+    if (terminalInputListeners.get(paneId) === listener) terminalInputListeners.delete(paneId);
+  };
 }
 
 /** Calls back when an open pane goes away; the returned function stops watching. */
@@ -729,6 +758,7 @@ function handleClosedPanes(before: readonly RuntimeTerminalGroup[], after: reado
   for (const pane of before.flatMap((group) => group.panes)) {
     if (open.has(pane.id)) continue;
     pendingTerminalOutput.delete(pane.id);
+    pendingTerminalInput.delete(pane.id);
     terminalPaneCloseListeners.get(pane.id)?.();
   }
 }
@@ -752,6 +782,7 @@ useRuntimeUiStore.subscribe((state, previous) => {
 
 export const runtimeUiActions = {
   appendTerminalOutput,
+  sendTerminalInput,
   onTerminalPaneClosed,
   activateTerminalGroup: (groupId: string) => useRuntimeUiStore.getState().activateTerminalGroup(groupId),
   activateTerminalPane: (paneId: string) => useRuntimeUiStore.getState().activateTerminalPane(paneId),

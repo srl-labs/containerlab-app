@@ -351,6 +351,18 @@ describe("MessageRouter with the clab-ui webview host", () => {
     expect(nodeEndpoint.args).to.deep.equal([[NODE_COMMANDS.NODE_STOP, "r3", YAML_PATH]]);
   });
 
+  it("types a lab guide's terminal block into the node's shell", async () => {
+    const typed = sinon
+      .stub(nodeCommandService, "sendTerminalInput")
+      .resolves({ result: "Typed 2 lines", error: null });
+    const webview = connectWebview();
+
+    webview.host.topoViewer.sendNodeTerminalInput?.("r1", "enter candidate\ncommit now");
+    await webview.settle();
+
+    expect(typed.args).to.deep.equal([["r1", "enter candidate\ncommit now", YAML_PATH]]);
+  });
+
   it("forwards a multi-interface capture to the capture endpoint", async () => {
     const interfaceEndpoint = sinon
       .stub(nodeCommandService, "handleInterfaceEndpoint")

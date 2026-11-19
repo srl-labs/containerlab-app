@@ -49,6 +49,7 @@ import type { ContainerState, LabState } from "../types";
 
 import {
   runtimeUiActions,
+  subscribeTerminalInput,
   subscribeTerminalOutput,
   useRuntimeUiStore,
   type RuntimeTerminalGroup,
@@ -56,6 +57,7 @@ import {
   type RuntimeTerminalShell
 } from "../state/runtimeUiStore";
 import { findLabStateForTopology } from "../state/documentUtils";
+import { TerminalTyper } from "../state/terminalTyper";
 import {
   createTerminalExportFileName,
   extractTerminalText,
@@ -649,6 +651,15 @@ export function RuntimeTerminalPaneView({
     let resumable = latestPaneRef.current.resumable === true;
     const socket = connectTerminalSessionWebSocket(sessionId, paneState.endpointId);
     websocketRef.current = socket;
+    // Text sent to the pane, such as a lab guide's terminal blocks, typed line by line.
+    const typer = new TerminalTyper({
+      send: (data) => {
+        if (socket.readyState !== WebSocket.OPEN) return false;
+        socket.send(JSON.stringify({ type: "input", data }));
+        return true;
+      }
+    });
+    const unsubscribeInput = subscribeTerminalInput(paneState.id, (text) => typer.type(text));
 
     socket.onmessage = (event) => {
       try {
@@ -658,6 +669,7 @@ export function RuntimeTerminalPaneView({
           resumable ||= payload.resumable === true;
         }
         if (payload.type === "exit" || payload.type === "error") ended = true;
+        if (payload.type === "output") typer.noteOutput();
         handleTerminalSocketPayload({
           fitAddon: fitAddonRef.current,
           payload,
@@ -712,6 +724,10 @@ export function RuntimeTerminalPaneView({
 
     socket.onclose = (event) => {
       websocketRef.current = null;
+      // This socket takes no more input: text sent from now on waits for the
+      // pane's next session, as it does while a pane connects.
+      unsubscribeInput();
+      typer.dispose();
       if (sessionClosedRef.current) {
         return;
       }
@@ -736,6 +752,8 @@ export function RuntimeTerminalPaneView({
 
     return () => {
       sessionClosedRef.current = true;
+      unsubscribeInput();
+      typer.dispose();
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
       socket.close();
       websocketRef.current = null;

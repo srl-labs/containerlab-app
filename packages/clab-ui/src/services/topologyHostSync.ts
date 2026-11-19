@@ -686,6 +686,7 @@ function buildInitialTopoViewerData(
     annotationsFileName: snapshot.annotationsFileName,
     yamlContent: snapshot.yamlContent,
     annotationsContent: snapshot.annotationsContent,
+    guide: snapshot.guide ?? null,
     documentRevision: snapshot.documentRevision ?? "",
     edgeAnnotations,
     ...(offset !== null ? { endpointLabelOffset: offset } : {}),

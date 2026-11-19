@@ -67,6 +67,7 @@ import {
   EXPORT_COMMANDS,
   MSG_CANCEL_LAB_LIFECYCLE,
   MSG_FIT_VIEWPORT,
+  MSG_NODE_TERMINAL_INPUT,
   MSG_SVG_EXPORT_RESULT,
   MuiThemeProvider,
   createApiClabUiHost,
@@ -881,6 +882,7 @@ type VscodeMessage = {
   panelYaml?: string;
   requestId?: string;
   svgContent?: string;
+  text?: unknown;
   usedIcons?: unknown;
 };
 
@@ -1144,6 +1146,27 @@ function handleNodeTerminalCommand(msg: VscodeMessage): void {
     nodeName: msg.nodeName,
     title: `${msg.command === "clab-node-attach-shell" ? "Shell" : "SSH"}: ${msg.nodeName}`,
   });
+}
+
+// A lab guide's terminal block: the node's shell pane, opened when needed, types the text.
+function handleNodeTerminalInputCommand(msg: VscodeMessage): void {
+  if (!getStandaloneBackend().capabilities.lifecycle) return;
+  const target = getActiveTopologyTarget();
+  if (
+    !target ||
+    typeof msg.nodeName !== "string" ||
+    msg.nodeName.trim().length === 0 ||
+    typeof msg.text !== "string"
+  ) {
+    return;
+  }
+  const paneId = runtimeUiActions.openTerminal({
+    ...target,
+    protocol: "shell",
+    nodeName: msg.nodeName,
+    title: `Shell: ${msg.nodeName}`,
+  });
+  runtimeUiActions.sendTerminalInput(paneId, msg.text);
 }
 
 function handleNodeLogsCommand(msg: VscodeMessage): void {
@@ -1466,6 +1489,7 @@ const STANDALONE_MESSAGE_HANDLERS: Record<string, StandaloneMessageHandler> = {
   [EXPORT_COMMANDS.EXPORT_SVG_GRAFANA_BUNDLE]: handleGrafanaBundleExport,
   "clab-node-connect-ssh": handleNodeTerminalCommand,
   "clab-node-attach-shell": handleNodeTerminalCommand,
+  [MSG_NODE_TERMINAL_INPUT]: handleNodeTerminalInputCommand,
   "clab-node-view-logs": handleNodeLogsCommand,
   "clab-node-start": handleNodeLifecycleCommand,
   "clab-node-stop": handleNodeLifecycleCommand,
@@ -1646,6 +1670,10 @@ function setupStandaloneUiHost(): void {
           ? tailscaleStatus
           : undefined,
         ...(getStandaloneBackend().capabilities.lifecycle ? { labOperations } : { labOperations: undefined }),
+        // Without a lab, there is no terminal to type into: guides offer to copy.
+        sendNodeTerminalInput: getStandaloneBackend().capabilities.lifecycle
+          ? apiHost.topoViewer.sendNodeTerminalInput
+          : undefined,
         // The runtime of the topology's lab host decides what the view offers.
         ...(getStandaloneBackend().capabilities.lifecycle
           ? {

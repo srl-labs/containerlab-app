@@ -11,6 +11,9 @@ import networkYaml from "../fixtures/topologies/network.clab.yml?raw";
 import networkAnnotations from "../fixtures/topologies/network.clab.yml.annotations.json?raw";
 import simpleYaml from "../fixtures/topologies/simple.clab.yml?raw";
 import simpleAnnotations from "../fixtures/topologies/simple.clab.yml.annotations.json?raw";
+import srlPairGuide from "../fixtures/topologies/srl-pair.clab.md?raw";
+import srlPairYaml from "../fixtures/topologies/srl-pair.clab.yml?raw";
+import srlPairAnnotations from "../fixtures/topologies/srl-pair.clab.yml.annotations.json?raw";
 import spineLeafYaml from "../fixtures/topologies/spine-leaf.clab.yml?raw";
 import spineLeafAnnotations from "../fixtures/topologies/spine-leaf.clab.yml.annotations.json?raw";
 import stagesYaml from "../fixtures/topologies/stages.clab.yml?raw";
@@ -32,6 +35,9 @@ export const fixtureFiles: Record<string, string> = {
   [`${TOPOLOGY_ROOT}/network.clab.yml.annotations.json`]: networkAnnotations,
   [`${TOPOLOGY_ROOT}/simple.clab.yml`]: simpleYaml,
   [`${TOPOLOGY_ROOT}/simple.clab.yml.annotations.json`]: simpleAnnotations,
+  [`${TOPOLOGY_ROOT}/srl-pair.clab.md`]: srlPairGuide,
+  [`${TOPOLOGY_ROOT}/srl-pair.clab.yml`]: srlPairYaml,
+  [`${TOPOLOGY_ROOT}/srl-pair.clab.yml.annotations.json`]: srlPairAnnotations,
   [`${TOPOLOGY_ROOT}/spine-leaf.clab.yml`]: spineLeafYaml,
   [`${TOPOLOGY_ROOT}/spine-leaf.clab.yml.annotations.json`]: spineLeafAnnotations,
   [`${TOPOLOGY_ROOT}/stages.clab.yml`]: stagesYaml,

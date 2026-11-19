@@ -1,6 +1,7 @@
-/* global describe, it, beforeEach */
+/* global describe, it, beforeEach, afterEach */
 /**
- * Tests for link captures sent from the topology canvas.
+ * Tests for link captures sent from the topology canvas, and for lab guide
+ * text typed into a node's shell.
  *
  * The canvas names a port the way the topology does (SR OS 1/1/c1/1, Linux
  * eth1); containerlab lists links as host-side clab-s-* interfaces aliased to
@@ -10,6 +11,7 @@ import Module from "module";
 import path from "path";
 
 import { expect } from "chai";
+import sinon from "sinon";
 
 const originalResolve = (Module as any)._resolveFilename;
 (Module as any)._resolveFilename = function (
@@ -368,4 +370,44 @@ describe("canvas ports of SR-SIM nodes in labs with another container prefix", (
       });
     }
   }
+});
+
+describe("lab guide text typed into a node's shell", () => {
+  let clock: sinon.SinonFakeTimers;
+  let typed: string[];
+
+  beforeEach(() => {
+    setRunningLabsProvider({
+      discoverInspectLabs: async () => ({ capdist: LAB })
+    } as any);
+    typed = [];
+    vscodeStub.window.terminals.length = 0;
+    // Attach Shell opens the node's terminal unless it is open already.
+    const terminals: Array<{ name: string; sendText(text: string): void }> = vscodeStub.window.terminals;
+    sinon.stub(vscodeStub.commands, "executeCommand").callsFake(async (...args: unknown[]) => {
+      const [command, node] = args as [string, { name: string }];
+      if (command !== "containerlab.node.attachShell") return;
+      const name = `Shell - ${node.name}`;
+      if (terminals.some((terminal) => terminal.name === name)) return;
+      terminals.push({ name, sendText: (text) => typed.push(text) });
+    });
+    clock = sinon.useFakeTimers();
+  });
+
+  afterEach(() => {
+    clock.restore();
+    sinon.restore();
+    vscodeStub.window.terminals.length = 0;
+  });
+
+  it("types a second block after the first, into the shell the first opened", async () => {
+    const first = nodeCommandService.sendTerminalInput("client1", "enter candidate\ncommit now", YAML_PATH);
+    const second = nodeCommandService.sendTerminalInput("client1", "show version", YAML_PATH);
+    await clock.tickAsync(10_000);
+
+    const results = await Promise.all([first, second]);
+    expect(results.map((result) => result.error)).to.deep.equal([null, null]);
+    expect(typed).to.deep.equal(["enter candidate", "commit now", "show version"]);
+    expect(vscodeStub.window.terminals).to.have.length(1);
+  });
 });

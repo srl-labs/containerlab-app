@@ -100,8 +100,17 @@ export type TopologyHostCommand =
   | { command: "batch"; payload: { commands: TopologyHostCommand[] } }
   | { command: "setLabSettings"; payload: LabSettingsUpdate }
   | { command: "setInheritanceSection"; payload: InheritanceSectionUpdate }
+  /** Writes a new lab guide beside the topology; it never replaces one. */
+  | { command: "createGuide"; payload: { content: string } }
   | { command: "undo" }
   | { command: "redo" };
+
+/** A Markdown lab guide, read as it is on disk. */
+export interface TopologyGuideFile {
+  /** e.g. `mylab.clab.md` */
+  fileName: string;
+  content: string;
+}
 
 export interface TopologySnapshot {
   revision: number;
@@ -117,6 +126,8 @@ export interface TopologySnapshot {
   yamlContent: string;
   /** Raw annotations JSON content as read from disk (or a generated default if missing). */
   annotationsContent: string;
+  /** The lab guide beside the topology (`mylab.clab.md`); absent when there is none. */
+  guide?: TopologyGuideFile;
   labName: string;
   mode: "edit" | "view";
   deploymentState: DeploymentState;

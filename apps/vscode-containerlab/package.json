@@ -1340,11 +1340,11 @@
             "enumDescriptions": [
               "Ask before a script runs for the first time, and again when it changes.",
               "Ask before every run.",
-              "Ask only for scripts you may not have written: another user's, or from a shared folder."
+              "Ask only for scripts you may not have written: another user's, or from a shared folder. Lab guide blocks still ask before their first run."
             ],
             "default": "firstRun",
             "scope": "machine",
-            "markdownDescription": "When script buttons on the canvas ask before running their script on the lab host. Scripts you may not have written always ask. A topology's workspace cannot change this setting. Applies to topology views opened after the change."
+            "markdownDescription": "When script buttons on the canvas and lab guide blocks ask before running. Scripts you may not have written always ask, and so does each guide block before its first run unless you agree to the whole guide. A topology's workspace cannot change this setting. Applies to topology views opened after the change."
           }
         }
       },

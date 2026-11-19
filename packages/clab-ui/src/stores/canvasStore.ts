@@ -72,8 +72,11 @@ interface CanvasState {
   /** Kept out of the graph so each slider step or color change repaints only that node */
   nodeBoxPreview: NodeBoxPreview | null;
   fitViewRequestId: number;
-  /** A node to select and center on once it is drawn, such as from a link to it. */
-  focusNodeRequest: { nodeId: string; requestId: number } | null;
+  /**
+   * A node to center on once it is drawn, such as from a link to it; `select`
+   * false leaves the selection, and the panel showing, as they are.
+   */
+  focusNodeRequest: { nodeId: string; requestId: number; select: boolean } | null;
   nodeFilter: string;
   hoveredLink: HoveredLink | null;
   /** Whether hovering a link highlights it; embedders of the viewer opt in. */
@@ -87,7 +90,7 @@ interface CanvasActions {
   setAnnotationHandlers: (handlers: AnnotationHandlers | null) => void;
   setNodeBoxPreview: (preview: NodeBoxPreview | null) => void;
   requestFitView: () => void;
-  requestFocusNode: (nodeId: string) => void;
+  requestFocusNode: (nodeId: string, options?: { select?: boolean }) => void;
   /** Ends the focus request with this id; a newer request stays. */
   clearFocusNodeRequest: (requestId: number) => void;
   setNodeFilter: (nodeFilter: string) => void;
@@ -243,8 +246,14 @@ export const useCanvasStore = createWithEqualityFn<CanvasStore>((set) => ({
   requestFitView: () => {
     set((state) => ({ fitViewRequestId: state.fitViewRequestId + 1 }));
   },
-  requestFocusNode: (nodeId) => {
-    set((state) => ({ focusNodeRequest: { nodeId, requestId: (state.focusNodeRequest?.requestId ?? 0) + 1 } }));
+  requestFocusNode: (nodeId, options) => {
+    set((state) => ({
+      focusNodeRequest: {
+        nodeId,
+        requestId: (state.focusNodeRequest?.requestId ?? 0) + 1,
+        select: options?.select !== false
+      }
+    }));
   },
   clearFocusNodeRequest: (requestId) => {
     set((state) => (state.focusNodeRequest?.requestId === requestId ? { focusNodeRequest: null } : state));

@@ -1,0 +1,15 @@
+name: srl-pair
+
+topology:
+  nodes:
+    srl1:
+      kind: nokia_srlinux
+      type: ixr-d2l
+      image: ghcr.io/nokia/srlinux:latest
+    srl2:
+      kind: nokia_srlinux
+      type: ixr-d2l
+      image: ghcr.io/nokia/srlinux:latest
+
+  links:
+    - endpoints: [ "srl1:e1-1", "srl2:e1-1" ]

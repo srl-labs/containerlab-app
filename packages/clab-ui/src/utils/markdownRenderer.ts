@@ -31,26 +31,33 @@ function escapeHtml(text: string): string {
  * - Emoji support via markdown-it-emoji
  * - Security: HTML disabled, linkify enabled
  */
-const markdownRenderer = new MarkdownIt({
-  html: false, // Disable raw HTML for security
-  linkify: true, // Auto-convert URLs to links
-  typographer: true, // Smart quotes and dashes
-  // Annotations are edited in a plain textarea, so a typed newline must stay a
-  // line break after rendering (GitHub-comment style), or the committed result
-  // won't match what the editor showed.
-  breaks: true,
-  langPrefix: "hljs language-",
-  highlight(code: string, lang: string): string {
-    try {
-      if (lang && hljs.getLanguage(lang)) {
-        return hljs.highlight(code, { language: lang }).value;
+function createMarkdownRenderer(breaks: boolean) {
+  return new MarkdownIt({
+    html: false, // Disable raw HTML for security
+    linkify: true, // Auto-convert URLs to links
+    typographer: true, // Smart quotes and dashes
+    breaks,
+    langPrefix: "hljs language-",
+    highlight(code: string, lang: string): string {
+      try {
+        if (lang && hljs.getLanguage(lang)) {
+          return hljs.highlight(code, { language: lang }).value;
+        }
+        return hljs.highlightAuto(code).value;
+      } catch {
+        return escapeHtml(code);
       }
-      return hljs.highlightAuto(code).value;
-    } catch {
-      return escapeHtml(code);
     }
-  }
-}).use(markdownItEmoji);
+  }).use(markdownItEmoji);
+}
+
+// Annotations are edited in a plain textarea, so a typed newline must stay a
+// line break after rendering (GitHub-comment style), or the committed result
+// won't match what the editor showed.
+const markdownRenderer = createMarkdownRenderer(true);
+// Documents such as lab guides are written in an editor that wraps lines, so
+// a single newline joins the paragraph as in any Markdown file.
+const documentMarkdownRenderer = createMarkdownRenderer(false);
 
 // Match: </a></p> + any whitespace + <p><a (with or without space before href)
 const BADGE_PARAGRAPH_REGEX = /<\/a><\/p>\s*<p><a(?=\s|>)/g;
@@ -86,13 +93,15 @@ function postProcessHtml(html: string): string {
 /**
  * Render markdown text to sanitized HTML
  * @param text - Raw markdown text
+ * @param options.document - Join wrapped lines into paragraphs instead of keeping each newline
  * @returns Sanitized HTML string
  */
-export function renderMarkdown(text: string): string {
+export function renderMarkdown(text: string, options: { document?: boolean } = {}): string {
   if (text.trim().length === 0) {
     return "";
   }
-  const rendered = markdownRenderer.render(text);
+  const renderer = options.document === true ? documentMarkdownRenderer : markdownRenderer;
+  const rendered = renderer.render(text);
   const processed = postProcessHtml(rendered);
   return DOMPurify.sanitize(processed);
 }

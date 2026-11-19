@@ -7,6 +7,7 @@ import {
   EXPORT_COMMANDS,
   MSG_CANCEL_LAB_LIFECYCLE,
   MSG_FIT_VIEWPORT,
+  MSG_NODE_TERMINAL_INPUT,
   MSG_SVG_EXPORT_RESULT,
   type TopologySnapshot,
   type TopologyRef
@@ -17,6 +18,7 @@ export {
   EXPORT_COMMANDS,
   MSG_CANCEL_LAB_LIFECYCLE,
   MSG_FIT_VIEWPORT,
+  MSG_NODE_TERMINAL_INPUT,
   MSG_SVG_EXPORT_RESULT,
   MuiThemeProvider,
   createApiClabUiHost,

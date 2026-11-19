@@ -6,6 +6,7 @@ import * as vscode from "vscode";
 
 import { log } from "../services/logger";
 import { createTopologySyncController } from "@containerlab/clab-ui/host";
+import { guideFileNameFor } from "@containerlab/clab-ui/session";
 import { fsAdapterFor } from "../shared/io";
 import { labUri } from "../../../backend/labBackends";
 import { onDockerImagesUpdated } from "../../../utils/docker/images";
@@ -33,6 +34,7 @@ export interface InternalUpdateController {
 export class WatcherManager {
   private fileWatcher: vscode.FileSystemWatcher | undefined;
   private annotationsWatcher: vscode.FileSystemWatcher | undefined;
+  private guideWatcher: vscode.FileSystemWatcher | undefined;
   private saveListener: vscode.Disposable | undefined;
   private dockerImagesSubscription: vscode.Disposable | undefined;
   private lastYamlContent: string | undefined;
@@ -53,6 +55,10 @@ export class WatcherManager {
     if (this.annotationsWatcher) {
       this.annotationsWatcher.dispose();
       this.annotationsWatcher = undefined;
+    }
+    if (this.guideWatcher) {
+      this.guideWatcher.dispose();
+      this.guideWatcher = undefined;
     }
     if (this.saveListener) {
       this.saveListener.dispose();
@@ -78,6 +84,7 @@ export class WatcherManager {
 
     this.fileWatcher?.dispose();
     this.annotationsWatcher?.dispose();
+    this.guideWatcher?.dispose();
     this.snapshotRefreshController.dispose();
     this.snapshotRefreshController = createTopologySyncController({
       debounceMs: 0,
@@ -130,6 +137,32 @@ export class WatcherManager {
     this.annotationsWatcher.onDidChange(() => handleAnnotations("change"));
     this.annotationsWatcher.onDidCreate(() => handleAnnotations("create"));
     this.annotationsWatcher.onDidDelete(() => handleAnnotations("delete"));
+
+    this.setupGuideWatcher(yamlFilePath);
+  }
+
+  /**
+   * The lab guide beside the topology: the webview never writes it, so every
+   * change is someone else's. The host keeps the revision when only the guide changed.
+   */
+  private setupGuideWatcher(yamlFilePath: string): void {
+    const guidePath = guideFileNameFor(yamlFilePath);
+    if (guidePath === undefined) return;
+    const guideUri = labUri(guidePath);
+    this.guideWatcher = vscode.workspace.createFileSystemWatcher(
+      guideUri.scheme === "file"
+        ? guidePath
+        : new vscode.RelativePattern(guideUri.with({ path: "/" }), guideUri.path.slice(1))
+    );
+    const refresh = (trigger: "change" | "create" | "delete") => {
+      log.info(`[ReactTopoViewer] Lab guide ${trigger} detected, refreshing`);
+      this.snapshotRefreshController.refresh({ externalChange: true }).catch((err: unknown) => {
+        log.error(`[ReactTopoViewer] Failed to refresh after lab guide ${trigger}: ${String(err)}`);
+      });
+    };
+    this.guideWatcher.onDidChange(() => refresh("change"));
+    this.guideWatcher.onDidCreate(() => refresh("create"));
+    this.guideWatcher.onDidDelete(() => refresh("delete"));
   }
 
   /**

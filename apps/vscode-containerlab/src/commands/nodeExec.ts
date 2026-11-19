@@ -32,11 +32,16 @@ function getNodeContext(node: ClabContainerTreeNode | undefined): NodeContext | 
   return { containerId, containerKind, container };
 }
 
+/** The VS Code terminal Attach Shell opens for a node, and focuses when it is open. */
+export function shellTerminalName(node: Pick<ClabContainerTreeNode, "name" | "cID">): string {
+  return `Shell - ${node.name || node.cID}`;
+}
+
 export function attachShell(node: ClabContainerTreeNode | undefined): void {
   const ctx = getNodeContext(node);
   if (!ctx || !node) return;
   if (isRemoteNode(node)) {
-    void openRemoteTerminal(node, "shell", `Shell - ${ctx.container}`);
+    void openRemoteTerminal(node, "shell", shellTerminalName(node));
     return;
   }
 
@@ -50,7 +55,7 @@ export function attachShell(node: ClabContainerTreeNode | undefined): void {
 
   execCommandInTerminal(
     `${runtime} exec -it ${ctx.containerId} ${execCmd}`,
-    `Shell - ${ctx.container}`,
+    shellTerminalName(node),
     true // If terminal exists, just focus it
   );
 }

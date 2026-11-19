@@ -545,7 +545,7 @@ export function SettingsOverlay({
             </SectionCard>
             <SectionCard
               title="Confirm script buttons"
-              description="When script buttons on the canvas ask before running their script on the lab host."
+              description="When script buttons on the canvas and lab guide blocks ask before they run."
               wide={false}
             >
               <TextField
