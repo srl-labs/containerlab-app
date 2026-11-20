@@ -22,6 +22,7 @@
     "@srl-labs/containerlab-lab-backend": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "yaml": "catalog:",
     "zustand": "catalog:"
   },
   "devDependencies": {

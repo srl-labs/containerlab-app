@@ -14,6 +14,9 @@ import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/w
 import { labHostIdentityOf } from "@containerlab/clab-ui/settings";
 import { hasDesktopTitleBar } from "./desktopChrome";
 import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
+import { createTopologyFile, writeFileExplorerFile } from "./runtimeApi";
+import { registerCreateLabTool } from "./webmcp/registerCreateLabTool";
+import { WebMcpStatusIcon } from "./webmcp/WebMcpStatusIcon";
 import type {
   ClusterHostsSupport,
   LabHostSetupProps,
@@ -2181,16 +2184,28 @@ function StandaloneApp() {
             />
           ),
           header: (
-            <>
-              <StandaloneConnectionBanner />
-              {tabOrientation === "horizontal" ? (
-                <StandaloneLabTabs
-                  showSelection={!overviewOpen}
-                  onActivate={selectLabTab}
-                  onClose={closeLabTabAndActivateNext}
-                />
-              ) : null}
-            </>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                minWidth: 0,
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <StandaloneConnectionBanner />
+                {tabOrientation === "horizontal" ? (
+                  <StandaloneLabTabs
+                    showSelection={!overviewOpen}
+                    onActivate={selectLabTab}
+                    onClose={closeLabTabAndActivateNext}
+                  />
+                ) : null}
+              </div>
+              <div style={{ paddingInlineEnd: 12, paddingBlock: 8 }}>
+                <WebMcpStatusIcon />
+              </div>
+            </div>
           ),
           content: renderDocumentContent(),
           emptyState: <StandaloneLabEmptyState onCreateLab={explorerBridge.createTopologyFile} />,
@@ -2350,5 +2365,24 @@ export function mountStandaloneApp(): void {
     setupStandaloneUiHost();
     labDeepLinks.start(window.location.search);
   }
+  void registerCreateLabTool({
+    enabled: !getStandaloneBackend().capabilities.lifecycle,
+    async writeTopologyFile(fileName, content) {
+      const created = await createTopologyFile({ fileName, content });
+      topologyManager.invalidateTopologyFileListCache();
+      scheduleExplorerSnapshot(0);
+      return { topologyRef: created.topologyRef };
+    },
+    async writeAnnotationsFile(annotationsPath, content) {
+      await writeFileExplorerFile({
+        endpointId: "",
+        path: annotationsPath,
+        content,
+      });
+    },
+    async openTopology(topologyRef) {
+      await openTopologyInTab(topologyRef, { deploymentState: "undeployed" });
+    },
+  });
   renderApp();
 }

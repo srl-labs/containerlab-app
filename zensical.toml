@@ -30,6 +30,7 @@ nav = [
   { "Guides" = [
     { "Tour the workspace" = "guides/workspace.md" },
     { "Build a topology" = "guides/topologies.md" },
+    { "Create labs with WebMCP" = "guides/webmcp.md" },
     { "Node templates" = "guides/templates.md" },
     { "Layout and style" = "guides/appearance.md" },
     { "Run a lab" = "guides/labs.md" },
