@@ -53,7 +53,7 @@ export async function registerCreateLabTool(
 
   await modelContext.registerTool(
     {
-      name: "createCLOSTopology",
+      name: "create_clos_topology",
       description:
         "Generate a Clos leaf–spine topology (every node links to every node of the next tier) and open it.",
       inputSchema: createClosTopologyInputSchema,

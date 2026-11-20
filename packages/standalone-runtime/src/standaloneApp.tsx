@@ -14,7 +14,8 @@ import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/w
 import { labHostIdentityOf } from "@containerlab/clab-ui/settings";
 import { hasDesktopTitleBar } from "./desktopChrome";
 import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
-import { createTopologyFile, writeFileExplorerFile } from "./runtimeApi";
+import { createTopologyFile, deleteTopologyFile, writeFileExplorerFile } from "./runtimeApi";
+import { writeTopologyFileReplacing } from "./webmcp/writeTopologyFileReplacing";
 import { registerCreateLabTool } from "./webmcp/registerCreateLabTool";
 import { WebMcpStatusIcon } from "./webmcp/WebMcpStatusIcon";
 import type {
@@ -2368,7 +2369,10 @@ export function mountStandaloneApp(): void {
   void registerCreateLabTool({
     enabled: !getStandaloneBackend().capabilities.lifecycle,
     async writeTopologyFile(fileName, content) {
-      const created = await createTopologyFile({ fileName, content });
+      const created = await writeTopologyFileReplacing(fileName, content, {
+        createTopologyFile,
+        deleteTopologyFile,
+      });
       topologyManager.invalidateTopologyFileListCache();
       scheduleExplorerSnapshot(0);
       return { topologyRef: created.topologyRef };
