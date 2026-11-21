@@ -2,34 +2,32 @@ import { validateContainerlabTopology } from "@containerlab/clab-ui/workspace/ya
 import type { TopologyRef } from "@containerlab/clab-ui/session";
 import * as YAML from "yaml";
 
+import { validateAnnotations } from "./annotationsInputSchema";
+import { saveLabFiles, type LabFileStore } from "./saveLabFiles";
+
 export type CreateLabDeps = {
-  writeTopologyFile: (
-    fileName: string,
-    content: string,
-  ) => Promise<{ topologyRef: TopologyRef }>;
-  writeAnnotationsFile?: (
-    annotationsPath: string,
-    content: string,
-  ) => Promise<void>;
+  files: LabFileStore;
   openTopology?: (topologyRef: TopologyRef) => Promise<void>;
 };
 
 export type CreateLabResult =
-  | { ok: true; fileName: string; topologyRef: TopologyRef; autoLayout: boolean }
+  | {
+      ok: true;
+      fileName: string;
+      topologyRef: TopologyRef;
+      autoLayout: boolean;
+      replaced: boolean;
+    }
   | { ok: false; errors: string[] };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function annotationsPathFor(yamlPath: string): string {
-  return `${yamlPath}.annotations.json`;
-}
-
 /** Pull topology + optional annotations from the tool argument. */
 export function parseCreateLabInput(input: unknown): {
   topology: unknown;
-  annotations: Record<string, unknown> | undefined;
+  annotations: unknown;
 } {
   if (!isRecord(input)) {
     return { topology: input, annotations: undefined };
@@ -39,50 +37,57 @@ export function parseCreateLabInput(input: unknown): {
     // Wrapper form: { topology, annotations? }. A Containerlab document also has
     // a nested topology object, but that document also has required `name`.
     if (typeof input.name !== "string") {
-      const annotations = isRecord(input.annotations) ? input.annotations : undefined;
-      return { topology: topologyValue, annotations };
+      return { topology: topologyValue, annotations: input.annotations };
     }
   }
   return { topology: input, annotations: undefined };
 }
 
-/** Validate a topology document and write it as a `.clab.yml` file. */
+function topologyErrors(topology: unknown): string[] {
+  const validation = validateContainerlabTopology(topology);
+  if (!validation.valid) {
+    return validation.errors.map((error) =>
+      error.instancePath ? `${error.instancePath}: ${error.message}` : error.message,
+    );
+  }
+  if (!isRecord(topology) || typeof topology.name !== "string") {
+    return ['Missing required property "name"'];
+  }
+  return [];
+}
+
+/**
+ * Validate a topology document and its annotations, write them as
+ * `{name}.clab.yml` (replacing a file of that name) and open the lab. When a
+ * step fails, the previous files are restored.
+ */
 export async function createLab(
   input: unknown,
   deps: CreateLabDeps,
 ): Promise<CreateLabResult> {
   const { topology, annotations } = parseCreateLabInput(input);
-  const validation = validateContainerlabTopology(topology);
-  if (!validation.valid) {
-    return {
-      ok: false,
-      errors: validation.errors.map((error) =>
-        error.instancePath ? `${error.instancePath}: ${error.message}` : error.message,
-      ),
-    };
+  const errors = [
+    ...topologyErrors(topology),
+    ...(annotations !== undefined ? validateAnnotations(annotations) : []),
+  ];
+  if (errors.length > 0 || !isRecord(topology)) {
+    return { ok: false, errors };
   }
 
-  if (!isRecord(topology) || typeof topology.name !== "string") {
-    return { ok: false, errors: ['Missing required property "name"'] };
-  }
-
-  const fileName = `${topology.name}.clab.yml`;
-  const content = YAML.stringify(topology);
-  const autoLayout = annotations === undefined;
+  const fileName = `${String(topology.name)}.clab.yml`;
   try {
-    const { topologyRef } = await deps.writeTopologyFile(fileName, content);
-    if (annotations !== undefined) {
-      if (!deps.writeAnnotationsFile) {
-        return { ok: false, errors: ["Annotations writing is unavailable."] };
-      }
-      const path =
-        topologyRef.annotationsPath ?? annotationsPathFor(topologyRef.yamlPath);
-      await deps.writeAnnotationsFile(path, `${JSON.stringify(annotations, null, 2)}\n`);
-    }
-    if (deps.openTopology) {
-      await deps.openTopology(topologyRef);
-    }
-    return { ok: true, fileName, topologyRef, autoLayout };
+    const { topologyRef, replaced } = await saveLabFiles(
+      {
+        fileName,
+        yaml: YAML.stringify(topology),
+        ...(annotations !== undefined
+          ? { annotations: `${JSON.stringify(annotations, null, 2)}\n` }
+          : {}),
+      },
+      deps.files,
+      deps.openTopology,
+    );
+    return { ok: true, fileName, topologyRef, autoLayout: annotations === undefined, replaced };
   } catch (error) {
     return {
       ok: false,

@@ -57,7 +57,7 @@ The `--autoConnect` option connects to your running local Chrome profile. In Chr
 Both tools are registered only in the browser sandbox (files in browser storage, no lab host). The full web app does not expose them.
 
 1. Open [https://containerlab.app/sandbox/](https://containerlab.app/sandbox/), or run `pnpm pages:dev` and open `http://127.0.0.1:5174/`.
-2. Check the small mark at the top right: green means `document.modelContext` is available; dimmed red means WebMCP is off in this browser.
+2. Check for a small green mark in the left rail, above **Help & Feedback**. It appears only when `document.modelContext` is available; without it, WebMCP is off in this browser.
 
 Ask the connected agent to list Chrome pages and use `list_webmcp_tools` on the sandbox tab. It should see `create_lab` and `create_clos_topology` and can invoke them with `execute_webmcp_tool`. If the MCP tools are missing, check the server configuration and restart the agent session; if the page tools are missing, check the Chrome indicator and selected tab.
 
@@ -70,6 +70,8 @@ Ask the connected agent to list Chrome pages and use `list_webmcp_tools` on the 
 
 The tool writes `name.clab.yml` into sandbox storage, writes `name.clab.yml.annotations.json` when `annotations` is set, and opens the lab on the canvas.
 
+A call with the name of an existing lab replaces that file and its annotations. Without `annotations`, the old layout is removed and the lab is laid out again. If any step fails, the previous files are kept and the tool returns the error.
+
 ## What `create_clos_topology` accepts
 
 Same shape as **Generate Clos Topology** / `containerlab generate`: tiers and images, not a hand-written node list. Every node links to every node of the next tier.
@@ -77,8 +79,8 @@ Same shape as **Generate Clos Topology** / `containerlab generate`: tiers and im
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `name` | Yes | Lab name and `.clab.yml` file name |
-| `tiers` | Yes | Stages from bottom to top; each has `count` and optional `kind` / `type` |
-| `images` | Yes | Container image per kind used in the tiers |
+| `tiers` | Yes | Stages from bottom to top; each has `count` (1–256) and optional `kind` / `type`. At most 1024 nodes and 4096 links in total |
+| `images` | Yes | Container image for every kind used in the tiers, including `nokia_srlinux` for tiers without a `kind` |
 | `nodePrefix`, `groupPrefix`, `managementNetwork`, `ipv4Subnet`, `ipv6Subnet`, `licenses` | No | Same options as the Clos dialog |
 | `annotations` | No | Canvas annotations. Omit to auto-layout when the lab opens |
 

@@ -71,7 +71,7 @@ function OverviewRailItem({ overview, pinned }: { overview: OverviewEntry | unde
 }
 
 /** Standalone rail around the same explorer view VS Code shows in its sidebar. */
-export function WorkspaceSidebar({ colorScheme, hideLogo = false, onColorSchemeChange, onOpenSettings, overview, tabs }: {
+export function WorkspaceSidebar({ colorScheme, hideLogo = false, onColorSchemeChange, onOpenSettings, overview, status, tabs }: {
   colorScheme: "light" | "dark";
   /** Omit the rail's logo row when the host already shows the logo, such as in a title bar. */
   hideLogo?: boolean;
@@ -79,6 +79,8 @@ export function WorkspaceSidebar({ colorScheme, hideLogo = false, onColorSchemeC
   onOpenSettings: () => void;
   /** A page in the document area that lists every lab; the host renders it as the App's content. */
   overview?: OverviewEntry;
+  /** Host status marks, shown above Help & Feedback; each lines up with the 36px rail icons. */
+  status?: ReactNode;
   tabs?: ReactNode;
 }) {
   const [view, setView] = useState<SidebarView>("labs");
@@ -174,6 +176,7 @@ export function WorkspaceSidebar({ colorScheme, hideLogo = false, onColorSchemeC
           }}>
             {tabs}
           </Box>
+          {status}
           <WorkspaceRailItem pinned={pinned} label="Help & Feedback" onClick={() => window.open("https://containerlab.app", "_blank", "noopener,noreferrer")}>
             <HelpOutlineIcon fontSize="small" />
           </WorkspaceRailItem>

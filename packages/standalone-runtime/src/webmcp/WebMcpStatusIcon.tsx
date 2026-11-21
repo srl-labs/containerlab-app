@@ -1,23 +1,37 @@
 import { isWebMcpAvailable } from "./modelContext";
 
-/** Small top-right mark for document.modelContext availability. */
+/**
+ * Rail mark, lined up with the rail icons, shown only when the browser exposes
+ * document.modelContext; without WebMCP the sandbox shows nothing.
+ */
 export function WebMcpStatusIcon() {
-  const available = isWebMcpAvailable();
-  const label = available ? "WebMCP available" : "WebMCP unavailable";
+  if (!isWebMcpAvailable()) {
+    return null;
+  }
 
   return (
-    <span
-      aria-label={label}
-      title={label}
+    <div
+      role="img"
+      aria-label="WebMCP available"
+      title="WebMCP available"
+      data-testid="webmcp-status"
       style={{
-        display: "inline-block",
-        width: 8,
-        height: 8,
-        borderRadius: "50%",
+        display: "grid",
+        placeItems: "center",
+        width: 36,
+        height: 20,
+        marginInline: 6,
         flexShrink: 0,
-        backgroundColor: available ? "var(--mui-palette-success-main, #2e7d32)" : "var(--mui-palette-error-main, #d32f2f)",
-        opacity: available ? 1 : 0.45,
       }}
-    />
+    >
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          backgroundColor: "var(--mui-palette-success-main, #2e7d32)",
+        }}
+      />
+    </div>
   );
 }

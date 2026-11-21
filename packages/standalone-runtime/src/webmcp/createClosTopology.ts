@@ -5,6 +5,14 @@ import {
 import * as YAML from "yaml";
 
 import { createLab, type CreateLabDeps, type CreateLabResult } from "./createLab";
+import {
+  MAX_CLOS_LINKS,
+  MAX_CLOS_NODES,
+  MAX_TIER_NODES,
+} from "./createClosTopologyInputSchema";
+
+/** The generator's kind for a tier without one. */
+const DEFAULT_KIND = "nokia_srlinux";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -22,10 +30,67 @@ function stringRecord(value: unknown): Record<string, string> | undefined {
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
+function parseTiers(value: unknown, errors: string[]): ClosTopologyRequest["tiers"] {
+  if (!Array.isArray(value) || value.length === 0) {
+    errors.push('Missing required property "tiers" (at least one tier).');
+    return [];
+  }
+  const tiers: ClosTopologyRequest["tiers"] = [];
+  value.forEach((tier: unknown, index) => {
+    if (!isRecord(tier)) {
+      errors.push(`tiers[${index}] must be an object.`);
+      return;
+    }
+    const count = tier.count;
+    if (typeof count !== "number" || !Number.isInteger(count) || count < 1 || count > MAX_TIER_NODES) {
+      errors.push(`tiers[${index}].count must be an integer from 1 to ${MAX_TIER_NODES}.`);
+      return;
+    }
+    const kind = optionalString(tier.kind);
+    const type = optionalString(tier.type);
+    tiers.push({
+      count,
+      ...(kind !== undefined ? { kind } : {}),
+      ...(type !== undefined ? { type } : {}),
+    });
+  });
+  return tiers;
+}
+
+/** Every node links to every node of the next tier; cap what the sandbox has to hold. */
+function fabricSizeErrors(tiers: ClosTopologyRequest["tiers"]): string[] {
+  const nodeCount = tiers.reduce((sum, tier) => sum + tier.count, 0);
+  const linkCount = tiers.reduce(
+    (sum, tier, index) => sum + tier.count * (tiers[index + 1]?.count ?? 0),
+    0,
+  );
+  return [
+    ...(nodeCount > MAX_CLOS_NODES
+      ? [`The tiers have ${nodeCount} nodes; the limit is ${MAX_CLOS_NODES}.`]
+      : []),
+    ...(linkCount > MAX_CLOS_LINKS
+      ? [`The tiers need ${linkCount} links; the limit is ${MAX_CLOS_LINKS}.`]
+      : []),
+  ];
+}
+
+function imageErrors(
+  tiers: ClosTopologyRequest["tiers"],
+  images: Record<string, string>,
+): string[] {
+  if (Object.keys(images).length === 0) {
+    return ['Missing required property "images" (image per node kind).'];
+  }
+  const kinds = new Set(tiers.map((tier) => tier.kind ?? DEFAULT_KIND));
+  return [...kinds]
+    .filter((kind) => !Object.hasOwn(images, kind))
+    .map((kind) => `images has no entry for kind "${kind}".`);
+}
+
 /** Parse a Clos generate request plus optional canvas annotations. */
 export function parseCreateClosTopologyInput(input: unknown): {
   request: ClosTopologyRequest | undefined;
-  annotations: Record<string, unknown> | undefined;
+  annotations: unknown;
   errors: string[];
 } {
   if (!isRecord(input)) {
@@ -34,43 +99,18 @@ export function parseCreateClosTopologyInput(input: unknown): {
 
   const errors: string[] = [];
   const name = optionalString(input.name);
-  if (!name) errors.push('Missing required property "name".');
+  if (name === undefined) errors.push('Missing required property "name".');
 
-  if (!Array.isArray(input.tiers) || input.tiers.length === 0) {
-    errors.push('Missing required property "tiers" (at least one tier).');
-  }
-
-  const tiers: ClosTopologyRequest["tiers"] = [];
-  if (Array.isArray(input.tiers)) {
-    input.tiers.forEach((tier, index) => {
-      if (!isRecord(tier)) {
-        errors.push(`tiers[${index}] must be an object.`);
-        return;
-      }
-      const count = tier.count;
-      if (!Number.isInteger(count) || (count as number) < 1) {
-        errors.push(`tiers[${index}].count must be an integer >= 1.`);
-        return;
-      }
-      const kind = optionalString(tier.kind);
-      const type = optionalString(tier.type);
-      tiers.push({
-        count: count as number,
-        ...(kind ? { kind } : {}),
-        ...(type ? { type } : {}),
-      });
-    });
-  }
+  const tiers = parseTiers(input.tiers, errors);
+  errors.push(...fabricSizeErrors(tiers));
 
   const images = stringRecord(input.images) ?? {};
-  if (Object.keys(images).length === 0) {
-    errors.push('Missing required property "images" (image per node kind).');
-  }
+  errors.push(...imageErrors(tiers, images));
 
-  if (errors.length > 0 || !name) {
+  if (errors.length > 0 || name === undefined) {
     return {
       request: undefined,
-      annotations: isRecord(input.annotations) ? input.annotations : undefined,
+      annotations: input.annotations,
       errors,
     };
   }
@@ -95,7 +135,7 @@ export function parseCreateClosTopologyInput(input: unknown): {
 
   return {
     request,
-    annotations: isRecord(input.annotations) ? input.annotations : undefined,
+    annotations: input.annotations,
     errors: [],
   };
 }

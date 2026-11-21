@@ -1013,6 +1013,9 @@ importers:
       '@srl-labs/containerlab-lab-backend':
         specifier: workspace:*
         version: link:../lab-backend
+      ajv:
+        specifier: 'catalog:'
+        version: 8.20.0
       react:
         specifier: 'catalog:'
         version: 19.3.0

@@ -1,8 +1,8 @@
-export type ModelContextTool = {
+type ModelContextTool = {
   name: string;
   description: string;
   inputSchema?: object;
-  annotations?: { readOnlyHint?: boolean };
+  annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean };
   execute: (input: unknown) => unknown | Promise<unknown>;
 };
 
