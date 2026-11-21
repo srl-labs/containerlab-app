@@ -88,6 +88,41 @@ function getValidator(schema: object): ReturnType<Ajv["compile"]> {
   return validate;
 }
 
+export type ContainerlabTopologySchemaError = {
+  instancePath: string;
+  message: string;
+};
+
+export type ContainerlabTopologyValidationResult =
+  | { valid: true }
+  | { valid: false; errors: ContainerlabTopologySchemaError[] };
+
+/** Validate a parsed topology document against the bundled Containerlab schema. */
+export function validateContainerlabTopology(
+  value: unknown,
+): ContainerlabTopologyValidationResult {
+  const validate = getValidator(CONTAINERLAB_SCHEMA);
+  const isValid = validate(value);
+  if (isValid === true || validate.errors === null || validate.errors === undefined) {
+    return { valid: true };
+  }
+
+  const leafErrors = validate.errors.filter(
+    (error) => !STRUCTURAL_AJV_KEYWORDS.has(error.keyword),
+  );
+  const errors = leafErrors.length > 0 ? leafErrors : validate.errors;
+  const messages: ContainerlabTopologySchemaError[] = [];
+  const seen = new Set<string>();
+  for (const error of errors) {
+    const message = formatAjvError(error);
+    const key = `${error.instancePath}::${message}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    messages.push({ instancePath: error.instancePath, message });
+  }
+  return { valid: false, errors: messages };
+}
+
 function offsetToLineCol(
   text: string,
   offset: number,
@@ -201,35 +236,19 @@ function validateYaml(
   const jsonData: unknown = doc.toJSON();
   if (jsonData === undefined) return markers;
 
-  const validate = getValidator(CONTAINERLAB_SCHEMA);
-  const isValid = validate(jsonData);
-  if (
-    isValid === true ||
-    validate.errors === null ||
-    validate.errors === undefined
-  ) {
+  const schemaResult = validateContainerlabTopology(jsonData);
+  if (schemaResult.valid) {
     return markers;
   }
 
-  const leafErrors = validate.errors.filter(
-    (error) => !STRUCTURAL_AJV_KEYWORDS.has(error.keyword),
-  );
-  const errors = leafErrors.length > 0 ? leafErrors : validate.errors;
-  const seen = new Set<string>();
-
-  for (const error of errors) {
-    const message = formatAjvError(error);
-    const key = `${error.instancePath}::${message}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
+  for (const error of schemaResult.errors) {
     const pos = resolveYamlPosition(doc, text, error.instancePath);
     markers.push({
       startLineNumber: pos.startLine,
       startColumn: pos.startCol,
       endLineNumber: pos.endLine,
       endColumn: pos.endCol,
-      message,
+      message: error.message,
       severity: monacoApi.MarkerSeverity.Warning,
     });
   }

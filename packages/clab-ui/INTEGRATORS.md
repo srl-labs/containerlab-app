@@ -861,6 +861,9 @@ area and respects its bounds. Do not position UI by querying another component's
 DOM. Shared floating surfaces use host theme tokens, with opaque high-contrast
 fallbacks; decorative animation respects reduced motion.
 
+Pass `status` to `WorkspaceSidebar` to show host status marks above Help & Feedback;
+give each mark a 36px-wide box with 6px side margins so it lines up with the rail icons.
+
 Pass `overview` to `WorkspaceSidebar` to add the rail's Overview entry, and render
 `LabsOverview` from `…/workspace/overview` as the `content` slot while it is active.
 The host supplies the cards (built with the `…/workspace/state` lab helpers), the

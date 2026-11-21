@@ -14,6 +14,14 @@ import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/w
 import { labHostIdentityOf } from "@containerlab/clab-ui/settings";
 import { hasDesktopTitleBar } from "./desktopChrome";
 import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
+import {
+  createTopologyFile,
+  deleteFileExplorerPath,
+  readFileExplorerFile,
+  writeFileExplorerFile,
+} from "./runtimeApi";
+import type { LabFileStore } from "./webmcp/saveLabFiles";
+import { WebMcpStatusIcon } from "./webmcp/WebMcpStatusIcon";
 import type {
   ClusterHostsSupport,
   LabHostSetupProps,
@@ -2168,6 +2176,8 @@ function StandaloneApp() {
                 active: overviewOpen,
                 onToggle: () => useWorkspaceViewStore.getState().setOverviewOpen(!overviewOpen),
               }}
+              // Only the sandbox registers WebMCP tools.
+              status={getStandaloneBackend().capabilities.lifecycle ? undefined : <WebMcpStatusIcon />}
               tabs={
                 tabOrientation === "vertical" ? (
                   <StandaloneLabTabs
@@ -2350,5 +2360,64 @@ export function mountStandaloneApp(): void {
     setupStandaloneUiHost();
     labDeepLinks.start(window.location.search);
   }
+  registerSandboxWebMcpTools();
   renderApp();
+}
+
+/** Sandbox file operations for the WebMCP tools. */
+function sandboxLabFileStore(): LabFileStore {
+  const filesChanged = () => {
+    topologyManager.invalidateTopologyFileListCache();
+    scheduleExplorerSnapshot(0);
+  };
+  return {
+    async findTopologyFile(fileName) {
+      topologyManager.invalidateTopologyFileListCache();
+      const entries = await topologyManager.listTopologyFiles();
+      return entries.find((entry) => entry.path === fileName);
+    },
+    async createTopologyFile(fileName, content) {
+      const { topologyRef } = await createTopologyFile({ fileName, content });
+      filesChanged();
+      return topologyRef;
+    },
+    async readFile(path) {
+      return (await readFileExplorerFile("", path)).content;
+    },
+    async writeFile(path, content) {
+      await writeFileExplorerFile({ endpointId: "", path, content });
+      filesChanged();
+    },
+    async deleteFile(path) {
+      await deleteFileExplorerPath("", path);
+      filesChanged();
+    },
+  };
+}
+
+/**
+ * Register create_lab and create_clos_topology in the sandbox. The module is
+ * loaded only there, and only when the browser exposes WebMCP.
+ */
+function registerSandboxWebMcpTools(): void {
+  if (getStandaloneBackend().capabilities.lifecycle || !document.modelContext) {
+    return;
+  }
+  void import("./webmcp/registerCreateLabTool")
+    .then(({ registerCreateLabTool }) =>
+      registerCreateLabTool({
+        files: sandboxLabFileStore(),
+        async openTopology(topologyRef) {
+          await openTopologyInTab(topologyRef, { deploymentState: "undeployed" });
+        },
+      }),
+    )
+    .then((errors) => {
+      for (const error of errors) {
+        console.error("A WebMCP tool could not be registered:", error);
+      }
+    })
+    .catch((error: unknown) => {
+      console.error("WebMCP tools could not be registered:", error);
+    });
 }
