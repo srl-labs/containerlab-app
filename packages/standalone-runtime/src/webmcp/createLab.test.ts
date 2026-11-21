@@ -4,6 +4,7 @@ import test from "node:test";
 import type { TopologyRef } from "@containerlab/clab-ui/session";
 
 import { createLab, parseCreateLabInput } from "./createLab";
+import type { LabFileStore } from "./saveLabFiles";
 
 function topologyRef(fileName: string): TopologyRef {
   return {
@@ -13,6 +14,30 @@ function topologyRef(fileName: string): TopologyRef {
     annotationsPath: `${fileName}.annotations.json`,
     source: "standalone",
   };
+}
+
+/** Records writes to an empty sandbox. */
+function recordingStore() {
+  const writes = new Map<string, string>();
+  const files: LabFileStore = {
+    async findTopologyFile() {
+      return undefined;
+    },
+    async createTopologyFile(fileName, content) {
+      writes.set(fileName, content);
+      return topologyRef(fileName);
+    },
+    async readFile(path) {
+      throw new Error(`ENOENT: ${path}`);
+    },
+    async writeFile(path, content) {
+      writes.set(path, content);
+    },
+    async deleteFile(path) {
+      writes.delete(path);
+    },
+  };
+  return { writes, files };
 }
 
 const demoTopology = {
@@ -46,29 +71,21 @@ test("parseCreateLabInput accepts wrapper and bare topology documents", () => {
 });
 
 test("createLab stores a schema-valid topology as a .clab.yml file", async () => {
-  const writes: Array<{ fileName: string; content: string }> = [];
-  const result = await createLab(
-    { topology: demoTopology },
-    {
-      async writeTopologyFile(fileName, content) {
-        writes.push({ fileName, content });
-        return { topologyRef: topologyRef(fileName) };
-      },
-    },
-  );
+  const { writes, files } = recordingStore();
+  const result = await createLab({ topology: demoTopology }, { files });
 
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.fileName, "demo.clab.yml");
   assert.equal(result.autoLayout, true);
-  assert.equal(writes.length, 1);
-  assert.equal(writes[0]?.fileName, "demo.clab.yml");
-  assert.match(writes[0]?.content ?? "", /name: demo/);
-  assert.match(writes[0]?.content ?? "", /kind: linux/);
+  assert.equal(result.replaced, false);
+  assert.deepEqual([...writes.keys()], ["demo.clab.yml"]);
+  assert.match(writes.get("demo.clab.yml") ?? "", /name: demo/);
+  assert.match(writes.get("demo.clab.yml") ?? "", /kind: linux/);
 });
 
 test("createLab writes annotations when provided and skips auto-layout", async () => {
-  const annotationWrites: Array<{ path: string; content: string }> = [];
+  const { writes, files } = recordingStore();
   const result = await createLab(
     {
       topology: demoTopology,
@@ -76,32 +93,38 @@ test("createLab writes annotations when provided and skips auto-layout", async (
         nodeAnnotations: [{ id: "r1", position: { x: 120, y: 40 } }],
       },
     },
-    {
-      async writeTopologyFile(fileName) {
-        return { topologyRef: topologyRef(fileName) };
-      },
-      async writeAnnotationsFile(path, content) {
-        annotationWrites.push({ path, content });
-      },
-    },
+    { files },
   );
 
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.autoLayout, false);
-  assert.equal(annotationWrites.length, 1);
-  assert.equal(annotationWrites[0]?.path, "demo.clab.yml.annotations.json");
-  assert.match(annotationWrites[0]?.content ?? "", /"x": 120/);
+  assert.match(writes.get("demo.clab.yml.annotations.json") ?? "", /"x": 120/);
+});
+
+test("createLab rejects malformed annotations before writing anything", async () => {
+  const { writes, files } = recordingStore();
+  const result = await createLab(
+    {
+      topology: demoTopology,
+      annotations: { nodeAnnotations: { r1: { position: { x: 0, y: 0 } } } },
+    },
+    { files },
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.ok(result.errors.some((message) => /annotations\/nodeAnnotations/.test(message)));
+  assert.equal(writes.size, 0);
+
+  const notAnObject = await createLab({ topology: demoTopology, annotations: [] }, { files });
+  assert.equal(notAnObject.ok, false);
+  assert.equal(writes.size, 0);
 });
 
 test("createLab rejects a document missing name or topology.nodes", async () => {
-  let writeCount = 0;
-  const deps = {
-    async writeTopologyFile(fileName: string) {
-      writeCount += 1;
-      return { topologyRef: topologyRef(fileName) };
-    },
-  };
+  const { writes, files } = recordingStore();
+  const deps = { files };
 
   const missingName = await createLab(
     { topology: { topology: { nodes: { r1: { kind: "linux", image: "alpine" } } } } },
@@ -118,5 +141,5 @@ test("createLab rejects a document missing name or topology.nodes", async () => 
   assert.equal(missingNodes.ok, false);
   if (missingNodes.ok) return;
   assert.ok(missingNodes.errors.some((message) => /nodes/i.test(message)));
-  assert.equal(writeCount, 0);
+  assert.equal(writes.size, 0);
 });

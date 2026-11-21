@@ -1,80 +1,76 @@
 import { createClosTopology } from "./createClosTopology";
 import { createClosTopologyInputSchema } from "./createClosTopologyInputSchema";
-import { createLab, type CreateLabDeps } from "./createLab";
+import { createLab, type CreateLabDeps, type CreateLabResult } from "./createLab";
 import { createLabInputSchema } from "./createLabInputSchema";
 import { type ModelContext } from "./modelContext";
-
-export { isWebMcpAvailable } from "./modelContext";
 
 let registrationAbort: AbortController | null = null;
 
 export type RegisterCreateLabToolOptions = CreateLabDeps & {
   modelContext?: ModelContext;
-  enabled?: boolean;
 };
 
-/** Register sandbox WebMCP tools when the document exposes modelContext. */
+const REPLACES =
+  "A lab with the same name replaces {name}.clab.yml and its annotations; if any step fails, the previous files are kept.";
+
+function toolResult(result: CreateLabResult) {
+  if (!result.ok) {
+    return { error: result.errors.join("; ") };
+  }
+  return {
+    fileName: result.fileName,
+    topologyRef: result.topologyRef,
+    autoLayout: result.autoLayout,
+    replaced: result.replaced,
+  };
+}
+
+/**
+ * Register the sandbox WebMCP tools when the document exposes modelContext.
+ * Each tool registers on its own; returns the error of each tool that failed.
+ */
 export async function registerCreateLabTool(
   options: RegisterCreateLabToolOptions,
-): Promise<void> {
-  if (options.enabled === false) {
-    return;
-  }
-
+): Promise<Error[]> {
   const modelContext = options.modelContext ?? document.modelContext;
   if (!modelContext) {
-    return;
+    return [];
   }
 
   registrationAbort?.abort();
   registrationAbort = new AbortController();
   const { signal } = registrationAbort;
+  const annotations = { readOnlyHint: false, destructiveHint: true };
 
-  await modelContext.registerTool(
-    {
-      name: "create_lab",
-      description: "Create a containerlab topology.",
-      inputSchema: createLabInputSchema,
-      annotations: { readOnlyHint: false },
-      async execute(input) {
-        const result = await createLab(input, options);
-        if (!result.ok) {
-          return { error: result.errors.join("; ") };
-        }
-        return {
-          fileName: result.fileName,
-          topologyRef: result.topologyRef,
-          autoLayout: result.autoLayout,
-        };
+  const results = await Promise.allSettled([
+    modelContext.registerTool(
+      {
+        name: "create_lab",
+        description: `Create a containerlab topology from a topology document and open it. ${REPLACES}`,
+        inputSchema: createLabInputSchema,
+        annotations,
+        async execute(input) {
+          return toolResult(await createLab(input, options));
+        },
       },
-    },
-    { signal },
-  );
-
-  await modelContext.registerTool(
-    {
-      name: "create_clos_topology",
-      description:
-        "Generate a Clos leaf–spine topology (every node links to every node of the next tier) and open it.",
-      inputSchema: createClosTopologyInputSchema,
-      annotations: { readOnlyHint: false },
-      async execute(input) {
-        const result = await createClosTopology(input, options);
-        if (!result.ok) {
-          return { error: result.errors.join("; ") };
-        }
-        return {
-          fileName: result.fileName,
-          topologyRef: result.topologyRef,
-          autoLayout: result.autoLayout,
-        };
+      { signal },
+    ),
+    modelContext.registerTool(
+      {
+        name: "create_clos_topology",
+        description: `Generate a Clos leaf–spine topology (every node links to every node of the next tier) and open it. ${REPLACES}`,
+        inputSchema: createClosTopologyInputSchema,
+        annotations,
+        async execute(input) {
+          return toolResult(await createClosTopology(input, options));
+        },
       },
-    },
-    { signal },
+      { signal },
+    ),
+  ]);
+  return results.flatMap((result) =>
+    result.status === "rejected"
+      ? [result.reason instanceof Error ? result.reason : new Error(String(result.reason))]
+      : [],
   );
-}
-
-export function unregisterCreateLabTool(): void {
-  registrationAbort?.abort();
-  registrationAbort = null;
 }

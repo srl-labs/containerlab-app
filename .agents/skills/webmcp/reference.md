@@ -1,6 +1,6 @@
 # WebMCP tool reference
 
-Read this when you are filling `create_lab` or `create_clos_topology`. The live `inputSchema` from `list_webmcp_tools` still wins if it disagrees.
+Read this when you are filling `create_lab` or `create_clos_topology`. The live `inputSchema` from `list_webmcp_tools` lists the main fields. `create_lab` checks the full Containerlab schema when it runs, and its error messages name the field to fix.
 
 ## create_clos_topology
 
@@ -21,6 +21,8 @@ Tiers are bottom to top. Every node links to every node of the next tier.
 }
 ```
 
+A tier has at most 256 nodes, and a fabric at most 1024 nodes and 4096 links. `images` needs an entry for every kind in the tiers, including `nokia_srlinux` when a tier has no `kind`.
+
 That writes `clos6.clab.yml` with nodes `node1-1`, `node1-2`, `node2-1`, … and groups `tier-1`, `tier-2`, `tier-3`. Set `nodePrefix` and `groupPrefix` to change those prefixes. Omit `annotations` for auto-layout.
 
 Interface numbers on tier N start at 1 for the first tier, and at `1 + (count of the tier below)` after that, so a leaf's downlinks and uplinks do not reuse a port.
@@ -32,8 +34,8 @@ Interface numbers on tier N start at 1 for the first tier, and at `1 + (count of
 | `nokia_srlinux` | `e1-1`, `e1-2`, … |
 | `nokia_sros`, `nokia_srsim` | `1/1/1`, `1/1/2`, … |
 | `cisco_xrv9k` | `Gi0/0/0/1`, … |
-| `juniper_vjunosswitch`, `juniper_vjunosevolved`, `juniper_vjunosrouter` | `et-0/0/0`, `et-0/0/1`, … |
-| `juniper_vqfx`, `juniper_vmx`, `juniper_vsrx` | `ge-0/0/0`, … |
+| `juniper_vjunosswitch`, `juniper_vjunosevolved`, `juniper_vjunosrouter` | `et-0/0/1`, `et-0/0/2`, … |
+| `juniper_vqfx`, `juniper_vmx`, `juniper_vsrx` | `ge-0/0/1`, `ge-0/0/2`, … |
 | `arista_veos` | `Et1/1`, … |
 | `nvidia_cumulusvx` | `swp1`, `swp2`, … |
 | `linux`, `arista_ceos`, `cisco_xrd`, `cisco_iol`, `frr`, `sonic-vs`, `sonic-vm`, `juniper_crpd`, and the other `eth%d` kinds | `eth1`, `eth2`, … |
@@ -82,7 +84,7 @@ Use this tool when the wiring is not a full mesh. A 4-rail DGX-style fabric is o
 
 ## Annotations
 
-Omit the property to auto-layout. When present, the object is stored as `{name}.clab.yml.annotations.json` and the lab opens with those positions.
+Omit the property to auto-layout. When present, the object is stored as `{name}.clab.yml.annotations.json` and the lab opens with those positions. `nodeAnnotations`, `freeTextAnnotations` and the other `…Annotations` keys are arrays; a malformed entry fails the call before anything is written.
 
 ```json
 {

@@ -1,33 +1,10 @@
-/** Shared annotations property for WebMCP create tools. */
-export const annotationsInputSchema = {
-  type: "object",
-  description:
-    "Canvas annotations for the topology. Omit to auto-layout nodes when the lab opens.",
-  additionalProperties: true,
-  properties: {
-    nodeAnnotations: {
-      type: "array",
-      items: {
-        type: "object",
-        required: ["id"],
-        additionalProperties: true,
-        properties: {
-          id: { type: "string" },
-          position: {
-            type: "object",
-            required: ["x", "y"],
-            additionalProperties: false,
-            properties: {
-              x: { type: "number" },
-              y: { type: "number" },
-            },
-          },
-        },
-      },
-    },
-    viewerSettings: { type: "object", additionalProperties: true },
-  },
-} as const;
+import { annotationsInputSchema } from "./annotationsInputSchema";
+
+/** Most nodes in one tier. */
+export const MAX_TIER_NODES = 256;
+/** Most nodes and links in one generated fabric, to keep the sandbox responsive. */
+export const MAX_CLOS_NODES = 1024;
+export const MAX_CLOS_LINKS = 4096;
 
 /** Tool input shaped like the Clos generator / `containerlab generate` request. */
 export const createClosTopologyInputSchema = {
@@ -43,14 +20,13 @@ export const createClosTopologyInputSchema = {
     tiers: {
       type: "array",
       minItems: 1,
-      description:
-        "Clos stages from bottom to top (e.g. leaves then spines). Every node links to every node of the next tier.",
+      description: `Clos stages from bottom to top (e.g. leaves then spines). Every node links to every node of the next tier. At most ${MAX_CLOS_NODES} nodes and ${MAX_CLOS_LINKS} links in total.`,
       items: {
         type: "object",
         additionalProperties: false,
         required: ["count"],
         properties: {
-          count: { type: "integer", minimum: 1, maximum: 256 },
+          count: { type: "integer", minimum: 1, maximum: MAX_TIER_NODES },
           kind: {
             type: "string",
             description: "Node kind. Defaults to nokia_srlinux when omitted.",
@@ -61,7 +37,8 @@ export const createClosTopologyInputSchema = {
     },
     images: {
       type: "object",
-      description: "Container image per node kind used in the tiers.",
+      description:
+        "Container image per node kind. Every kind used in the tiers needs one, including the default nokia_srlinux.",
       additionalProperties: { type: "string", minLength: 1 },
       minProperties: 1,
     },

@@ -15,7 +15,7 @@ description: >-
 
 The browser sandbox registers two tools on `document.modelContext`: `create_lab` and `create_clos_topology`. They exist only while the app has no lab lifecycle (the sandbox). The full web app does not register them. A successful call writes `{name}.clab.yml` into sandbox storage and opens it on the canvas. The sandbox cannot deploy.
 
-The live `inputSchema` from `list_webmcp_tools` is authoritative. This skill is how to choose and call the tools. Field details and examples are in [reference.md](reference.md).
+The live `inputSchema` from `list_webmcp_tools` lists the main fields; `create_lab` checks the full Containerlab schema when it runs. This skill is how to choose and call the tools. Field details and examples are in [reference.md](reference.md).
 
 ## Find the sandbox
 
@@ -27,7 +27,7 @@ Otherwise:
 2. If it is not open, navigate a tab there, then list pages again and use that page id.
 3. Call `list_webmcp_tools` on that page once. Expect `create_lab` and `create_clos_topology`. Remember the page id.
 
-If those names are absent, WebMCP is off in this browser. Stop and tell the user to enable **WebMCP Testing** at `chrome://flags/#enable-webmcp-testing` and relaunch Chrome. The sandbox shows a green mark at the top right when `document.modelContext` is available, and a dimmed red mark when it is not. Do not recreate the topology by typing into the editor.
+If those names are absent, WebMCP is off in this browser. Stop and tell the user to enable **WebMCP Testing** at `chrome://flags/#enable-webmcp-testing` and relaunch Chrome. The sandbox shows a green mark in the left rail, above Help & Feedback, only when `document.modelContext` is available. Do not recreate the topology by typing into the editor.
 
 ## Call a page tool
 
@@ -41,8 +41,8 @@ Discover the host schemas once, the first time you call a page tool in this conv
 
 Read the result before doing anything else.
 
-- Success: `{ fileName, topologyRef, autoLayout }`. `autoLayout: true` means annotations were omitted and the editor places the nodes.
-- Failure: `{ error }` with schema or generator messages joined by `"; "`. Fix the input from that text and call again. Do not switch tools to dodge a validation error that belongs to the topology. Do not search the repository.
+- Success: `{ fileName, topologyRef, autoLayout, replaced }`. `autoLayout: true` means annotations were omitted and the editor places the nodes. `replaced: true` means a file of that name was overwritten.
+- Failure: `{ error }` with schema or generator messages joined by `"; "`. Nothing was changed: a file of that name keeps its previous content. Fix the input from that text and call again. Do not switch tools to dodge a validation error that belongs to the topology. Do not search the repository.
 
 ## Pick the tool
 
@@ -70,8 +70,8 @@ Omit `annotations` to auto-layout. When you send them, node ids must match the n
 Required: `name`, `tiers`, `images`.
 
 - `name` matches `^[A-Za-z0-9_-]+$` (no dot). Same file rule: `{name}.clab.yml`.
-- `tiers`: array, bottom to top. Each item is `{ "count": N, "kind": "linux", "type": "ixrd2" }`. `count` is an integer from 1 to 256. Omitted `kind` becomes `nokia_srlinux`.
-- `images`: one non-empty image string per kind you use.
+- `tiers`: array, bottom to top. Each item is `{ "count": N, "kind": "linux", "type": "ixrd2" }`. `count` is an integer from 1 to 256. Omitted `kind` becomes `nokia_srlinux`. A fabric has at most 1024 nodes and 4096 links.
+- `images`: one non-empty image string for every kind in the tiers, including `nokia_srlinux` when a tier has no `kind`.
 
 Optional: `licenses`, `nodePrefix` (default `node`), `groupPrefix` (default `tier`), `managementNetwork`, `ipv4Subnet`, `ipv6Subnet`, `annotations`.
 
