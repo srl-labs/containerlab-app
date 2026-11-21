@@ -9,6 +9,7 @@ export {
 
 export { TopologyHostCore as TopologySessionCore } from "../core/host/TopologyHostCore";
 export { runDocumentOperation } from "../core/host/documentQueue";
+export { GUIDE_FILE_SUFFIX, guideFileNameFor } from "../guide/guideFile";
 
 export * from "../core/messages/extension";
 export * from "../core/messages/webview";

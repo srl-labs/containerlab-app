@@ -22,6 +22,7 @@ import {
   MSG_LAB_LIFECYCLE_STATUS,
   MSG_LAB_OPERATION,
   MSG_LAB_OPERATION_RESULT,
+  MSG_NODE_TERMINAL_INPUT,
   MSG_OPEN_LAB_FILE,
   MSG_PLAN_APPLY_LAB,
   MSG_SVG_EXPORT_RESULT,
@@ -570,6 +571,24 @@ export class MessageRouter {
     else if (res.result != null) log.info(`[MessageRouter] ${formatUnknownForLog(res.result)}`);
   }
 
+  /** A lab guide's terminal block: typed into the node's shell. */
+  private async handleNodeTerminalInput(message: WebviewMessage): Promise<void> {
+    const yamlFilePath = this.getYamlFilePath(MSG_NODE_TERMINAL_INPUT);
+    if (yamlFilePath == null || yamlFilePath.length === 0) return;
+    const nodeName = typeof message.nodeName === "string" ? message.nodeName : "";
+    if (!nodeName || typeof message.text !== "string") {
+      log.warn(`[MessageRouter] Invalid terminal input payload for node "${nodeName}"`);
+      return;
+    }
+    const res = await nodeCommandService.sendTerminalInput(nodeName, message.text, yamlFilePath);
+    if (res.error != null && res.error.length > 0) {
+      log.error(`[MessageRouter] ${res.error}`);
+      void vscode.window.showErrorMessage(res.error);
+    } else if (res.result != null) {
+      log.info(`[MessageRouter] ${formatUnknownForLog(res.result)}`);
+    }
+  }
+
   private async handleInterfaceCommand(
     command: InterfaceCommand,
     message: WebviewMessage
@@ -717,6 +736,11 @@ export class MessageRouter {
 
     if (isNodeCommand(command)) {
       await this.handleNodeCommand(command, message);
+      return true;
+    }
+
+    if (command === MSG_NODE_TERMINAL_INPUT) {
+      await this.handleNodeTerminalInput(message);
       return true;
     }
 

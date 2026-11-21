@@ -256,6 +256,12 @@ export interface ClabUiTopoViewerHost {
    * omit it get one `runNodeAction` per node.
    */
   runNodesAction?(action: TopoViewerNodesAction, nodeNames: string[]): void;
+  /**
+   * Type text into the node's shell, opening it first as `runNodeAction("shell")`
+   * does; each line is entered as if typed. Hosts that omit it cannot send text
+   * to a terminal, and lab guides offer their terminal blocks to copy.
+   */
+  sendNodeTerminalInput?(nodeName: string, text: string): void;
   /** Exec, snapshots, config save and inspect details; hosts that omit it hide them. */
   labOperations?: ClabUiLabOperationsHost;
   /**

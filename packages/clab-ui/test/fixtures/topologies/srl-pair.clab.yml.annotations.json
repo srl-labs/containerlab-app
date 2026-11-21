@@ -1,0 +1,24 @@
+{
+  "freeTextAnnotations": [],
+  "freeShapeAnnotations": [],
+  "groupStyleAnnotations": [],
+  "networkNodeAnnotations": [],
+  "nodeAnnotations": [
+    {
+      "id": "srl1",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 260,
+        "y": 300
+      }
+    },
+    {
+      "id": "srl2",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 560,
+        "y": 300
+      }
+    }
+  ]
+}

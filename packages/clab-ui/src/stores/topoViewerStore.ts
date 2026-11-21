@@ -6,6 +6,7 @@ import type { CustomNodeTemplate, CustomTemplateEditorData } from "../core/types
 import type { EdgeAnnotation } from "../core/types/topology";
 import type { CustomIconInfo } from "../core/types/icons";
 import type { LabSettings } from "../core/types/labSettings";
+import type { TopologyGuideFile } from "../core/types/messages";
 import type { TopologyVariables } from "../host/topologyVariables";
 import { upsertEdgeAnnotation } from "../annotations/edgeAnnotations";
 import {
@@ -72,6 +73,8 @@ export interface TopoViewerState {
   yamlContent: string;
   /** Raw annotations JSON content from host snapshot (used by Monaco source editors). */
   annotationsContent: string;
+  /** The lab guide beside the topology, as the host read it; null when there is none. */
+  guide: TopologyGuideFile | null;
   documentRevision: string;
   selectedNode: string | null;
   selectedEdge: string | null;
@@ -221,6 +224,7 @@ const initialState: TopoViewerState = {
   annotationsFileName: "topology.clab.yml.annotations.json",
   yamlContent: "",
   annotationsContent: "{}\n",
+  guide: null,
   documentRevision: "",
   selectedNode: null,
   selectedEdge: null,

@@ -547,6 +547,7 @@ type TopologySnapshot = {
   annotationsFileName: string;
   yamlContent: string;
   annotationsContent: string;
+  guide?: { fileName: string; content: string };
   labName: string;
   mode: "edit" | "view";
   deploymentState: "deployed" | "undeployed" | "unknown";
@@ -556,6 +557,12 @@ type TopologySnapshot = {
   history?: { scope: string; undo: number[]; redo: number[] };
 };
 ```
+
+`guide` is the lab guide beside the topology: `mylab.clab.md` next to `mylab.clab.yml`
+(`guideFileNameFor` in `/session` names it). The side panel shows it in a Guide tab.
+`TopologySessionCore` reads it with the topology, and `onExternalChange` reloads a
+changed guide without a new revision, since the UI never writes it. Hosts that watch
+the topology's files should watch the guide too and push the snapshot when it changes.
 
 `history` numbers the host's undo and redo steps, each stack with its next step
 last. The UI orders unsaved YAML and JSON tab edits among them, so one undo
@@ -599,8 +606,12 @@ currently include:
 - `setAnnotationsWithMemberships`
 - `batch`
 - `setLabSettings`
+- `createGuide`
 - `undo`
 - `redo`
+
+`createGuide` writes a new lab guide beside the topology and fails when one exists;
+it is no undo step.
 
 If your host cannot support a command, that is an integration gap, not
 something the UI can recover from automatically.
@@ -672,6 +683,12 @@ and `--restore`); `restoresSnapshots(options)` tells whether a deploy uses them.
 `runNodesAction(action, nodeNames)` is optional: start, stop or restart several selected
 nodes in one call. Without it, the canvas calls `runNodeAction` once per node. The window
 host posts `{ command: "clab-node-<action>", nodeName, nodeNames }`.
+
+`sendNodeTerminalInput(nodeName, text)` is optional: it types `text` into the node's
+shell, opening it first as `runNodeAction("shell", nodeName)` does, one line at a time
+as if typed. A lab guide's `terminal=` blocks use it; without it, they can only be
+copied. The window host posts `{ command: "clab-node-terminal-input", nodeName, text }`.
+The guide's `exec=` blocks run through `labOperations.exec`.
 
 `openLabFile(request)` is optional: it opens a file the topology refers to (a bind
 source, startup config or license) in the host's editor, creating it empty first when

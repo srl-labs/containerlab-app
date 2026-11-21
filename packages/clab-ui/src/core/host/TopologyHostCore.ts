@@ -17,6 +17,7 @@ import type {
 import type { LabSettingsUpdate } from "../types/labSettings";
 import type { InheritanceSectionUpdate } from "../types/inheritance";
 import type {
+  TopologyGuideFile,
   TopologyHistoryState,
   TopologyHostCommand,
   TopologyHostResponseMessage,
@@ -41,6 +42,7 @@ import {
   topologyFileStem,
   type TopologyVariables
 } from "../../host/topologyVariables";
+import { guideFileNameFor } from "../../guide/guideFile";
 
 /**
  * Looks up what containerlab will substitute in the topology: the lab name it
@@ -115,6 +117,11 @@ export class TopologyHostCore implements TopologyHost {
   private yamlFilePath: string;
   private readonly documentKey: string;
   private documentBaseline: DocumentState | null = null;
+  /**
+   * The lab guide as last read. The UI never writes it, so commands keep it:
+   * it is read again with the files, on an external change and once created.
+   */
+  private guide: Promise<TopologyGuideFile | undefined> | null = null;
   private mode: "edit" | "view";
   private deploymentState: DeploymentState;
   private dirty: boolean | undefined;
@@ -220,6 +227,7 @@ export class TopologyHostCore implements TopologyHost {
     }
     const previous = this.documentBaseline;
     this.baseFs.invalidateCache?.();
+    this.guide = null;
     this.snapshot = await this.buildSnapshot();
     if (
       previous &&
@@ -361,6 +369,7 @@ export class TopologyHostCore implements TopologyHost {
 
   private async onExternalChangeUnlocked(): Promise<TopologySnapshot> {
     this.baseFs.invalidateCache?.();
+    this.guide = null;
     // The files as this host last wrote or read them: a watcher reporting this
     // host's own save late, as from a lab host. Keep the revision and history,
     // or the edits the user makes meanwhile are rejected as stale.
@@ -370,6 +379,9 @@ export class TopologyHostCore implements TopologyHost {
         current.yamlContent === this.documentBaseline.yamlContent &&
         current.annotationsContent === this.documentBaseline.annotationsContent
       ) {
+        // The guide is read-only here: a new version of it keeps the revision and history.
+        const guide = await this.loadGuide();
+        if (guide?.content !== this.snapshot.guide?.content) this.snapshot = { ...this.snapshot, guide };
         return this.snapshot;
       }
     }
@@ -453,7 +465,21 @@ export class TopologyHostCore implements TopologyHost {
       await this.applyInheritanceSection(command.payload);
       return;
     }
+    if (command.command === "createGuide") {
+      await this.createGuide(command.payload.content);
+      return;
+    }
     throw new Error(`${command.command} handled before executeCommand`);
+  }
+
+  private async createGuide(content: string): Promise<void> {
+    const location = this.guideLocation();
+    if (location === undefined) throw new Error("This topology file has no place for a lab guide.");
+    if (await this.baseFs.exists(location.path)) {
+      throw new Error(`${location.fileName} already exists.`);
+    }
+    await this.transactionalFs.writeFile(location.path, content);
+    this.guide = null;
   }
 
   private async handleNodeCommand(
@@ -736,11 +762,38 @@ export class TopologyHostCore implements TopologyHost {
     }
   }
 
+  private guideLocation(): { fileName: string; path: string } | undefined {
+    const fileName = guideFileNameFor(this.baseFs.basename(this.yamlFilePath));
+    if (fileName === undefined) return undefined;
+    return { fileName, path: this.baseFs.join(this.baseFs.dirname(this.yamlFilePath), fileName) };
+  }
+
+  private loadGuide(): Promise<TopologyGuideFile | undefined> {
+    this.guide ??= this.readGuide();
+    return this.guide;
+  }
+
+  /** The lab guide beside the topology; a guide that cannot be read leaves the topology usable. */
+  private async readGuide(): Promise<TopologyGuideFile | undefined> {
+    const location = this.guideLocation();
+    if (location === undefined) return undefined;
+    const { fileName, path: guidePath } = location;
+    try {
+      return { fileName, content: await this.baseFs.readFile(guidePath) };
+    } catch (err) {
+      if (!isFileNotFoundError(err)) {
+        this.logger.warn(`[TopologyHost] Failed to read lab guide "${guidePath}": ${errorToMessage(err)}`);
+      }
+      return undefined;
+    }
+  }
+
   private async buildSnapshot(): Promise<TopologySnapshot> {
-    const [yamlContent, initialAnnotationsContent, loadedAnnotations] = await Promise.all([
+    const [yamlContent, initialAnnotationsContent, loadedAnnotations, guide] = await Promise.all([
       this.baseFs.readFile(this.yamlFilePath),
       this.readAnnotationsContent(),
-      this.annotationsIO.loadAnnotations(this.yamlFilePath, true)
+      this.annotationsIO.loadAnnotations(this.yamlFilePath, true),
+      this.loadGuide()
     ]);
     const yamlDoc = YAML.parseDocument(yamlContent);
     const parsed = normalizeParsedTopologyValue(yamlDoc.toJS());
@@ -807,6 +860,7 @@ export class TopologyHostCore implements TopologyHost {
       annotationsFileName,
       yamlContent,
       annotationsContent: annotationsContent ?? JSON.stringify(createNewLabAnnotations(), null, 2),
+      guide,
       labName: labName ?? "",
       mode: this.mode,
       deploymentState: this.deploymentState,
@@ -1130,6 +1184,8 @@ function isRenameEditCommand(command: TopologyHostCommand): boolean {
 }
 
 function shouldSkipHistory(command: TopologyHostCommand): boolean {
+  // The guide is no part of the topology's history: undo leaves it in place.
+  if (command.command === "createGuide") return true;
   if (
     command.command === "savePositions" ||
     command.command === "savePositionsAndAnnotations" ||

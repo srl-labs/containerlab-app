@@ -516,6 +516,9 @@ export function createFakeClabUiHost(
           for (const nodeName of nodeNames) await fakeLifecycle.nodeAction(action, nodeName);
         })();
       },
+      sendNodeTerminalInput(nodeName, text) {
+        recordHarnessMessage({ command: "clab-node-terminal-input", nodeName, text });
+      },
       labOperations: harnessLabOperations,
       labHost: () => harnessLabOperations.hostInfo(),
       captureInterface(nodeName, interfaceName, options = {}) {

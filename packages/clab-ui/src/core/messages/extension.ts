@@ -41,6 +41,12 @@ export const MSG_VALIDATE_TOPOLOGY = "topo-validate" as const;
  */
 export const MSG_OPEN_LAB_FILE = "openLabFile" as const;
 
+/**
+ * Type text into a node's shell, opening it first: `{ nodeName, text }`. Each
+ * line of `text` is entered as if typed.
+ */
+export const MSG_NODE_TERMINAL_INPUT = "clab-node-terminal-input" as const;
+
 const LIFECYCLE_COMMANDS_SET: ReadonlySet<string> = new Set(Object.values(LIFECYCLE_COMMANDS));
 
 export type LifecycleCommand = (typeof LIFECYCLE_COMMANDS)[keyof typeof LIFECYCLE_COMMANDS];

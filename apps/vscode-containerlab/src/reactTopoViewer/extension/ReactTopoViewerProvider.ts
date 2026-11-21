@@ -203,11 +203,14 @@ export class ReactTopoViewer {
     const loadExternalChange = async (): Promise<unknown> => {
       const host = this.topologyHost;
       if (!host) return null;
-      const { revision } = await host.getSnapshot();
+      const before = await host.getSnapshot();
       const snapshot = await host.onExternalChange();
       // Files that did not change, e.g. this panel's own save reported late,
-      // need no redraw: it would interrupt what the user is doing.
-      return snapshot.revision === revision ? null : snapshot;
+      // need no redraw: it would interrupt what the user is doing. A changed
+      // lab guide keeps the revision, since the host never writes it.
+      const unchanged =
+        snapshot.revision === before.revision && snapshot.guide?.content === before.guide?.content;
+      return unchanged ? null : snapshot;
     };
 
     this.watcherManager.setupFileWatcher(

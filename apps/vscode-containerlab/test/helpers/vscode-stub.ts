@@ -1,6 +1,7 @@
 export const window = {
   lastErrorMessage: "",
   lastInfoMessage: "",
+  terminals: [] as Array<{ name: string; exitStatus?: unknown; sendText(text: string, addNewLine?: boolean): void }>,
   createOutputChannel(_name: string, options?: { log: boolean } | string) {
     const isLogChannel = typeof options === "object" && options.log;
     return {

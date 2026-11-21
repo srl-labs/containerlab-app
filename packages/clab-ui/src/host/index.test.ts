@@ -53,13 +53,15 @@ test("createWindowClabUiHost resolves VS Code API and posts semantic commands", 
   host.topoViewer.runNodeAction("restart", "leaf1");
   host.topoViewer.runNodesAction?.("stop", ["leaf1", "leaf2"]);
   host.topoViewer.runNodesAction?.("stop", []);
+  host.topoViewer.sendNodeTerminalInput?.("leaf1", "show version\nquit");
 
   assert.deepEqual(messages, [
     { command: "ready" },
     { command: "restartLab" },
     { command: "clab-node-connect-ssh", nodeName: "leaf1" },
     { command: "clab-node-restart", nodeName: "leaf1" },
-    { command: "clab-node-stop", nodeName: "leaf1", nodeNames: ["leaf1", "leaf2"] }
+    { command: "clab-node-stop", nodeName: "leaf1", nodeNames: ["leaf1", "leaf2"] },
+    { command: "clab-node-terminal-input", nodeName: "leaf1", text: "show version\nquit" }
   ]);
 });
 

@@ -3,7 +3,13 @@ import test from "node:test";
 
 import type { TopologyRef } from "../../session";
 
-import { resumableTerminalState, useRuntimeUiStore, type RuntimeTerminalPane } from "./runtimeUiStore";
+import {
+  resumableTerminalState,
+  runtimeUiActions,
+  subscribeTerminalInput,
+  useRuntimeUiStore,
+  type RuntimeTerminalPane
+} from "./runtimeUiStore";
 
 function makeTopologyRef(path: string, labName: string, endpointId: string): TopologyRef {
   return {
@@ -166,4 +172,30 @@ test("only open, resumable terminal panes come back after a reload", () => {
     [{ id: "group-1", activePaneId: "live", panes: [["live", "connecting", undefined]] }]
   );
   assert.equal(restored?.activeTerminalGroupId, "group-1");
+});
+
+test("text for a pane waits until its session connects, in order", () => {
+  const paneId = openSshTerminal();
+  runtimeUiActions.sendTerminalInput(paneId, "enter candidate");
+  runtimeUiActions.sendTerminalInput(paneId, "commit now");
+
+  const typed: string[] = [];
+  const unsubscribe = subscribeTerminalInput(paneId, (text) => typed.push(text));
+  runtimeUiActions.sendTerminalInput(paneId, "show version");
+  unsubscribe();
+  runtimeUiActions.sendTerminalInput(paneId, "later");
+
+  assert.deepEqual(typed, ["enter candidate\ncommit now", "show version"]);
+});
+
+test("text for a closed pane is dropped", () => {
+  const paneId = openSshTerminal();
+  runtimeUiActions.sendTerminalInput(paneId, "uptime");
+  useRuntimeUiStore.getState().closeTerminal(paneId);
+
+  const typed: string[] = [];
+  subscribeTerminalInput(paneId, (text) => typed.push(text))();
+  runtimeUiActions.sendTerminalInput("no-such-pane", "uptime");
+  subscribeTerminalInput("no-such-pane", (text) => typed.push(text))();
+  assert.deepEqual(typed, []);
 });
