@@ -16,13 +16,17 @@ import {
 import type { HostRuntimeContainer } from "../../src/host";
 import { parseApplyPlan, type ApplyPlan } from "../../src/host/applyPlan";
 import { parseTailscaleStatus, type TailscaleStatus } from "../../src/host/tailscaleStatus";
-import { expandLabNameGitTokens } from "../../src/host/topologyVariables";
+import {
+  expandLabNameGitTokens,
+  isTopologyTemplateFileName
+} from "../../src/host/topologyVariables";
 
 import { fakeRuntimeContainers, type FakeNodeRuntime } from "./fakeLab";
 import { createFakeLabOperations } from "./fakeLabOperations";
 import { createFakeLifecycle } from "./fakeLifecycle";
 import { createFakeNodeStats } from "./fakeNodeStats";
 import { createFakeTemplates, type TemplateState } from "./fakeTemplates";
+import { renderFakeTemplate } from "./fakeTemplateRender";
 import { fixtureFiles, TOPOLOGY_ROOT } from "./fixtureFiles";
 import {
   buildHarnessExplorerSnapshot,
@@ -202,9 +206,18 @@ export function createFakeClabUiHost(
   let explorerUiState: ExplorerUiState = HARNESS_EXPLORER_UI_STATE;
   // Whether the editor was last told the lab is deployed by the fake lifecycle.
   let publishedDeployed = false;
+  /** The topology the fake containerlab works on: of a template, what it renders. */
+  function deployableYaml(path: string): string | undefined {
+    if (!isTopologyTemplateFileName(path)) return files.get(path);
+    try {
+      return renderFakeTemplate(files, path).content;
+    } catch {
+      return undefined;
+    }
+  }
   const fakeLifecycle = createFakeLifecycle({
     currentPath: () => currentYamlPath,
-    readYaml: (path) => files.get(path),
+    readYaml: deployableYaml,
     publish: publishFakeLab,
     refreshRuntime: (lab) => host.harness.applyRuntimeContainers(fakeRuntimeContainers(lab)),
     emit: emitTopoViewerEvent
@@ -237,7 +250,7 @@ export function createFakeClabUiHost(
     }
     emitTopoViewerEvent({
       type: "modeChanged",
-      mode: "editor",
+      mode: currentMode(),
       deploymentState: lab ? "deployed" : "undeployed",
       ...(dirty !== undefined ? { dirty } : {})
     });
@@ -248,7 +261,12 @@ export function createFakeClabUiHost(
     const dirty = fakeLifecycle.dirtyFor(currentYamlPath);
     if (dirty === undefined) return;
     core.updateContext({ dirty });
-    emitTopoViewerEvent({ type: "modeChanged", mode: "editor", deploymentState: "deployed", dirty });
+    emitTopoViewerEvent({ type: "modeChanged", mode: currentMode(), deploymentState: "deployed", dirty });
+  }
+
+  /** As the VS Code host says it: a template is read-only, any other topology editable. */
+  function currentMode(): "editor" | "viewer" {
+    return isTopologyTemplateFileName(currentYamlPath) ? "viewer" : "editor";
   }
 
   function emitExplorerMessage(message: ExplorerIncomingMessage): void {
@@ -274,6 +292,10 @@ export function createFakeClabUiHost(
           envNames.filter((name) => name in HARNESS_ENV).map((name) => [name, HARNESS_ENV[name]] as const)
         )
       }),
+      // A template shows what the harness's stand-in for containerlab renders from it.
+      ...(isTopologyTemplateFileName(yamlFilePath)
+        ? { renderTopology: async () => renderFakeTemplate(files, yamlFilePath) }
+        : {}),
       logger: {
         debug: () => {},
         info: () => {},
@@ -316,7 +338,7 @@ export function createFakeClabUiHost(
   }
 
   const harnessLabOperations = createFakeLabOperations({
-    readYaml: () => files.get(currentYamlPath),
+    readYaml: () => deployableYaml(currentYamlPath),
     record: recordHarnessMessage
   });
   const host: FakeClabUiHost = {

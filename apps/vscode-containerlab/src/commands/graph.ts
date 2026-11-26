@@ -5,15 +5,9 @@ import type { ReactTopoViewer } from "../reactTopoViewer";
 import { ReactTopoViewerProvider } from "../reactTopoViewer";
 import { getSelectedLabNode } from "../utils/utils";
 import { MSG_LAB_LIFECYCLE_LOG, MSG_LAB_LIFECYCLE_STATUS } from "@containerlab/clab-ui/session";
-import {
-  isTopologyFileName,
-  isTopologyTemplateFileName,
-  topologyFileStem
-} from "@containerlab/clab-ui/host";
+import { isTopologyFileName, topologyFileStem } from "@containerlab/clab-ui/host";
 
 import { isUriString, labNameForPath, labPathOf, rememberHostOf } from "../backend/labBackends";
-
-import { showRenderedTopology } from "./renderedTopology";
 
 /**
  * Graph Lab (TopoViewer)
@@ -58,12 +52,6 @@ export async function graphTopoviewer(node?: ClabLabTreeNode, context?: vscode.E
     return;
   }
 
-  // Only containerlab can turn a template into a topology: show its rendered result instead.
-  if (isTopologyTemplateFileName(labPath)) {
-    await showRenderedTopology(labPath, node?.connectionId);
-    return;
-  }
-
   // Opened from a lab host's section: the viewer's actions run on that host.
   if (node) await rememberHostOf(node);
 
@@ -71,8 +59,9 @@ export async function graphTopoviewer(node?: ClabLabTreeNode, context?: vscode.E
   const labName =
     node?.name ?? (isUriString(labPath) ? labNameForPath(labPath) : topologyFileStem(labPath));
 
-  // Use the provider to create/get the viewer. The viewer is always editable;
-  // it attaches runtime data on its own when the lab is deployed.
+  // Use the provider to create/get the viewer. It attaches runtime data on its
+  // own when the lab is deployed. A topology is always editable; of a template
+  // the viewer shows what containerlab renders, read-only.
   const provider = ReactTopoViewerProvider.getInstance(context);
   const viewer = await provider.openViewer(labPath, labName);
 

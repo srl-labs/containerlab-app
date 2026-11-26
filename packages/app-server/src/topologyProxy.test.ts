@@ -191,6 +191,57 @@ test("/api/topology/sessions preserves running-lab-doc topology ref", async (t) 
   });
 });
 
+test("/api/topology/sessions takes a variables file next to the topology, and no other", async (t) => {
+  const app = Fastify({ logger: false });
+  t.after(async () => {
+    await app.close();
+  });
+
+  const endpoint: EndpointEntry = {
+    id: "endpoint-remote",
+    kind: "api",
+    url: "http://remote.test",
+    label: "Remote",
+    token: "secret-token",
+    username: "test",
+    sessionDuration: "24h"
+  };
+  const topologyRef = {
+    topologyId: `standalone:${endpoint.id}::/home/alice/.clab/fabric.clab.gotmpl`,
+    labName: "fabric",
+    yamlPath: "/home/alice/.clab/fabric.clab.gotmpl",
+    annotationsPath: "/home/alice/.clab/fabric.clab.gotmpl.annotations.json",
+    source: "standalone" as const
+  };
+  const captured: Array<string | undefined> = [];
+  const sessions = {
+    createSession(options: Parameters<StandaloneTopologySessionManager["createSession"]>[0]) {
+      captured.push(options.varsFile);
+      return { sessionId: "session-template", topologyRef: options.topologyRef };
+    }
+  } as unknown as StandaloneTopologySessionManager;
+
+  registerTopologyProxy(
+    app,
+    () => ({ backend: {} as LabBackend, endpoint, ui: {} as EndpointUiStore }),
+    sessions
+  );
+
+  for (const varsFile of ["fabric.clab_vars.prod.yml", "/etc/passwd", "", undefined]) {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/topology/sessions",
+      payload: {
+        topologyRef,
+        sourcePreference: "running-lab-doc",
+        ...(varsFile !== undefined ? { varsFile } : {})
+      }
+    });
+    assert.equal(response.statusCode, 200, response.body);
+  }
+  assert.deepEqual(captured, ["fabric.clab_vars.prod.yml", undefined, undefined, undefined]);
+});
+
 test("/api/topology/snapshot applies runtime link class updates to cached snapshots", async (t) => {
   const app = Fastify({ logger: false });
   t.after(async () => {

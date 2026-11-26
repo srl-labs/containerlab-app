@@ -359,6 +359,83 @@ test("failed running-document batch restores YAML and annotations and allows ret
   assert.match(await client.getLabTopologyYaml("test-token", labName), /n1/);
 });
 
+test("a template session shows the lab host's rendering and never writes the template", async () => {
+  const yamlPath = "labs/fabric.clab.gotmpl";
+  const template = [
+    "name: fabric",
+    "topology:",
+    "  nodes:",
+    "{{- range $i := seq 1 .leaves }}",
+    "    leaf{{ $i }}:",
+    "      kind: linux",
+    "{{- end }}",
+    ""
+  ].join("\n");
+  const rendered = (leaves: number): string =>
+    [
+      "name: fabric",
+      "topology:",
+      "  nodes:",
+      ...Array.from({ length: leaves }, (_, i) => `    leaf${i + 1}:\n      kind: linux`),
+      ""
+    ].join("\n");
+  const renders: Array<{ labName: string; path: string; varsFile: string | undefined }> = [];
+  const client = Object.assign(new InMemoryClabApiClient({ [yamlPath]: template }), {
+    async renderTopology(_token: string, labName: string, path: string, varsFile?: string) {
+      renders.push({ labName, path, varsFile });
+      return { content: rendered(varsFile === "prod.yml" ? 3 : 2), varsFiles: varsFile ? [varsFile] : [] };
+    }
+  });
+  const manager = createStandaloneTopologySessionManager();
+  const session = (varsFile?: string) =>
+    manager.createSession({
+      backend: apiBackend(client, "secret-token"),
+      endpointId: "endpoint-remote",
+      topologyRef: {
+        topologyId: `standalone:endpoint-remote::${yamlPath}`,
+        labName: "fabric",
+        yamlPath,
+        annotationsPath: `${yamlPath}.annotations.json`,
+        source: "standalone"
+      },
+      // The client may still ask for an editable topology.
+      mode: "edit",
+      deploymentState: "undeployed",
+      containerDataProvider: createRuntimeContainerDataProvider([]),
+      ...(varsFile ? { varsFile } : {})
+    });
+
+  try {
+    const first = session();
+    const snapshot = await first.host.getSnapshot();
+    assert.deepEqual(snapshot.nodes.map((node) => node.id).sort(), ["leaf1", "leaf2"]);
+    assert.equal(snapshot.mode, "view");
+    assert.deepEqual(snapshot.template, { source: "rendered" });
+    assert.deepEqual(renders, [{ labName: "fabric", path: yamlPath, varsFile: undefined }]);
+
+    const refused = await first.host.applyCommand(
+      { command: "setYamlContent", payload: { content: rendered(1) } },
+      snapshot.revision
+    );
+    assert.equal(refused.type, "topology-host:error");
+    const moved = await first.host.applyCommand(
+      { command: "savePositions", payload: [{ id: "leaf2", position: { x: 40, y: 50 } }] },
+      snapshot.revision
+    );
+    assert.equal(moved.type, "topology-host:ack");
+    assert.equal(await client.getFile("", "", yamlPath), template);
+    assert.match(await client.getFile("", "", `${yamlPath}.annotations.json`), /"leaf2"/);
+
+    // The variables file of the lab's deploy settings decides the rendering.
+    const prod = await session("prod.yml").host.getSnapshot();
+    assert.deepEqual(prod.nodes.map((node) => node.id).sort(), ["leaf1", "leaf2", "leaf3"]);
+    assert.deepEqual(prod.template, { source: "rendered", varsFiles: ["prod.yml"] });
+    assert.equal(renders.at(-1)?.varsFile, "prod.yml");
+  } finally {
+    manager.disposeAll();
+  }
+});
+
 function apiBackend(client: unknown, token: string): ApiLabBackend {
   const apiClient = client as ClabApiClient;
   return new ApiLabBackend({ baseUrl: apiClient.getBaseUrl(), token, client: apiClient });

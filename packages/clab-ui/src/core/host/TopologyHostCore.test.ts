@@ -912,3 +912,282 @@ test("commands keep the guide they read instead of reading it again", async () =
   await host.onExternalChange();
   assert.equal(guideReads, 2);
 });
+
+const TEMPLATE = `name: fabric
+topology:
+  nodes:
+{{- range $i := seq 1 .leaves }}
+    leaf{{ $i }}:
+      kind: linux
+{{- end }}
+  links: []
+`;
+
+const TEMPLATE_PATH = "/labs/fabric.clab.gotmpl";
+const TEMPLATE_ANNOTATIONS_PATH = `${TEMPLATE_PATH}.annotations.json`;
+
+/** What containerlab renders from TEMPLATE with that many leaves. */
+function renderedFabric(leaves: number): string {
+  const nodes = Array.from({ length: leaves }, (_, i) => `    leaf${i + 1}:\n      kind: linux\n`);
+  return `name: fabric\ntopology:\n  nodes:\n${nodes.join("")}  links: []\n`;
+}
+
+async function templateHost(
+  render: () => Promise<{ content: string; varsFiles?: string[]; error?: string }>,
+  template = TEMPLATE
+): Promise<{ fs: MemoryFileSystemAdapter; host: TopologyHostCore }> {
+  const fs = new MemoryFileSystemAdapter();
+  await fs.writeFile(TEMPLATE_PATH, template);
+  const host = new TopologyHostCore({
+    fs,
+    yamlFilePath: TEMPLATE_PATH,
+    // A template is read-only whatever the host asks for.
+    mode: "edit",
+    deploymentState: "undeployed",
+    renderTopology: render
+  });
+  return { fs, host };
+}
+
+function nodeIds(snapshot: TopologySnapshot): string[] {
+  return snapshot.nodes.map((node) => node.id).sort();
+}
+
+test("a template shows the topology containerlab renders from it, read-only", async () => {
+  const { host } = await templateHost(async () => ({
+    content: renderedFabric(3),
+    varsFiles: ["fabric.clab_vars.yml"]
+  }));
+  const snapshot = await host.getSnapshot();
+  assert.deepEqual(nodeIds(snapshot), ["leaf1", "leaf2", "leaf3"]);
+  assert.equal(snapshot.mode, "view");
+  assert.equal(snapshot.yamlFileName, "fabric.clab.gotmpl");
+  assert.equal(snapshot.yamlContent, renderedFabric(3));
+  assert.deepEqual(snapshot.template, { source: "rendered", varsFiles: ["fabric.clab_vars.yml"] });
+
+  // The host cannot make it editable.
+  host.updateContext({ mode: "edit" });
+  assert.equal((await host.getSnapshot()).mode, "view");
+});
+
+test("a topology file that is no template has no template state", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  await fs.writeFile("/labs/plain.clab.yml", BASE_YAML);
+  const host = new TopologyHostCore({
+    fs,
+    yamlFilePath: "/labs/plain.clab.yml",
+    mode: "edit",
+    deploymentState: "undeployed"
+  });
+  const snapshot = await host.getSnapshot();
+  assert.equal(snapshot.template, undefined);
+  assert.equal(snapshot.mode, "edit");
+});
+
+test("a template is never written: topology edits are refused, annotations are saved", async () => {
+  const { fs, host } = await templateHost(async () => ({ content: renderedFabric(2) }));
+  const { revision } = await host.getSnapshot();
+
+  const refused: TopologyHostCommand[] = [
+    { command: "setYamlContent", payload: { content: BASE_YAML } },
+    { command: "deleteNode", payload: { id: "leaf1" } },
+    { command: "addNode", payload: { id: "leaf9", name: "leaf9" } },
+    { command: "setLabSettings", payload: { name: "other" } },
+    {
+      command: "batch",
+      payload: {
+        commands: [
+          { command: "savePositions", payload: [{ id: "leaf1", position: { x: 1, y: 1 } }] },
+          { command: "deleteNode", payload: { id: "leaf2" } }
+        ]
+      }
+    }
+  ];
+  for (const command of refused) {
+    const response = await host.applyCommand(command, revision);
+    assert.equal(response.type, "topology-host:error", command.command);
+    if (response.type !== "topology-host:error") throw new Error("Expected an error");
+    assert.match(response.error, /fabric\.clab\.gotmpl is a topology template/);
+  }
+  assert.equal(await fs.exists(TEMPLATE_ANNOTATIONS_PATH), false);
+
+  // Positions of rendered nodes, also of those a loop made, go to the annotations.
+  const moved = await apply(host, revision, {
+    command: "savePositions",
+    payload: [
+      { id: "leaf1", position: { x: 10, y: 20 } },
+      { id: "leaf2", position: { x: 30, y: 40 } }
+    ]
+  });
+  assert.deepEqual(
+    moved.snapshot.annotations.nodeAnnotations?.map((node) => [node.id, node.position]),
+    [
+      ["leaf1", { x: 10, y: 20 }],
+      ["leaf2", { x: 30, y: 40 }]
+    ]
+  );
+  assert.equal(moved.snapshot.dirty, undefined);
+  assert.equal(await fs.readFile(TEMPLATE_PATH), TEMPLATE);
+});
+
+test("undo and redo of a template's annotations leave the template alone", async () => {
+  const { fs, host } = await templateHost(async () => ({ content: renderedFabric(1) }));
+  const { revision } = await host.getSnapshot();
+  const moved = await apply(host, revision, {
+    command: "savePositions",
+    payload: [{ id: "leaf1", position: { x: 10, y: 20 } }]
+  });
+  assert.equal(moved.snapshot.canUndo, true);
+
+  const undone = await apply(host, moved.snapshot.revision, { command: "undo" });
+  assert.deepEqual(undone.snapshot.annotations.nodeAnnotations ?? [], []);
+  assert.equal(await fs.readFile(TEMPLATE_PATH), TEMPLATE);
+
+  const redone = await apply(host, undone.snapshot.revision, { command: "redo" });
+  assert.deepEqual(redone.snapshot.annotations.nodeAnnotations?.[0]?.position, { x: 10, y: 20 });
+  assert.equal(await fs.readFile(TEMPLATE_PATH), TEMPLATE);
+});
+
+test("a template renders again when its text changes, not when only its annotations do", async () => {
+  let leaves = 2;
+  let renders = 0;
+  const { fs, host } = await templateHost(async () => {
+    renders += 1;
+    return { content: renderedFabric(leaves) };
+  });
+  const first = await host.getSnapshot();
+  assert.equal(renders, 1);
+
+  // The host's own annotation save, reported late by a file watcher.
+  const moved = await apply(host, first.revision, {
+    command: "savePositions",
+    payload: [{ id: "leaf1", position: { x: 10, y: 20 } }]
+  });
+  const echoed = await host.onExternalChange();
+  assert.equal(echoed.revision, moved.snapshot.revision);
+  assert.equal(renders, 1);
+
+  // The template is edited as text.
+  leaves = 3;
+  await fs.writeFile(TEMPLATE_PATH, `${TEMPLATE}# more leaves\n`);
+  const edited = await host.onExternalChange();
+  assert.equal(renders, 2);
+  assert.ok(edited.revision > moved.snapshot.revision);
+  assert.deepEqual(nodeIds(edited), ["leaf1", "leaf2", "leaf3"]);
+  // The node that was there before keeps its place.
+  assert.deepEqual(
+    edited.annotations.nodeAnnotations?.find((node) => node.id === "leaf1")?.position,
+    { x: 10, y: 20 }
+  );
+});
+
+test("a template renders again after a deploy and when the host drops the snapshot", async () => {
+  let leaves = 1;
+  let renders = 0;
+  const { host } = await templateHost(async () => {
+    renders += 1;
+    return { content: renderedFabric(leaves) };
+  });
+  await host.getSnapshot();
+  await host.getSnapshot();
+  assert.equal(renders, 1);
+
+  // Runtime data alone keeps the rendering.
+  host.updateContext({ containerDataProvider: createRuntimeContainerDataProvider([]) });
+  await host.getSnapshot();
+  assert.equal(renders, 1);
+
+  // The variables files may have changed by the time the lab is deployed.
+  leaves = 2;
+  host.updateContext({ deploymentState: "deployed" });
+  assert.deepEqual(nodeIds(await host.getSnapshot()), ["leaf1", "leaf2"]);
+  assert.equal(renders, 2);
+
+  leaves = 3;
+  host.invalidateSnapshot();
+  assert.deepEqual(nodeIds(await host.getSnapshot()), ["leaf1", "leaf2", "leaf3"]);
+  assert.equal(renders, 3);
+});
+
+test("a template containerlab cannot render shows its text when that is plain YAML", async () => {
+  const written = `name: plain
+topology:
+  nodes:
+    srl1:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:{{ .version }}
+  links: []
+`;
+  const { fs, host } = await templateHost(async () => {
+    throw new Error("Rendering a topology needs containerlab 0.78 or newer.");
+  }, written);
+  // The position of a node only the rendering has.
+  const annotations = JSON.stringify({ nodeAnnotations: [{ id: "leaf7", position: { x: 5, y: 6 } }] });
+  await fs.writeFile(TEMPLATE_ANNOTATIONS_PATH, annotations);
+
+  const snapshot = await host.getSnapshot();
+  assert.deepEqual(nodeIds(snapshot), ["srl1"]);
+  assert.equal(snapshot.mode, "view");
+  assert.deepEqual(snapshot.template, {
+    source: "text",
+    error: "Rendering a topology needs containerlab 0.78 or newer."
+  });
+  // What is drawn is not what is deployed: no annotation is dropped for it.
+  assert.deepEqual(
+    snapshot.annotations.nodeAnnotations?.find((node) => node.id === "leaf7")?.position,
+    { x: 5, y: 6 }
+  );
+});
+
+test("a template that neither renders nor is plain YAML opens empty, with the reason", async () => {
+  const { host } = await templateHost(async () => {
+    throw new Error("template: fabric:4: unexpected EOF");
+  });
+  const snapshot = await host.getSnapshot();
+  assert.deepEqual(snapshot.nodes, []);
+  assert.equal(snapshot.yamlContent, "");
+  assert.equal(snapshot.labName, "fabric");
+  assert.deepEqual(snapshot.template, {
+    source: "text",
+    error: "template: fabric:4: unexpected EOF"
+  });
+});
+
+test("a template that stops rendering keeps the topology it last rendered", async () => {
+  let broken = false;
+  const { fs, host } = await templateHost(async () => {
+    if (broken) throw new Error("template: fabric:9: unexpected {{end}}");
+    return { content: renderedFabric(2) };
+  });
+  const first = await host.getSnapshot();
+  const moved = await apply(host, first.revision, {
+    command: "savePositions",
+    payload: [{ id: "leaf2", position: { x: 30, y: 40 } }]
+  });
+
+  broken = true;
+  await fs.writeFile(TEMPLATE_PATH, `${TEMPLATE}{{ end }}\n`);
+  const kept = await host.onExternalChange();
+  assert.deepEqual(nodeIds(kept), ["leaf1", "leaf2"]);
+  assert.deepEqual(kept.template, {
+    source: "last-rendered",
+    error: "template: fabric:9: unexpected {{end}}"
+  });
+  assert.deepEqual(kept.annotations.nodeAnnotations, moved.snapshot.annotations.nodeAnnotations);
+
+  // Fixed again: the reason is gone.
+  broken = false;
+  await fs.writeFile(TEMPLATE_PATH, TEMPLATE);
+  const fixed = await host.onExternalChange();
+  assert.deepEqual(fixed.template, { source: "rendered" });
+});
+
+test("a rendered topology containerlab rejects is shown with the reason", async () => {
+  const { host } = await templateHost(async () => ({
+    content: renderedFabric(1),
+    error: 'node "leaf1" has no image'
+  }));
+  const snapshot = await host.getSnapshot();
+  assert.deepEqual(nodeIds(snapshot), ["leaf1"]);
+  assert.deepEqual(snapshot.template, { source: "rendered", error: 'node "leaf1" has no image' });
+});

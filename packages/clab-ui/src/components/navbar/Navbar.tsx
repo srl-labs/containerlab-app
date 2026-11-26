@@ -69,6 +69,7 @@ import { LabOperationsDialogs } from "../panels/lab-operations/LabOperationsDial
 
 import { labOperationMenuItems } from "./LabOperationMenuItems";
 import { LabHostChip } from "./LabHostChip";
+import { TemplateChip } from "./TemplateChip";
 import { useLabHostLoader } from "./useLabHostLoader";
 import { useLifecycleDialogState } from "./useLifecycleDialogState";
 
@@ -296,10 +297,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isDirty = useIsDirty();
   const { toggleLock, setProcessing } = useTopoViewerActions();
   const deploymentCommands = useDeploymentCommands();
-  const { labOperations, openLabHostSettings } = useClabUiHost().topoViewer;
+  const { labOperations, openLabHostSettings, openLabFile } = useClabUiHost().topoViewer;
   const hasLabOperations = labOperations !== undefined;
   const [manifestRequest, setManifestRequest] = React.useState<Promise<{ yaml: string }> | null>(null);
   const labName = useTopoViewerStore((state) => state.labName);
+  const topologyTemplate = useTopoViewerStore((state) => state.topologyTemplate);
+  const yamlFileName = useTopoViewerStore((state) => state.yamlFileName);
   useLabHostLoader();
   const labHostInfo = useLabHostStore((state) => state.info);
   const operationSupport = useLabOperationsStore((state) => state.support);
@@ -649,6 +652,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               {...(openLabHostSettings
                 ? { onOpen: () => openLabHostSettings(labHostInfo.host?.id ?? "") }
                 : {})}
+            />
+            <Divider orientation="vertical" flexItem sx={TOOLBAR_DIVIDER_SX} />
+          </>
+        ) : null}
+        {isTopologyActive && topologyTemplate ? (
+          <>
+            <TemplateChip
+              template={topologyTemplate}
+              fileName={yamlFileName}
+              container={TOOLBAR_CONTAINER}
+              {...(openLabFile ? { onOpen: () => openLabFile({ path: yamlFileName }) } : {})}
             />
             <Divider orientation="vertical" flexItem sx={TOOLBAR_DIVIDER_SX} />
           </>

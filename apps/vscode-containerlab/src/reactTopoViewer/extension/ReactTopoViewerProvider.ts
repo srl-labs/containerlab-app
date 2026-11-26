@@ -27,9 +27,16 @@ import {
   type TopoEdge,
   type TopologySnapshot
 } from "@containerlab/clab-ui/session";
-import type { HostRuntimeContainer } from "@containerlab/clab-ui/host";
+import { isTopologyTemplateFileName, type HostRuntimeContainer } from "@containerlab/clab-ui/host";
 import { fsAdapterFor } from "./shared/io";
-import { connectionOf, isUriString, labUri, resolveLab } from "../../backend/labBackends";
+import {
+  connectionOf,
+  hostOfLabPath,
+  isUriString,
+  labUri,
+  resolveLab
+} from "../../backend/labBackends";
+import { labSettingsFor } from "../../backend/labSettings";
 
 import { formatErrorMessage, log } from "./services/logger";
 import { deploymentStateChecker } from "./services/DeploymentStateChecker";
@@ -207,9 +214,12 @@ export class ReactTopoViewer {
       const snapshot = await host.onExternalChange();
       // Files that did not change, e.g. this panel's own save reported late,
       // need no redraw: it would interrupt what the user is doing. A changed
-      // lab guide keeps the revision, since the host never writes it.
+      // lab guide keeps the revision, since the host never writes it, and so
+      // does a template that stops rendering: its last topology stays.
       const unchanged =
-        snapshot.revision === before.revision && snapshot.guide?.content === before.guide?.content;
+        snapshot.revision === before.revision &&
+        snapshot.guide?.content === before.guide?.content &&
+        JSON.stringify(snapshot.template) === JSON.stringify(before.template);
       return unchanged ? null : snapshot;
     };
 
@@ -364,7 +374,16 @@ export class ReactTopoViewer {
     this.runtimeContainers = [];
 
     // The topology is always editable; runtime data attaches when deployed.
+    // Only containerlab can turn a template into a topology: the core shows
+    // what it renders, with the variables file of the lab's deploy settings.
     const yamlFilePath = this.lastYamlFilePath;
+    const renderTopology = isTopologyTemplateFileName(yamlFilePath)
+      ? async () => {
+          const { backend, target } = await resolveLab(yamlFilePath);
+          const varsFile = labSettingsFor(hostOfLabPath(yamlFilePath).id, yamlFilePath)?.varsFile;
+          return backend.renderTopology(target, varsFile ? { varsFile } : {});
+        }
+      : undefined;
     this.topologyHost = new TopologyHostCore({
       fs: fsAdapterFor(this.lastYamlFilePath),
       yamlFilePath: this.lastYamlFilePath,
@@ -380,7 +399,8 @@ export class ReactTopoViewer {
       resolveVariables: async (request) => {
         const { backend, target } = await resolveLab(yamlFilePath);
         return backend.topologyVariables(target, request);
-      }
+      },
+      ...(renderTopology ? { renderTopology } : {})
     });
 
     this.messageRouter = new MessageRouter({
@@ -535,7 +555,8 @@ export class ReactTopoViewer {
     this.currentPanel.webview.postMessage({
       type: MSG_TOPO_MODE_CHANGE,
       data: {
-        mode: "editor",
+        // A template is edited as text: its topology is read-only here.
+        mode: isTopologyTemplateFileName(this.lastYamlFilePath) ? "viewer" : "editor",
         deploymentState: this.deploymentState,
         ...(this.dirtyState !== undefined ? { dirty: this.dirtyState } : {})
       }
