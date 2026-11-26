@@ -84,3 +84,12 @@ export function getRuntimeContainersForTopology(
 ): HostRuntimeContainer[] {
   return getRuntimeContainers(findLabStateForTopology(topologyRef, labs));
 }
+
+/**
+ * The lab name runtime data of a topology matches by: the name its running
+ * containers carry, which can differ from the file's lab name, e.g. for
+ * `name: lab-${USER}`. Without containers, the file's lab name.
+ */
+export function runtimeLabName(containers: HostRuntimeContainer[], fallback: string): string {
+  return containers.find((container) => container.labName)?.labName ?? fallback;
+}
