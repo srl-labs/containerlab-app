@@ -1,6 +1,6 @@
 {
   "name": "containerlab-desktop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Manage and inspect containerlab topologies from a desktop application.",
   "license": "Apache-2.0",

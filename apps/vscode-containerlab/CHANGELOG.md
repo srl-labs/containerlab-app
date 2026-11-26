@@ -1,10 +1,14 @@
 # Change Log
 
-## [0.27.1] - Unreleased
+## [0.28.0] - 2026-11-26
 
 - Lab guides: a `.clab.md` file next to a topology, such as `srl-pair.clab.md` beside `srl-pair.clab.yml`, shows as a step-by-step guide in the topology view's **Guide** tab. Its code blocks run their command on the lab's nodes (`exec=srl1,srl2`) or type their lines into a node's shell (`terminal=srl1`), each after asking the first time (or once for the whole guide), and every block has a checkmark to follow progress. The guide reloads when its file changes, and a lab without one offers **Create guide**, which writes a first guide with the lab's node names.
 - **Attach Shell** on a local node opens the node's shell as the terminal's own process. The terminal closes when the shell ends, instead of staying under the node's name with a shell of this computer, where the next lines meant for the node would have run. A shell that cannot start keeps its error on screen until Enter.
 - Fix packet capture on distributed SR-SIM nodes, such as an SR-7s, from the explorer and the topology canvas: containerlab rejected their containers as no node of the lab, and Edgeshark could not find the container or the SR OS port the canvas named. Link impairments set from the canvas find these nodes too.
+- **Curve** link style in **Lab Settings → Appearance → Link style**, next to Straight and Elbow, with a **Curvature** slider. Curved links leave the side of the node that faces the other end, keep endpoint labels readable along the curve, and run parallel links side by side. The style is saved per lab.
+- `.clab.gotmpl` topology templates open on the canvas again, drawn from what containerlab renders, so nodes and links made by loops and variables show up and a running template lab gets link states, captures and node actions. A template opens read-only; annotations are still saved, and a toolbar chip names the variables files and opens the template as text.
+- Labs whose name uses an environment variable, such as `name: lab-${USER}`, show link states and traffic stats on the canvas: the name is expanded the way containerlab does it, locally and on lab hosts.
+- The YAML editor knows the link `netem` impairment settings from containerlab's current schema.
 
 ## [0.27.0] - 2026-11-07
 

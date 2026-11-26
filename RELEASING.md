@@ -4,11 +4,11 @@ Publish one GitHub Release for the product you want to ship. The tag selects the
 
 | Product | Manifest | Prepared version/tag | Result |
 | --- | --- | --- | --- |
-| Shared UI | `packages/clab-ui/package.json` | `clab-ui-v0.4.0` | `@containerlab/clab-ui` on npmjs.org |
+| Shared UI | `packages/clab-ui/package.json` | `clab-ui-v0.5.0` | `@containerlab/clab-ui` on npmjs.org |
 | Standalone viewer | `packages/clab-viewer/package.json` | `0.1.0` is published; next `clab-viewer-v<version>` | `@containerlab/clab-viewer` on npmjs.org |
-| VS Code extension | `apps/vscode-containerlab/package.json` | `vscode-v0.27.0` | VSIX, Marketplace, Open VSX |
-| Web app | `apps/web/package.json` | `web-v0.3.0` | `ghcr.io/srl-labs/containerlab-web:0.3.0` |
-| Desktop app | `apps/desktop/package.json` | `desktop-v0.3.0` | Linux, macOS, Windows installers |
+| VS Code extension | `apps/vscode-containerlab/package.json` | `vscode-v0.28.0` | VSIX, Marketplace, Open VSX |
+| Web app | `apps/web/package.json` | `web-v0.4.0` | `ghcr.io/srl-labs/containerlab-web:0.4.0` |
+| Desktop app | `apps/desktop/package.json` | `desktop-v0.4.0` | Linux, macOS, Windows installers |
 
 `@containerlab/clab-ui` and `@containerlab/clab-viewer` are public npm packages. Internal libraries and application manifests stay private. Their versions do not have to match the root or each other. Applications bundle their workspace UI from the release commit; a UI-only npm release does not update installed applications.
 
@@ -49,7 +49,7 @@ Missing store tokens skip their respective stores; the workflow still produces a
 
 ## GitHub Latest and registry tags
 
-Keep the existing `v0.2.2` release and its tag. It can remain **Latest** until the next stable desktop release is ready. Mark that release (for example `desktop-v0.3.0`) as Latest; do not move or rename old Git tags. This keeps the repository's `/releases/latest` link pointing to desktop downloads.
+Keep the existing `v0.2.2` release and its tag. It can remain **Latest** until the next stable desktop release is ready. Mark that release (for example `desktop-v0.4.0`) as Latest; do not move or rename old Git tags. This keeps the repository's `/releases/latest` link pointing to desktop downloads.
 
 | Channel | What updates it |
 | --- | --- |
@@ -68,7 +68,7 @@ These are independent. UI, viewer, VS Code, and web GitHub Releases should have 
 3. In GitHub, choose **Releases → Draft a new release**, create the product tag at the reviewed commit, and enter product-specific release notes. Alternatively, use `gh release create <tag> --target <commit> --title '<product> <version>' --notes-file <notes.md> --latest=false`.
 4. Publish the release. The matching workflow builds and publishes only that product. Use **Set as the latest release** only for stable desktop releases; other product releases should leave it unchecked. GitHub's Latest designation is shared by the whole repository.
 
-Examples: publishing `clab-ui-v0.4.0` ships only the UI to npm; `clab-viewer-v0.1.1` ships only the viewer; publishing `vscode-v0.27.0` ships only the extension. The former generic `v<version>` application tags are historical and no longer release new builds.
+Examples: publishing `clab-ui-v0.5.0` ships only the UI to npm; `clab-viewer-v0.1.1` ships only the viewer; publishing `vscode-v0.28.0` ships only the extension. The former generic `v<version>` application tags are historical and no longer release new builds.
 
 | Product | Useful checks |
 | --- | --- |
