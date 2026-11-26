@@ -8,12 +8,24 @@ import Typography from "@mui/material/Typography";
 
 import { useClabUiHost, useTopologySessionClient } from "../../../host";
 import { guideFileNameFor } from "../../../guide/guideFile";
-import { guideTemplate } from "../../../guide/guideTemplate";
+import { guideTemplate, type GuideTemplateNode } from "../../../guide/guideTemplate";
 import { executeTopologyCommand } from "../../../services/topologyHostCommands";
 import { useGraphStore } from "../../../stores/graphStore";
 import { useIsLocked, useTopoViewerStore } from "../../../stores/topoViewerStore";
 import { MONO_FONT_FAMILY } from "../../../theme/typography";
-import { topologyNodeNames } from "../lab-operations/LabOperationParts";
+
+/** The lab's nodes by name, each with its kind when the topology names one. */
+function templateNodes(
+  nodes: ReadonlyArray<{ id: string; type?: string; data?: { extraData?: { kind?: unknown } } }>
+): GuideTemplateNode[] {
+  return nodes
+    .filter((node) => node.type === "topology-node")
+    .map((node) => {
+      const kind = node.data?.extraData?.kind;
+      return { name: node.id, kind: typeof kind === "string" && kind !== "" ? kind : undefined };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
 
 export const GuideEmptyState: React.FC = () => {
   const yamlFileName = useTopoViewerStore((state) => state.yamlFileName);
@@ -35,13 +47,21 @@ export const GuideEmptyState: React.FC = () => {
     setError(null);
     // Read once, for the template: the empty state shows neither.
     const { labName } = useTopoViewerStore.getState();
-    const nodeNames = topologyNodeNames(useGraphStore.getState().nodes);
+    const nodes = templateNodes(useGraphStore.getState().nodes);
     executeTopologyCommand(
-      { command: "createGuide", payload: { content: guideTemplate(labName, nodeNames) } },
+      { command: "createGuide", payload: { content: guideTemplate(labName, nodes) } },
       {},
       sessionClient
     )
-      .then(() => topoViewer.openLabFile?.({ path: fileName }))
+      .then((response) => {
+        // Only an accepted command wrote the file. A rejected one was sent for
+        // an older version of the topology, which has been loaded again now.
+        if (response.type !== "topology-host:ack") {
+          setError("The topology changed in the meantime, so no guide was created. Try again.");
+          return;
+        }
+        topoViewer.openLabFile?.({ path: fileName });
+      })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)))
       .finally(() => setCreating(false));
   }, [fileName, isLocked, nudgeLock, sessionClient, topoViewer]);

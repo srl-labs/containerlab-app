@@ -12,9 +12,10 @@ import type { TopologyGuideFile } from "../../../core/types/messages";
 import { useClabUiHost, type ClabUiTopoViewerHost } from "../../../host";
 import { guideCodeBlocks, parseGuide, type GuideCodeBlock, type GuidePart } from "../../../guide/parseGuide";
 import {
+  guideProgress,
   guideProgressKey,
-  readGuideProgress,
-  writeGuideProgress,
+  subscribeGuideProgress,
+  updateGuideProgress,
   type GuideProgress
 } from "../../../guide/guideProgress";
 import { useDeploymentCommands } from "../../../hooks/ui/usePanelCommands";
@@ -24,10 +25,11 @@ import {
   trustScript,
   type ScriptButtonConfirm
 } from "../../../scriptButtons/scriptButtonPolicy";
+import { guideRuns, useGuideRunStore, type GuideBlockRun, type GuideRuns } from "../../../stores/guideRunStore";
 import { useTopoViewerStore } from "../../../stores/topoViewerStore";
 import { useTopologyNodeNames } from "../lab-operations/LabOperationParts";
 
-import { GuideBlock, type GuideBlockAction, type GuideBlockRun } from "./GuideBlock";
+import { GuideBlock, type GuideBlockAction } from "./GuideBlock";
 import { GuideMarkdown } from "./GuideMarkdown";
 
 const IDLE: GuideBlockRun = { status: "idle" };
@@ -78,11 +80,21 @@ function guideConfirmMode(): ScriptButtonConfirm {
   return mode === "never" ? "firstRun" : mode;
 }
 
-/** The reader's place in the guide, saved in this browser as it changes. */
-function useGuideProgress(key: string): [GuideProgress, React.Dispatch<React.SetStateAction<GuideProgress>>] {
-  const [progress, setProgress] = React.useState(() => readGuideProgress(key));
-  React.useEffect(() => writeGuideProgress(key, progress), [key, progress]);
-  return [progress, setProgress];
+type UpdateProgress = (update: (current: GuideProgress) => GuideProgress) => void;
+
+/**
+ * The reader's place in the guide, saved in this browser as it changes. The
+ * page keeps it, so it also changes while this tab is not shown.
+ */
+function useGuideProgress(key: string): [GuideProgress, UpdateProgress] {
+  const progress = React.useSyncExternalStore(subscribeGuideProgress, () => guideProgress(key));
+  const update = React.useCallback<UpdateProgress>((change) => updateGuideProgress(key, change), [key]);
+  return [progress, update];
+}
+
+/** A prompt goes away with the reason to ask: its block can no longer run. */
+function shownRun(run: GuideBlockRun, action: GuideBlockAction | null): GuideBlockRun {
+  return run.status === "confirm" && action?.disabledReason !== undefined ? IDLE : run;
 }
 
 const DeployBanner: React.FC = () => {
@@ -174,8 +186,9 @@ const StepProgress: React.FC<{
 interface PartsProps {
   parts: GuidePart[];
   ticked: ReadonlySet<string>;
-  runs: Readonly<Record<string, GuideBlockRun>>;
+  runs: GuideRuns;
   actionFor: (block: GuideCodeBlock) => GuideBlockAction | null;
+  references: string;
   nodeNames: string[];
   onToggleTick: (id: string) => void;
   onRun: (block: GuideCodeBlock) => void;
@@ -183,28 +196,30 @@ interface PartsProps {
   onCancel: (id: string) => void;
 }
 
-const GuideParts: React.FC<PartsProps> = ({ parts, ticked, runs, actionFor, nodeNames, ...handlers }) => (
+const GuideParts: React.FC<PartsProps> = ({ parts, ticked, runs, actionFor, references, nodeNames, ...handlers }) => (
   <>
-    {parts.map((part, index) =>
-      part.type === "markdown" ? (
+    {parts.map((part, index) => {
+      if (part.type === "markdown") {
         // Text parts have no id of their own and never move between blocks.
-        <GuideMarkdown key={`text-${index}`} text={part.text} />
-      ) : (
+        return <GuideMarkdown key={`text-${index}`} text={part.text} references={references} />;
+      }
+      const action = actionFor(part);
+      return (
         <GuideBlock
           key={part.id}
           block={part}
           ticked={ticked.has(part.id)}
-          action={actionFor(part)}
-          run={runs[part.id] ?? IDLE}
+          action={action}
+          run={shownRun(runs[part.id] ?? IDLE, action)}
           nodeNames={nodeNames}
           {...handlers}
         />
-      )
-    )}
+      );
+    })}
   </>
 );
 
-/** One guide of one lab: its progress and runs start over for another. */
+/** One guide of one lab: another has its own progress and runs. */
 export const GuideTab: React.FC<{ guide: TopologyGuideFile }> = ({ guide }) => {
   const labName = useTopoViewerStore((state) => state.labName);
   const guideKey = guideProgressKey(labName, guide.fileName);
@@ -219,19 +234,23 @@ const GuideView: React.FC<{ guide: TopologyGuideFile; guideKey: string }> = ({ g
   const nodeNames = React.useMemo(() => new Set(nodeNameList), [nodeNameList]);
   const [progress, setProgress] = useGuideProgress(guideKey);
   const ticked = React.useMemo(() => new Set(progress.ticked), [progress.ticked]);
-  const [runs, setRuns] = React.useState<Record<string, GuideBlockRun>>({});
+  // Kept by the page: the panel leaves this tab for a node's details, and a run goes on meanwhile.
+  const runs = useGuideRunStore((state) => guideRuns(state, guideKey));
 
   const stepCount = parsed.steps.length;
   const step = Math.min(progress.step, Math.max(0, stepCount - 1));
   const blocks = React.useMemo(() => guideCodeBlocks(parsed), [parsed]);
   const tickedCount = blocks.filter((block) => ticked.has(block.id)).length;
   const hasRunnable = blocks.some((block) => hostRuns(block, topoViewer));
-  const actionFor = (block: GuideCodeBlock) =>
-    hostRuns(block, topoViewer) ? blockAction(block, deployed, nodeNames) : null;
+  const actionFor = React.useCallback(
+    (block: GuideCodeBlock) => (hostRuns(block, topoViewer) ? blockAction(block, deployed, nodeNames) : null),
+    [deployed, nodeNames, topoViewer]
+  );
 
-  const setRun = React.useCallback((id: string, run: GuideBlockRun) => {
-    setRuns((current) => ({ ...current, [id]: run }));
-  }, []);
+  const setRun = React.useCallback(
+    (id: string, run: GuideBlockRun) => useGuideRunStore.getState().setRun(guideKey, id, run),
+    [guideKey]
+  );
 
   /** Ticks the block, unticks it, or toggles it without `on`. */
   const setTicked = React.useCallback(
@@ -289,13 +308,18 @@ const GuideView: React.FC<{ guide: TopologyGuideFile; guideKey: string }> = ({ g
   /** Runs the block; agreed to for the whole guide, every block as it is now runs without asking. */
   const handleConfirm = React.useCallback(
     (block: GuideCodeBlock, trustGuide: boolean) => {
+      // The lab may have been destroyed, or the node removed, since the prompt came up.
+      if (actionFor(block)?.disabledReason !== undefined) {
+        setRun(block.id, IDLE);
+        return;
+      }
       execute(block);
       const agreed = trustGuide ? blocks.filter((entry) => entry.kind !== "copy") : [block];
       void Promise.all(agreed.map((entry) => trustKeyFor(guideKey, entry))).then((trustKeys) => {
         for (const trustKey of trustKeys) if (trustKey !== undefined) trustScript(trustKey);
       });
     },
-    [blocks, execute, guideKey]
+    [actionFor, blocks, execute, guideKey, setRun]
   );
 
   const handleCancel = React.useCallback((id: string) => setRun(id, IDLE), [setRun]);
@@ -318,6 +342,7 @@ const GuideView: React.FC<{ guide: TopologyGuideFile; guideKey: string }> = ({ g
     ticked,
     runs,
     actionFor,
+    references: parsed.references,
     nodeNames: nodeNameList,
     onToggleTick: setTicked,
     onRun: handleRun,

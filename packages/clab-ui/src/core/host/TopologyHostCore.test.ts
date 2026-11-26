@@ -811,6 +811,64 @@ test("createGuide writes the guide beside the topology, outside the undo history
   assert.equal(await fs.readFile(yamlFilePath), BASE_YAML);
 });
 
+test("createGuide leaves an undone edit to redo", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/demo.clab.yml";
+  await fs.writeFile(yamlFilePath, BASE_YAML);
+  const host = new TopologyHostCore({ fs, yamlFilePath, mode: "edit", deploymentState: "undeployed" });
+  const initial = await host.getSnapshot();
+  const edited = await apply(host, initial.revision, {
+    command: "setYamlContent",
+    payload: { content: CHANGED_YAML }
+  });
+  const undone = await apply(host, edited.snapshot.revision, { command: "undo" });
+  assert.equal(undone.snapshot.canRedo, true);
+
+  const created = await apply(host, undone.snapshot.revision, {
+    command: "createGuide",
+    payload: { content: "## First step\n" }
+  });
+  assert.equal(created.snapshot.canRedo, true);
+  const redone = await apply(host, created.snapshot.revision, { command: "redo" });
+  assert.equal(await fs.readFile(yamlFilePath), CHANGED_YAML);
+  assert.equal(redone.snapshot.guide?.content, "## First step\n");
+});
+
+test("a reload survives the snapshot being dropped while the guide is read", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/demo.clab.yml";
+  await fs.writeFile(yamlFilePath, BASE_YAML);
+  await fs.writeFile("/labs/demo.clab.md", "## Step one\n");
+  const host = new TopologyHostCore({ fs, yamlFilePath, mode: "edit", deploymentState: "undeployed" });
+  const initial = await host.getSnapshot();
+
+  // The guide read waits, as on a slow lab host, until the test lets it go.
+  const readFile = fs.readFile.bind(fs);
+  let releaseGuide: () => void = () => undefined;
+  let guideRequested: () => void = () => undefined;
+  const requested = new Promise<void>((resolve) => (guideRequested = resolve));
+  const released = new Promise<void>((resolve) => (releaseGuide = resolve));
+  fs.readFile = async (filePath: string) => {
+    if (filePath === "/labs/demo.clab.md") {
+      guideRequested();
+      await released;
+    }
+    return readFile(filePath);
+  };
+  await fs.writeFile("/labs/demo.clab.md", "## Step one\n\n## Step two\n");
+
+  const reload = host.onExternalChange();
+  await requested;
+  // The lab was deployed meanwhile: the host drops its snapshot outside the queue.
+  host.updateContext({ deploymentState: "deployed" });
+  releaseGuide();
+
+  const reloaded = await reload;
+  assert.equal(reloaded.guide?.content, "## Step one\n\n## Step two\n");
+  assert.equal(reloaded.deploymentState, "deployed");
+  assert.equal(reloaded.revision, initial.revision);
+});
+
 test("createGuide never replaces a guide", async () => {
   const fs = new MemoryFileSystemAdapter();
   const yamlFilePath = "/labs/demo.clab.yml";

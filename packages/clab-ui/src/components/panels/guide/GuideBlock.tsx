@@ -17,20 +17,12 @@ import Typography from "@mui/material/Typography";
 
 import type { LabExecResult } from "../../../host/labOperations";
 import type { GuideCodeBlock } from "../../../guide/parseGuide";
+import type { GuideBlockRun } from "../../../stores/guideRunStore";
 import { copyToClipboard } from "../../../utils/clipboard";
 import { controlRadius } from "../../../theme/surfaces";
 import { MONO_FONT_FAMILY } from "../../../theme/typography";
 import { ExecResults } from "../lab-operations/ExecCommandDialog";
 import { RunError, RunProgress } from "../lab-operations/LabOperationParts";
-
-export type GuideBlockRun =
-  | { status: "idle" }
-  /** `canTrustGuide`: the reader may agree to every block of the guide at once. */
-  | { status: "confirm"; canTrustGuide: boolean }
-  | { status: "running" }
-  | { status: "done"; result: LabExecResult }
-  | { status: "sent" }
-  | { status: "error"; message: string };
 
 /** The block's run button; null when the host can only copy it. */
 export interface GuideBlockAction {

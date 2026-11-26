@@ -31,11 +31,11 @@ function escapeHtml(text: string): string {
  * - Emoji support via markdown-it-emoji
  * - Security: HTML disabled, linkify enabled
  */
-function createMarkdownRenderer(breaks: boolean) {
-  return new MarkdownIt({
+function createMarkdownRenderer({ breaks, plainText }: { breaks: boolean; plainText: boolean }) {
+  const renderer = new MarkdownIt({
     html: false, // Disable raw HTML for security
     linkify: true, // Auto-convert URLs to links
-    typographer: true, // Smart quotes and dashes
+    typographer: !plainText, // Smart quotes and dashes
     breaks,
     langPrefix: "hljs language-",
     highlight(code: string, lang: string): string {
@@ -48,16 +48,19 @@ function createMarkdownRenderer(breaks: boolean) {
         return escapeHtml(code);
       }
     }
-  }).use(markdownItEmoji);
+  });
+  return plainText ? renderer : renderer.use(markdownItEmoji);
 }
 
 // Annotations are edited in a plain textarea, so a typed newline must stay a
 // line break after rendering (GitHub-comment style), or the committed result
 // won't match what the editor showed.
-const markdownRenderer = createMarkdownRenderer(true);
+const markdownRenderer = createMarkdownRenderer({ breaks: true, plainText: false });
 // Documents such as lab guides are written in an editor that wraps lines, so
-// a single newline joins the paragraph as in any Markdown file.
-const documentMarkdownRenderer = createMarkdownRenderer(false);
+// a single newline joins the paragraph as in any Markdown file. Their text is
+// shown as written: emoji shortcodes and smart punctuation would rewrite the
+// addresses and options a lab guide is full of (`2001:db8:a:b::1`, `--force`).
+const documentMarkdownRenderer = createMarkdownRenderer({ breaks: false, plainText: true });
 
 // Match: </a></p> + any whitespace + <p><a (with or without space before href)
 const BADGE_PARAGRAPH_REGEX = /<\/a><\/p>\s*<p><a(?=\s|>)/g;
@@ -93,7 +96,8 @@ function postProcessHtml(html: string): string {
 /**
  * Render markdown text to sanitized HTML
  * @param text - Raw markdown text
- * @param options.document - Join wrapped lines into paragraphs instead of keeping each newline
+ * @param options.document - Join wrapped lines into paragraphs instead of keeping each newline,
+ *   and leave emoji shortcodes and punctuation as written
  * @returns Sanitized HTML string
  */
 export function renderMarkdown(text: string, options: { document?: boolean } = {}): string {

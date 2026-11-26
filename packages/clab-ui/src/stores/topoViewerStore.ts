@@ -75,6 +75,12 @@ export interface TopoViewerState {
   annotationsContent: string;
   /** The lab guide beside the topology, as the host read it; null when there is none. */
   guide: TopologyGuideFile | null;
+  /**
+   * Names the host session the shown topology came from, and changes with it:
+   * two topologies may share a file name, in other folders or on other lab
+   * hosts. Empty from a host that does not say.
+   */
+  topologyScope: string;
   documentRevision: string;
   selectedNode: string | null;
   selectedEdge: string | null;
@@ -225,6 +231,7 @@ const initialState: TopoViewerState = {
   yamlContent: "",
   annotationsContent: "{}\n",
   guide: null,
+  topologyScope: "",
   documentRevision: "",
   selectedNode: null,
   selectedEdge: null,

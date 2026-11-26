@@ -37,9 +37,17 @@ function typer(time: FakeTime, sent: string[], open = (): boolean => true): Term
       sent.push(data);
       return true;
     },
+    ready: open,
     now: () => time.now,
     setTimer: time.setTimer
   });
+}
+
+/** A typer on a terminal that already shows its prompt. */
+function typerAtPrompt(time: FakeTime, sent: string[]): TerminalTyper {
+  const terminal = typer(time, sent);
+  terminal.noteOutput();
+  return terminal;
 }
 
 test("text becomes typed lines ending with Enter", () => {
@@ -64,10 +72,39 @@ test("the first line waits for a starting CLI to go quiet", () => {
   assert.deepEqual(sent, ["show version\r"]);
 });
 
-test("each later line waits for the previous one's answer", () => {
+test("the first line waits for a CLI that has printed nothing yet", () => {
   const time = new FakeTime();
   const sent: string[] = [];
   const terminal = typer(time, sent);
+  terminal.type("enter candidate\ncommit now");
+
+  // The shell is connected, but its CLI takes a while to show its banner.
+  time.advance(2500);
+  assert.deepEqual(sent, []);
+  terminal.noteOutput();
+  time.advance(900);
+  assert.deepEqual(sent, []);
+  time.advance(200);
+  assert.deepEqual(sent, ["enter candidate\r"]);
+  time.advance(400);
+  assert.deepEqual(sent, ["enter candidate\r", "commit now\r"]);
+});
+
+test("a terminal that prints nothing still gets its lines in the end", () => {
+  const time = new FakeTime();
+  const sent: string[] = [];
+  const terminal = typer(time, sent);
+  terminal.type("uptime");
+  time.advance(9900);
+  assert.deepEqual(sent, []);
+  time.advance(200);
+  assert.deepEqual(sent, ["uptime\r"]);
+});
+
+test("each later line waits for the previous one's answer", () => {
+  const time = new FakeTime();
+  const sent: string[] = [];
+  const terminal = typerAtPrompt(time, sent);
   terminal.type("one\ntwo\nthree");
   time.advance(1000);
   assert.deepEqual(sent, ["one\r"]);
@@ -104,22 +141,30 @@ test("lines wait for a connection that cannot take them yet", () => {
   let open = false;
   const terminal = typer(time, sent, () => open);
   terminal.type("uptime");
-  time.advance(3000);
+  // Longer than a line ever waits: the connection is what it waits for.
+  time.advance(30000);
   assert.deepEqual(sent, []);
+
+  // Connected, the terminal starts its CLI, and that still gets its quiet second.
   open = true;
-  time.advance(100);
+  time.advance(500);
+  terminal.noteOutput();
+  time.advance(900);
+  assert.deepEqual(sent, []);
+  time.advance(200);
   assert.deepEqual(sent, ["uptime\r"]);
 });
 
-test("a disposed typer types nothing more", () => {
+test("a disposed typer types nothing more and hands back what is left", () => {
   const time = new FakeTime();
   const sent: string[] = [];
-  const terminal = typer(time, sent);
-  terminal.type("one\ntwo");
+  const terminal = typerAtPrompt(time, sent);
+  terminal.type("one\ntwo\nthree");
   time.advance(1000);
-  terminal.dispose();
+  assert.deepEqual(terminal.dispose(), ["two", "three"]);
   time.advance(5000);
-  terminal.type("three");
+  terminal.type("four");
   time.advance(5000);
   assert.deepEqual(sent, ["one\r"]);
+  assert.deepEqual(terminal.dispose(), []);
 });

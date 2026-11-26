@@ -44,7 +44,7 @@ export function useOperationRun<T>(): [RunState<T>, (request: Promise<T>) => voi
 }
 
 /** Topology node names, sorted, without networks and annotations. */
-export function topologyNodeNames(nodes: ReadonlyArray<{ id: string; type?: string }>): string[] {
+function topologyNodeNames(nodes: ReadonlyArray<{ id: string; type?: string }>): string[] {
   return nodes
     .filter((node) => node.type === "topology-node")
     .map((node) => node.id)

@@ -687,6 +687,7 @@ function buildInitialTopoViewerData(
     yamlContent: snapshot.yamlContent,
     annotationsContent: snapshot.annotationsContent,
     guide: snapshot.guide ?? null,
+    topologyScope: snapshot.history?.scope ?? "",
     documentRevision: snapshot.documentRevision ?? "",
     edgeAnnotations,
     ...(offset !== null ? { endpointLabelOffset: offset } : {}),

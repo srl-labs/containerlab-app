@@ -29,6 +29,21 @@ async function messages(page: Page, command: string): Promise<HarnessMessage[]> 
   }, command);
 }
 
+const GUIDE_FILE = "srl-pair.clab.md";
+
+/** Replaces the lab's guide, as an editor saving the file would, and loads it. */
+async function writeGuide(page: Page, lines: string[]): Promise<void> {
+  await page.evaluate(
+    async ({ file, content }) => {
+      const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
+      if (!dev) throw new Error("__DEV__ API not available");
+      await dev.writeYamlFile(file, content);
+    },
+    { file: GUIDE_FILE, content: lines.join("\n") }
+  );
+  await page.getByTestId("guide-reload").click();
+}
+
 async function openPanel(page: Page): Promise<void> {
   // The panel stays open across a reload.
   if (!(await page.getByTestId("guide-tab").isVisible())) {
@@ -279,5 +294,175 @@ test.describe("Lab guide", () => {
     await expect(page.locator('[data-testid="guide-block"][data-kind="exec"]')).toContainText("srl1");
     const opened = await messages(page, "openLabFile");
     expect(opened.map((message) => (message as { path?: string }).path)).toEqual(["simple.clab.md"]);
+
+    // The node's shell is the SR Linux CLI, which knows no `hostname` or `ip`.
+    await page.getByTestId("guide-next").click();
+    const terminal = page.locator('[data-testid="guide-block"][data-kind="terminal"]');
+    await expect(terminal).toContainText("srl2");
+    await expect(terminal.locator("pre")).toHaveText("show version");
+  });
+
+  test("a block's output and an open prompt outlast a visit to another tab", async ({ page }) => {
+    await setDeploymentState(page, "deployed");
+    await openPanel(page);
+    const blocks = page.getByTestId("guide-block");
+    await blocks.nth(0).getByTestId("guide-block-run").click();
+    await blocks.nth(0).getByTestId("guide-block-confirm-run").click();
+    await expect(blocks.nth(0).getByTestId("lab-exec-stdout-srl1")).toBeVisible();
+    await blocks.nth(1).getByTestId("guide-block-run").click();
+    await expect(blocks.nth(1).getByTestId("guide-block-confirm")).toBeVisible();
+
+    // A click on a node takes the panel to its details, and the guide away.
+    await page.locator(".react-flow__node").first().click();
+    await expect(page.getByTestId("panel-tab-info")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("guide-tab")).toHaveCount(0);
+
+    await page.getByTestId("panel-tab-guide").click();
+    await expect(blocks.nth(0).getByTestId("lab-exec-stdout-srl1")).toBeVisible();
+    await expect(blocks.nth(0)).toHaveAttribute("data-ticked", "true");
+    await expect(blocks.nth(1).getByTestId("guide-block-confirm")).toBeVisible();
+    expect(await messages(page, "labOperation")).toHaveLength(1);
+  });
+
+  test("a command that ends while the guide is away shows its result on return", async ({ page }) => {
+    await setDeploymentState(page, "deployed");
+    await openPanel(page);
+    const block = page.getByTestId("guide-block").first();
+    await block.getByTestId("guide-block-run").click();
+    await expect(block.getByTestId("guide-block-confirm")).toBeVisible();
+
+    // Start the run and leave the tab before the command has answered.
+    await page.evaluate(() => {
+      const click = (testId: string) =>
+        document.querySelector<HTMLElement>(`[data-testid="${testId}"]`)?.click();
+      click("guide-block-confirm-run");
+      click("panel-tab-nodes");
+    });
+    await expect(page.getByTestId("guide-tab")).toHaveCount(0);
+    await expect.poll(async () => (await messages(page, "labOperation")).length).toBe(1);
+    // The harness answers after a moment; give the answer time to arrive unseen.
+    await page.waitForTimeout(500);
+
+    await page.getByTestId("panel-tab-guide").click();
+    await expect(block.getByTestId("lab-exec-stdout-srl1")).toBeVisible();
+    await expect(block).toHaveAttribute("data-ticked", "true");
+    await expect(page.getByTestId("guide-progress")).toHaveText("1 of 5 blocks done");
+    // Nothing ran twice.
+    expect(await messages(page, "labOperation")).toHaveLength(1);
+  });
+
+  test("a prompt goes away once its block can no longer run", async ({ page }) => {
+    await setDeploymentState(page, "deployed");
+    await openPanel(page);
+    const block = page.getByTestId("guide-block").first();
+    await block.getByTestId("guide-block-run").click();
+    await expect(block.getByTestId("guide-block-confirm")).toBeVisible();
+
+    await setDeploymentState(page, "undeployed");
+    await expect(block.getByTestId("guide-block-confirm")).toHaveCount(0);
+    await expect(block.getByTestId("guide-block-run")).toBeDisabled();
+    expect(await messages(page, "labOperation")).toHaveLength(0);
+  });
+
+  test("text is shown as written: addresses and options keep their characters", async ({ page }) => {
+    await openPanel(page);
+    await writeGuide(page, [
+      "# Addresses",
+      "",
+      "Ping 2001:db8:a:b::1 from 00:de:ad:be:ef:00 with --count 3 (c) and :100: percent."
+    ]);
+    await expect(page.getByTestId("guide-title")).toHaveText("Addresses");
+    await expect(page.getByTestId("guide-markdown")).toHaveText(
+      "Ping 2001:db8:a:b::1 from 00:de:ad:be:ef:00 with --count 3 (c) and :100: percent."
+    );
+  });
+
+  test("links named by reference work in every step", async ({ page }) => {
+    await openPanel(page);
+    await writeGuide(page, [
+      "# References",
+      "",
+      "Read the [docs][clab] first.",
+      "",
+      "## One",
+      "",
+      "Then open [the first router][r1], see the [docs][clab] again.",
+      "",
+      "## Links",
+      "",
+      "Nothing but the definitions:",
+      "",
+      "[clab]: https://containerlab.dev",
+      "[r1]: node:srl1"
+    ]);
+    await expect(page.getByTestId("guide-title")).toHaveText("References");
+    const intro = page.getByTestId("guide-markdown").first();
+    await expect(intro.getByRole("link", { name: "docs" })).toHaveAttribute("href", "https://containerlab.dev");
+    const step = page.getByTestId("guide-markdown").nth(1);
+    await expect(step.getByRole("link", { name: "docs" })).toHaveAttribute("href", "https://containerlab.dev");
+    await expect(step.getByRole("link", { name: "the first router" })).toHaveAttribute("href", "#clab-node=srl1");
+
+    // The step that only defines them shows its text, not the definitions.
+    await page.getByTestId("guide-next").click();
+    await expect(page.getByTestId("guide-markdown")).toHaveText("Nothing but the definitions:");
+  });
+
+  test("a block indented under a list item keeps its buttons", async ({ page }) => {
+    await openPanel(page);
+    await writeGuide(page, [
+      "# Lists",
+      "",
+      "## Check",
+      "",
+      "1. Check the uptime:",
+      "",
+      "    ```sh exec=srl1",
+      "    uptime",
+      "    ```",
+      "",
+      "2. Done."
+    ]);
+    await expect(page.getByTestId("guide-title")).toHaveText("Lists");
+    // The reload read the files of an undeployed lab; it runs from here on.
+    await setDeploymentState(page, "deployed");
+    const block = page.getByTestId("guide-block");
+    await expect(block).toHaveCount(1);
+    await expect(block).toHaveAttribute("data-kind", "exec");
+    await expect(block.locator("pre")).toHaveText("uptime");
+    await expect(block.getByTestId("guide-block-run")).toBeEnabled();
+    await expect(page.getByTestId("guide-progress")).toHaveText("0 of 1 blocks done");
+  });
+
+  test("a topology opened again goes back to its guide", async ({ page, topoViewerPage }) => {
+    await openPanel(page);
+    await page.getByTestId("panel-tab-nodes").click();
+    await expect(page.getByTestId("panel-tab-nodes")).toHaveAttribute("aria-selected", "true");
+
+    // The same file name, but another opening of it: file names alone do not tell topologies apart.
+    await topoViewerPage.gotoFile(GUIDE_LAB);
+    await topoViewerPage.waitForCanvasReady();
+    await expect(page.getByTestId("panel-tab-guide")).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("a guide saved outside the app reloads without redrawing the canvas", async ({ page, topoViewerPage }) => {
+    await openPanel(page);
+    await topoViewerPage.selectNode("srl1");
+    await expect.poll(() => topoViewerPage.getSelectedNodeIds()).toEqual(["srl1"]);
+
+    // What a host with a file watcher sends when only the guide changed.
+    await page.evaluate(async () => {
+      const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
+      if (!dev) throw new Error("__DEV__ API not available");
+      const snapshot = await dev.getHostSnapshot();
+      dev.emitHostMessage({
+        type: "topology-host:snapshot",
+        reason: "external-change",
+        snapshot: { ...snapshot, guide: { fileName: "srl-pair.clab.md", content: "# Saved elsewhere\n" } }
+      });
+    });
+
+    await expect.poll(() => topoViewerPage.getSelectedNodeIds()).toEqual(["srl1"]);
+    await page.getByTestId("panel-tab-guide").click();
+    await expect(page.getByTestId("guide-title")).toHaveText("Saved elsewhere");
   });
 });

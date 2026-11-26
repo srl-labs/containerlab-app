@@ -635,6 +635,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
   const annotationsContent = useTopoViewerStore((state) => state.annotationsContent);
   const guide = useTopoViewerStore((state) => state.guide);
   const guideFileName = guide?.fileName;
+  const topologyScope = useTopoViewerStore((state) => state.topologyScope);
   const [filter, setFilter] = useState("");
   const isViewMode = mode === "view";
   const nudgeLock = useTopoViewerStore((state) => state.nudgeLock);
@@ -713,16 +714,19 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
   }, [editorRequest, showEditTab]);
 
   // Each topology opens on its guide when it has one; without one, not on the Guide tab.
+  // A file name alone does not tell topologies apart, so the host session counts
+  // too; both come with the guide, in the same snapshot.
   const openedTopology = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (yamlFileName === openedTopology.current) return;
-    openedTopology.current = yamlFileName;
+    const topology = JSON.stringify([topologyScope, yamlFileName]);
+    if (topology === openedTopology.current) return;
+    openedTopology.current = topology;
     if (guideFileName !== undefined && disabledTabIds?.includes("guide") !== true) {
       setUserTab("guide");
     } else {
       setUserTab((current) => (current === "guide" ? "nodes" : current));
     }
-  }, [disabledTabIds, guideFileName, yamlFileName]);
+  }, [disabledTabIds, guideFileName, topologyScope, yamlFileName]);
 
   // Fall back to the first visible tab when current tab is no longer visible.
   // The Guide tab is always there, but only a lab with a guide falls back to it.

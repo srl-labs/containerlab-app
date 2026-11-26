@@ -2,20 +2,27 @@
  * Types text into a terminal session the way a person would: one line at a
  * time, each once the terminal has gone quiet. An interactive CLI that is
  * still starting, or still answering the previous line, may drop input sent
- * at it, so each line waits for the output to settle.
+ * at it, so each line waits for the output to settle. The first line also
+ * waits for the terminal to print something at all: a CLI that has shown
+ * nothing yet is not reading.
  */
 
 /** Quiet output before the first line, while a CLI may still be starting. */
 const FIRST_LINE_QUIET_MS = 1000;
 /** Quiet output before each later line: the previous line's echo and answer. */
 const LINE_QUIET_MS = 300;
-/** A line goes out after this much waiting, however busy the terminal is. */
+/**
+ * A line goes out after this much waiting on a connection that takes input,
+ * however busy the terminal is, or however silent before the first line.
+ */
 const MAX_LINE_WAIT_MS = 10000;
 const POLL_MS = 50;
 
 export interface TerminalTyperOptions {
   /** Sends input; false while the connection cannot take it, to try again later. */
   send: (data: string) => boolean;
+  /** Whether the connection takes input yet. Until it does, no line counts as waiting. */
+  ready?: () => boolean;
   now?: () => number;
   /** Calls back after `ms`; the returned function cancels it. */
   setTimer?: (callback: () => void, ms: number) => () => void;
@@ -37,6 +44,7 @@ export class TerminalTyper {
   private readonly now: () => number;
   private readonly setTimer: (callback: () => void, ms: number) => () => void;
   private lastActivityAt: number;
+  private sawOutput = false;
   private typedAny = false;
   private waitingSince: number | null = null;
   private cancelTimer: (() => void) | null = null;
@@ -50,6 +58,7 @@ export class TerminalTyper {
 
   /** The terminal printed something. */
   noteOutput(): void {
+    this.sawOutput = true;
     this.lastActivityAt = this.now();
   }
 
@@ -59,11 +68,13 @@ export class TerminalTyper {
     this.schedule(0);
   }
 
-  dispose(): void {
+  /** Stops typing and hands back the lines that did not go out, for a session that follows. */
+  dispose(): string[] {
     this.disposed = true;
-    this.queue.length = 0;
+    const unsent = this.queue.splice(0).map((line) => line.slice(0, -1));
     this.cancelTimer?.();
     this.cancelTimer = null;
+    return unsent;
   }
 
   private schedule(ms: number): void {
@@ -77,10 +88,17 @@ export class TerminalTyper {
   private pump(): void {
     const line = this.queue.at(0);
     if (line === undefined) return;
+    if (this.options.ready?.() === false) {
+      // A connection still opening has shown nothing of the terminal behind
+      // it, so the longest wait starts once it is there.
+      this.waitingSince = null;
+      this.schedule(POLL_MS);
+      return;
+    }
     const now = this.now();
     this.waitingSince ??= now;
     const quiet = this.typedAny ? LINE_QUIET_MS : FIRST_LINE_QUIET_MS;
-    const settled = now - this.lastActivityAt >= quiet;
+    const settled = (this.typedAny || this.sawOutput) && now - this.lastActivityAt >= quiet;
     const waitedEnough = now - this.waitingSince >= MAX_LINE_WAIT_MS;
     if ((!settled && !waitedEnough) || !this.options.send(line)) {
       this.schedule(POLL_MS);

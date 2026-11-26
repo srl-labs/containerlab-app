@@ -657,7 +657,8 @@ export function RuntimeTerminalPaneView({
         if (socket.readyState !== WebSocket.OPEN) return false;
         socket.send(JSON.stringify({ type: "input", data }));
         return true;
-      }
+      },
+      ready: () => socket.readyState === WebSocket.OPEN
     });
     const unsubscribeInput = subscribeTerminalInput(paneState.id, (text) => typer.type(text));
 
@@ -725,9 +726,9 @@ export function RuntimeTerminalPaneView({
     socket.onclose = (event) => {
       websocketRef.current = null;
       // This socket takes no more input: text sent from now on waits for the
-      // pane's next session, as it does while a pane connects.
+      // pane's next connection, as it does while a pane connects.
       unsubscribeInput();
-      typer.dispose();
+      const unsent = typer.dispose();
       if (sessionClosedRef.current) {
         return;
       }
@@ -740,6 +741,8 @@ export function RuntimeTerminalPaneView({
         return;
       }
       if (resumable) {
+        // The lines not typed yet go first once the pane is attached again.
+        runtimeUiActions.requeueTerminalInput(latestPane.id, sessionId, unsent);
         scheduleReconnect();
         return;
       }
@@ -753,7 +756,9 @@ export function RuntimeTerminalPaneView({
     return () => {
       sessionClosedRef.current = true;
       unsubscribeInput();
-      typer.dispose();
+      // A pane that only pauses its connection types the rest when it is back.
+      const unsent = typer.dispose();
+      if (!ended) runtimeUiActions.requeueTerminalInput(paneState.id, sessionId, unsent);
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
       socket.close();
       websocketRef.current = null;

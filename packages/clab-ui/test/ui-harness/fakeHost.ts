@@ -587,8 +587,9 @@ export function createFakeClabUiHost(
     },
 
     topology: {
-      async requestSnapshot() {
-        return core.getSnapshot();
+      async requestSnapshot(_context, options) {
+        // As the real hosts do: a reload reads the files again.
+        return options?.externalChange === true ? core.onExternalChange() : core.getSnapshot();
       },
 
       async dispatchCommand(_context, baseRevision, command): Promise<TopologyHostResponseMessage> {

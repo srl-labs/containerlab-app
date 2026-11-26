@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readGuideProgress, writeGuideProgress } from "./guideProgress";
+import {
+  guideProgress,
+  guideProgressKey,
+  readGuideProgress,
+  subscribeGuideProgress,
+  updateGuideProgress,
+  writeGuideProgress
+} from "./guideProgress";
 
 class MemoryStorage {
   readonly items = new Map<string, string>();
@@ -59,4 +66,36 @@ test("no storage means no progress, without errors", () => {
   };
   assert.deepEqual(readGuideProgress("lab/a.clab.md", failing), { step: 0, ticked: [] });
   assert.doesNotThrow(() => writeGuideProgress("lab/a.clab.md", { step: 1, ticked: [] }, failing));
+});
+
+test("progress changes without anything showing it, and is saved", () => {
+  const storage = new MemoryStorage();
+  const key = guideProgressKey("away", "away.clab.md");
+  let notified = 0;
+  const unsubscribe = subscribeGuideProgress(() => {
+    notified += 1;
+  });
+
+  assert.deepEqual(guideProgress(key, storage), { step: 0, ticked: [] });
+  updateGuideProgress(key, (current) => ({ ...current, ticked: [...current.ticked, "a-1"] }), storage);
+  assert.deepEqual(guideProgress(key, storage), { step: 0, ticked: ["a-1"] });
+  assert.deepEqual(readGuideProgress(key, storage), { step: 0, ticked: ["a-1"] });
+  assert.equal(notified, 1);
+
+  // The same object back means nothing changed: nobody is told, nothing is written.
+  const before = guideProgress(key, storage);
+  updateGuideProgress(key, (current) => current, storage);
+  assert.equal(guideProgress(key, storage), before);
+  assert.equal(notified, 1);
+
+  unsubscribe();
+  updateGuideProgress(key, (current) => ({ ...current, step: 2 }), storage);
+  assert.equal(notified, 1);
+  assert.equal(readGuideProgress(key, storage).step, 2);
+});
+
+test("progress works for the page without a browser to keep it in", () => {
+  const key = guideProgressKey("no-storage", "no-storage.clab.md");
+  updateGuideProgress(key, (current) => ({ ...current, ticked: ["b-1"] }), undefined);
+  assert.deepEqual(guideProgress(key, undefined).ticked, ["b-1"]);
 });

@@ -15,7 +15,8 @@ import { runningLabsProvider } from "../../../globals";
 import { connectionOf } from "../../../backend/labBackends";
 import { isClusterConnection } from "../../../backend/connections";
 import type { EndpointResult } from "@containerlab/clab-ui/session";
-import { shellTerminalName } from "../../../commands/nodeExec";
+import { isNodeShellTerminal, shellTerminalName } from "../../../commands/nodeExec";
+import { remoteTerminalAttached } from "../../../backend/remoteNode";
 
 import { formatErrorMessage, log } from "./logger";
 
@@ -24,9 +25,21 @@ const NEW_SHELL_SETTLE_MS = 3000;
 /** Between typed lines, so an interactive CLI answers one before the next. */
 const LINE_INTERVAL_MS = 300;
 const SHELL_OPEN_TIMEOUT_MS = 5000;
+/** How long a lab host gets to attach a terminal session before the text goes out anyway. */
+const REMOTE_ATTACH_TIMEOUT_MS = 15000;
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Waits for the promise, but no longer than the timeout. */
+async function settledWithin(promise: Promise<void>, timeoutMs: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, timeoutMs);
+  });
+  await Promise.race([promise, timeout]);
+  clearTimeout(timer);
 }
 
 function openTerminalNamed(name: string): vscode.Terminal | undefined {
@@ -294,6 +307,17 @@ class NodeCommandService {
       if (!terminal) {
         return { result: null, error: `No shell opened on ${nodeName}.` };
       }
+      // Only a terminal whose process is the node's shell gets the text: any
+      // other of that name, such as one renamed by hand, has a shell of this
+      // machine behind it, which would run the lines here.
+      if (!isNodeShellTerminal(terminal)) {
+        return {
+          result: null,
+          error: `The terminal "${name}" was not opened by Attach Shell, so nothing was typed into it. Close it and send the block again.`
+        };
+      }
+      // A lab host's session drops input until it is attached.
+      await settledWithin(remoteTerminalAttached(terminal), REMOTE_ATTACH_TIMEOUT_MS);
       if (!wasOpen) await wait(NEW_SHELL_SETTLE_MS);
       const lines = inputLines(text);
       for (const [index, line] of lines.entries()) {

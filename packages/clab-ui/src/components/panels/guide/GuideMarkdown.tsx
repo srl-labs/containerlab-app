@@ -10,10 +10,14 @@ import { MONO_FONT_FAMILY } from "../../../theme/typography";
 
 // The sanitizer drops unknown link schemes, so `node:` links travel as a hash.
 const NODE_LINK = /\]\(\s*node:([^)\s]+)\s*\)/g;
+// The same link as a reference definition: `[name]: node:srl1`.
+const NODE_REFERENCE = /^( {0,3}\[[^\]]+\]:[ \t]*)node:(\S+)/gm;
 const NODE_HASH = "#clab-node=";
 
 function withNodeLinks(text: string): string {
-  return text.replace(NODE_LINK, (_match, node: string) => `](${NODE_HASH}${encodeURIComponent(node)})`);
+  return text
+    .replace(NODE_LINK, (_match, node: string) => `](${NODE_HASH}${encodeURIComponent(node)})`)
+    .replace(NODE_REFERENCE, (_match, name: string, node: string) => `${name}${NODE_HASH}${encodeURIComponent(node)}`);
 }
 
 /**
@@ -76,15 +80,21 @@ const MARKDOWN_SX = {
   "& hr": { border: 0, borderTop: 1, borderColor: "divider" }
 } as const;
 
-export const GuideMarkdown: React.FC<{ text: string }> = ({ text }) => {
+/**
+ * `references` are the guide's link reference definitions: this text is one
+ * part of the guide, and its `[text][name]` links may be defined in another.
+ */
+export const GuideMarkdown: React.FC<{ text: string; references?: string }> = ({ text, references = "" }) => {
   const [loaded, setLoaded] = React.useState(() => getLoadedMarkdownRenderer() !== null);
   React.useEffect(() => {
     if (!loaded) void loadMarkdownRenderer().then(() => setLoaded(true));
   }, [loaded]);
   const content = React.useMemo(() => {
     const renderMarkdown = loaded ? getLoadedMarkdownRenderer() : null;
-    return renderMarkdown ? renderHtmlToReactNodes(renderMarkdown(withNodeLinks(text), { document: true })) : null;
-  }, [loaded, text]);
+    if (!renderMarkdown) return null;
+    const source = references === "" ? text : `${text}\n\n${references}`;
+    return renderHtmlToReactNodes(renderMarkdown(withNodeLinks(source), { document: true }));
+  }, [loaded, references, text]);
 
   // Plain text until the renderer has loaded.
   return (

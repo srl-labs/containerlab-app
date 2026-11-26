@@ -109,6 +109,51 @@ test("a fence in a list item drops its own indentation from the code", () => {
   assert.equal(block.code, "enter candidate\n  set / interface ethernet-1/1\ncommit now");
 });
 
+test("a fence indented as far as its list item's text is still a block", () => {
+  const fenced = (indent: string) => `${indent}\`\`\`srl terminal=srl1\n${indent}enter candidate\n${indent}  commit now\n${indent}\`\`\``;
+  for (const [item, indent] of [
+    ["- Configure:", "    "],
+    ["1. Configure:", "    "],
+    ["10. Configure:", "      "],
+    ["- Configure:", "\t"]
+  ]) {
+    const guide = parseGuide(`${item}\n\n${fenced(indent)}\n\n- Then check.`);
+    const block = guideCodeBlocks(guide).at(0);
+    assert.ok(block, `expected a block under "${item}" indented by ${JSON.stringify(indent)}`);
+    assert.equal(block.kind, "terminal");
+    assert.equal(block.code, "enter candidate\n  commit now");
+    assert.deepEqual(
+      guide.intro.map((part) => part.type),
+      ["markdown", "code", "markdown"]
+    );
+  }
+});
+
+test("a fence in a nested list item is a block, and the list ends with its indentation", () => {
+  const nested = "- Outer\n  - Inner:\n\n      ```sh exec=r1\n      uptime\n      ```\n";
+  assert.equal(codeBlock(nested).command, "uptime");
+  // Back at the margin the list is over: four spaces make an indented code block again.
+  const after = "- Item\n\nPlain text.\n\n    ```sh exec=r1\n    uptime\n    ```\n";
+  assert.deepEqual(guideCodeBlocks(parseGuide(after)), []);
+});
+
+test("a fence indented four spaces outside a list stays text", () => {
+  const guide = parseGuide("Indented code:\n\n    ```sh exec=r1\n    uptime\n    ```\n");
+  assert.deepEqual(guideCodeBlocks(guide), []);
+  assert.equal(guide.intro.length, 1);
+});
+
+test("link reference definitions count for the whole guide", () => {
+  const guide = parseGuide(
+    "See the [docs][clab].\n\n## One\n\nMore in the [docs][clab] and on [srl1][n1].\n\n## Links\n\n[clab]: https://containerlab.dev \"Containerlab\"\n[n1]: node:srl1\n"
+  );
+  assert.equal(guide.references, '[clab]: https://containerlab.dev "Containerlab"\n[n1]: node:srl1');
+  assert.deepEqual(guide.intro, [{ type: "markdown", text: "See the [docs][clab]." }]);
+  // A step holding only definitions has nothing left to show.
+  assert.deepEqual(guide.steps.map((step) => step.parts.length), [1, 0]);
+  assert.equal(parseGuide("Just text with [a link](https://example.com).").references, "");
+});
+
 test("an unclosed fence runs to the end of the guide", () => {
   assert.equal(codeBlock("```sh\nuptime\n## Later").code, "uptime\n## Later");
 });

@@ -26,8 +26,11 @@ const originalResolve = (Module as any)._resolveFilename;
   return originalResolve.call(this, request, parent, isMain, options);
 };
 
+import { attachShell } from "../../../src/commands/nodeExec";
 import { setRunningLabsProvider } from "../../../src/globals";
 import { nodeCommandService } from "../../../src/reactTopoViewer/extension/services/NodeCommandService";
+
+import type { StubTerminal } from "../../helpers/vscode-stub";
 
 const vscodeStub = require("../../helpers/vscode-stub");
 
@@ -56,6 +59,8 @@ const LAB = {
       name: "clab-capdist-client1",
       name_short: "client1",
       label: "client1",
+      cID: "client1-id",
+      kind: "linux",
       interfaces: [
         port("clab-s-82b47fe6", "eth2"),
         port("clab-s-d2115f7f", "eth1"),
@@ -373,23 +378,20 @@ describe("canvas ports of SR-SIM nodes in labs with another container prefix", (
 });
 
 describe("lab guide text typed into a node's shell", () => {
+  const SHELL = "Shell - clab-capdist-client1";
   let clock: sinon.SinonFakeTimers;
-  let typed: string[];
+  const terminals = (): StubTerminal[] => vscodeStub.window.terminals;
+  const typed = (): string[] => terminals().flatMap((terminal) => terminal.typed);
 
   beforeEach(() => {
     setRunningLabsProvider({
       discoverInspectLabs: async () => ({ capdist: LAB })
     } as any);
-    typed = [];
-    vscodeStub.window.terminals.length = 0;
-    // Attach Shell opens the node's terminal unless it is open already.
-    const terminals: Array<{ name: string; sendText(text: string): void }> = vscodeStub.window.terminals;
+    terminals().length = 0;
+    // The command as the extension registers it: Attach Shell on the node.
     sinon.stub(vscodeStub.commands, "executeCommand").callsFake(async (...args: unknown[]) => {
-      const [command, node] = args as [string, { name: string }];
-      if (command !== "containerlab.node.attachShell") return;
-      const name = `Shell - ${node.name}`;
-      if (terminals.some((terminal) => terminal.name === name)) return;
-      terminals.push({ name, sendText: (text) => typed.push(text) });
+      const [command, node] = args as [string, Parameters<typeof attachShell>[0]];
+      if (command === "containerlab.node.attachShell") attachShell(node);
     });
     clock = sinon.useFakeTimers();
   });
@@ -397,7 +399,7 @@ describe("lab guide text typed into a node's shell", () => {
   afterEach(() => {
     clock.restore();
     sinon.restore();
-    vscodeStub.window.terminals.length = 0;
+    terminals().length = 0;
   });
 
   it("types a second block after the first, into the shell the first opened", async () => {
@@ -407,7 +409,60 @@ describe("lab guide text typed into a node's shell", () => {
 
     const results = await Promise.all([first, second]);
     expect(results.map((result) => result.error)).to.deep.equal([null, null]);
-    expect(typed).to.deep.equal(["enter candidate", "commit now", "show version"]);
-    expect(vscodeStub.window.terminals).to.have.length(1);
+    expect(typed()).to.deep.equal(["enter candidate", "commit now", "show version"]);
+    expect(terminals().map((terminal) => terminal.name)).to.deep.equal([SHELL]);
+  });
+
+  it("opens the node's shell as the terminal's own process", async () => {
+    const sent = nodeCommandService.sendTerminalInput("client1", "uptime", YAML_PATH);
+    await clock.tickAsync(10_000);
+    expect((await sent).error).to.equal(null);
+
+    // Nothing of this machine is left in the terminal once the node's shell
+    // ends: its process is the launcher of that one command.
+    const [terminal] = terminals();
+    const { shellPath, shellArgs } = terminal.creationOptions as { shellPath: string; shellArgs: string[] };
+    expect(shellPath).to.equal("/bin/sh");
+    expect(shellArgs[0]).to.equal("-c");
+    expect(shellArgs[1]).to.match(/^exit 0$/m);
+    expect(shellArgs.slice(2)).to.deep.equal(["clab-node-shell", "docker exec -it client1-id sh"]);
+  });
+
+  it("types nothing into a terminal of that name that Attach Shell did not open", async () => {
+    // Such as an ordinary terminal renamed by hand: this machine's shell would run the lines.
+    const own = vscodeStub.window.createTerminal({ name: SHELL });
+    const sent = nodeCommandService.sendTerminalInput("client1", "rm -rf /etc/frr", YAML_PATH);
+    await clock.tickAsync(30_000);
+
+    expect((await sent).error).to.match(/was not opened by Attach Shell/);
+    expect(own.typed).to.deep.equal([]);
+    expect(terminals()).to.have.length(1);
+  });
+
+  it("gives a shell that ended a new terminal instead of typing into the old one", async () => {
+    const first = nodeCommandService.sendTerminalInput("client1", "show version", YAML_PATH);
+    await clock.tickAsync(10_000);
+    await first;
+    const [ended] = terminals();
+    ended.exitStatus = { code: 0 };
+
+    const second = nodeCommandService.sendTerminalInput("client1", "show interface", YAML_PATH);
+    await clock.tickAsync(10_000);
+    expect((await second).error).to.equal(null);
+    expect(ended.typed).to.deep.equal(["show version"]);
+    expect(terminals()).to.have.length(2);
+    expect(terminals()[1].typed).to.deep.equal(["show interface"]);
+  });
+
+  it("stops typing when the shell closes part way through", async () => {
+    const sent = nodeCommandService.sendTerminalInput("client1", "one\ntwo\nthree", YAML_PATH);
+    await clock.tickAsync(3_100);
+    const [terminal] = terminals();
+    expect(terminal.typed).to.deep.equal(["one"]);
+    terminal.exitStatus = { code: 0 };
+    await clock.tickAsync(10_000);
+
+    expect((await sent).error).to.match(/closed before the text was typed/);
+    expect(terminal.typed).to.deep.equal(["one"]);
   });
 });

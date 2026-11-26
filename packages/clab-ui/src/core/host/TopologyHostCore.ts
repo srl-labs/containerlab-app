@@ -349,7 +349,8 @@ export class TopologyHostCore implements TopologyHost {
     } else if (this.historyMergeUntil !== null && now > this.historyMergeUntil) {
       this.historyMergeUntil = null;
     }
-    this.future = [];
+    // A new guide changes nothing an undone edit was made on, so redo stays.
+    if (command.command !== "createGuide") this.future = [];
     this.revision += 1;
     this.snapshot = await this.buildSnapshot();
     this.markDirtyIfYamlChanged(beforeState.yamlContent, this.snapshot);
@@ -367,6 +368,11 @@ export class TopologyHostCore implements TopologyHost {
     return runDocumentOperation(this.documentKey, () => this.onExternalChangeUnlocked());
   }
 
+  /** The snapshot as it is now: after an `await` it may be gone, whatever was checked before. */
+  private cachedSnapshot(): TopologySnapshot | null {
+    return this.snapshot;
+  }
+
   private async onExternalChangeUnlocked(): Promise<TopologySnapshot> {
     this.baseFs.invalidateCache?.();
     this.guide = null;
@@ -381,7 +387,10 @@ export class TopologyHostCore implements TopologyHost {
       ) {
         // The guide is read-only here: a new version of it keeps the revision and history.
         const guide = await this.loadGuide();
-        if (guide?.content !== this.snapshot.guide?.content) this.snapshot = { ...this.snapshot, guide };
+        // `updateContext` drops the snapshot outside this queue, and may have
+        // while the files were read: build it again, for the same documents.
+        const snapshot = this.cachedSnapshot() ?? (await this.buildSnapshot());
+        this.snapshot = guide?.content === snapshot.guide?.content ? snapshot : { ...snapshot, guide };
         return this.snapshot;
       }
     }

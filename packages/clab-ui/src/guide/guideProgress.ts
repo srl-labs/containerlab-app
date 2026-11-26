@@ -2,6 +2,9 @@
  * A reader's place in a lab guide: the step they are on and the blocks they
  * ticked. It stays in this browser, per lab and guide file, and needs nothing
  * from the host.
+ *
+ * The page keeps each guide's progress here rather than in the Guide tab, so
+ * a block that finishes while the tab is away still gets its checkmark.
  */
 import { isRecord } from "../core/utilities/typeHelpers";
 
@@ -59,4 +62,39 @@ export function writeGuideProgress(key: string, progress: GuideProgress, storage
   } catch {
     /* Storage may be full or unavailable; the guide then starts over next time. */
   }
+}
+
+const live = new Map<string, GuideProgress>();
+const listeners = new Set<() => void>();
+
+/** The progress of a guide as this page has it: read from the browser once, then kept here. */
+export function guideProgress(key: string, storage = defaultStorage()): GuideProgress {
+  let progress = live.get(key);
+  if (progress === undefined) {
+    progress = readGuideProgress(key, storage);
+    live.set(key, progress);
+  }
+  return progress;
+}
+
+/** Changes a guide's progress, saves it and tells whoever shows it. */
+export function updateGuideProgress(
+  key: string,
+  update: (current: GuideProgress) => GuideProgress,
+  storage = defaultStorage()
+): void {
+  const current = guideProgress(key, storage);
+  const next = update(current);
+  if (next === current) return;
+  live.set(key, next);
+  writeGuideProgress(key, next, storage);
+  for (const listener of listeners) listener();
+}
+
+/** Calls back when any guide's progress changes; the returned function stops that. */
+export function subscribeGuideProgress(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }

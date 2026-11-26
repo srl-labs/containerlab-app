@@ -12,7 +12,7 @@ srl-pair.clab.md
 
 When you open the topology, the side panel switches to its **Guide** tab. The guide works the same in the web app, the desktop app and VS Code. In the browser sandbox, which runs no labs, its blocks can be copied but not run.
 
-A lab without a guide shows how to start one in the same tab: **Create guide** writes a first guide with the lab's own node names and opens it in your editor. It never replaces a file that is already there, and it waits until the lab is unlocked.
+A lab without a guide shows how to start one in the same tab: **Create guide** writes a first guide with the lab's own node names and opens it in your editor. Its example commands fit the nodes: `show version` for a node whose shell is a network OS CLI, shell commands for the others. It never replaces a file that is already there, and it waits until the lab is unlocked.
 
 ## An example
 
@@ -59,6 +59,10 @@ commit now
 
 The rest is plain Markdown, and other tools show these attributes as part of an ordinary code block. A guide reads the same on GitHub and in an editor preview.
 
+A block can sit in a list item, indented as far as the item's text. Links named by reference, `[the docs][clab]` with `[clab]: https://containerlab.dev` anywhere in the file, work in every step, also for nodes: `[r1]: node:srl1`.
+
+Text is shown as you wrote it. Emoji shortcodes such as `:rocket:` and smart punctuation are left alone, so `2001:db8:a:b::1`, `00:de:ad:be:ef:00` and `--force` keep their characters. Type an emoji itself to show one.
+
 ### Exec or terminal
 
 `containerlab exec` runs one command without a shell. An `exec=` block therefore holds one command; end a line with `\` to continue it on the next. Pipes, redirects and `&&` need a shell of their own:
@@ -67,7 +71,9 @@ The rest is plain Markdown, and other tools show these attributes as part of an 
 sh -c 'ip -br addr | grep ethernet'
 ```
 
-Use `terminal=` for interactive CLIs and for several commands in a row, such as entering configuration mode, changing the configuration and committing. The lines are typed one at a time. In web and desktop each line waits until the terminal has gone quiet, so a CLI that is still starting doesn't lose it. VS Code can't see what a terminal prints, so a shell it has just opened gets three seconds to start, and lines go out 300 ms apart.
+Use `terminal=` for interactive CLIs and for several commands in a row, such as entering configuration mode, changing the configuration and committing. The lines are typed one at a time. In web and desktop the first line waits until the terminal has printed something and each line waits until it has gone quiet, so a CLI that is still starting doesn't lose them. VS Code can't see what a terminal prints, so a shell it has just opened gets three seconds to start, and lines go out 300 ms apart.
+
+The lines only ever go to the node's shell. When that shell has ended, **Send** opens a new one for them. In VS Code, the terminal **Attach Shell** opens is the node's shell and nothing else: it closes when the shell ends, so no line of a guide is typed into a shell on your own computer. A terminal of the same name that Attach Shell did not open gets nothing typed into it.
 
 An `exec=` block waits for its command to end, then shows the output; it has no Stop button. Give commands an end, such as `ping -c 3` or `timeout 10 …`. A command that never ends shows "Running" until the app gives up after 10 minutes, and keeps running on the node afterwards. Put commands you want to watch, like a ping while you change the configuration, in a `terminal=` block as its last line, and stop them with Ctrl+C:
 
