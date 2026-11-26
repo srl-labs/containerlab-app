@@ -17,6 +17,7 @@ import {
 } from "../../messaging/webviewMessageBus";
 import { useGraphStore } from "../../stores/graphStore";
 import { useNodeStatsStore } from "../../stores/nodeStatsStore";
+import { useTopoViewerStore } from "../../stores/topoViewerStore";
 import { MSG_NODE_STATS_UPDATE } from "../../core/messages/webview";
 import type { HostNodeStatsSample } from "../../host/contracts";
 import { applySnapshotToStores } from "../../services/topologyHostSync";
@@ -73,7 +74,7 @@ interface NodeStatsUpdateMessage {
 }
 
 type ExtensionMessage =
-  | { type: "topology-host:snapshot"; snapshot?: TopologySnapshot }
+  | { type: "topology-host:snapshot"; snapshot?: TopologySnapshot; reason?: string }
   | EdgeStatsUpdateMessage
   | NodeDataUpdateMessage
   | NodeStatsUpdateMessage
@@ -93,7 +94,7 @@ function toStringValue(value: unknown): string {
 
 function isTopologySnapshotMessage(
   message: ExtensionMessage
-): message is { type: "topology-host:snapshot"; snapshot: TopologySnapshot } {
+): message is { type: "topology-host:snapshot"; snapshot: TopologySnapshot; reason?: string } {
   return (
     message.type === "topology-host:snapshot" &&
     "snapshot" in message &&
@@ -160,13 +161,32 @@ function applyEdgeStatsToEdge(
   return buildEdgeWithExtraData(edge, mergedExtraData, update.classes);
 }
 
+/**
+ * Whether the host reports a file change that left the topology as the view
+ * has it: only the lab guide beside it changed.
+ */
+function isGuideOnlyChange(
+  snapshot: TopologySnapshot,
+  reason: string | undefined,
+  sessionClient: ReturnType<typeof useTopologySessionClient>
+): boolean {
+  if (reason !== "external-change" || snapshot.revision !== sessionClient.getRevision()) return false;
+  const shown = useTopoViewerStore.getState();
+  return snapshot.yamlContent === shown.yamlContent && snapshot.annotationsContent === shown.annotationsContent;
+}
+
 function handleSnapshotMessage(
-  msg: { snapshot?: TopologySnapshot },
+  msg: { snapshot?: TopologySnapshot; reason?: string },
   sessionClient: ReturnType<typeof useTopologySessionClient>
 ): void {
-  if (msg.snapshot) {
-    applySnapshotToStores(msg.snapshot, {}, sessionClient);
+  if (!msg.snapshot) return;
+  if (isGuideOnlyChange(msg.snapshot, msg.reason, sessionClient)) {
+    // Saving the guide must not redraw the canvas: that drops the selection
+    // and a drag under way, each time an editor with auto-save writes the file.
+    useTopoViewerStore.setState({ guide: msg.snapshot.guide ?? null });
+    return;
   }
+  applySnapshotToStores(msg.snapshot, {}, sessionClient);
 }
 
 function handleEdgeStatsUpdateMessage(msg: EdgeStatsUpdateMessage): void {

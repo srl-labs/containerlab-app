@@ -6,6 +6,7 @@ import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
+import { shallow } from "zustand/shallow";
 
 import { useGraphStore } from "../../../stores/graphStore";
 import { controlRadius } from "../../../theme/surfaces";
@@ -43,16 +44,19 @@ export function useOperationRun<T>(): [RunState<T>, (request: Promise<T>) => voi
 }
 
 /** Topology node names, sorted, without networks and annotations. */
+function topologyNodeNames(nodes: ReadonlyArray<{ id: string; type?: string }>): string[] {
+  return nodes
+    .filter((node) => node.type === "topology-node")
+    .map((node) => node.id)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * The topology's node names, as a list that changes only with them: moving or
+ * selecting a node, which replaces the graph's nodes, re-renders nothing.
+ */
 export function useTopologyNodeNames(): string[] {
-  const nodes = useGraphStore((state) => state.nodes);
-  return React.useMemo(
-    () =>
-      nodes
-        .filter((node) => node.type === "topology-node")
-        .map((node) => node.id)
-        .sort((a, b) => a.localeCompare(b)),
-    [nodes]
-  );
+  return useGraphStore((state) => topologyNodeNames(state.nodes), shallow);
 }
 
 export const NodePicker: React.FC<{

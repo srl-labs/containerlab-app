@@ -516,6 +516,9 @@ export function createFakeClabUiHost(
           for (const nodeName of nodeNames) await fakeLifecycle.nodeAction(action, nodeName);
         })();
       },
+      sendNodeTerminalInput(nodeName, text) {
+        recordHarnessMessage({ command: "clab-node-terminal-input", nodeName, text });
+      },
       labOperations: harnessLabOperations,
       labHost: () => harnessLabOperations.hostInfo(),
       captureInterface(nodeName, interfaceName, options = {}) {
@@ -584,8 +587,9 @@ export function createFakeClabUiHost(
     },
 
     topology: {
-      async requestSnapshot() {
-        return core.getSnapshot();
+      async requestSnapshot(_context, options) {
+        // As the real hosts do: a reload reads the files again.
+        return options?.externalChange === true ? core.onExternalChange() : core.getSnapshot();
       },
 
       async dispatchCommand(_context, baseRevision, command): Promise<TopologyHostResponseMessage> {

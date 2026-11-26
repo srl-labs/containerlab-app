@@ -36,6 +36,7 @@ nav = [
     { "Run a lab" = "guides/labs.md" },
     { "Fabric view" = "guides/fabric.md" },
     { "Script buttons" = "guides/script-buttons.md" },
+    { "Lab guides" = "guides/lab-guides.md" },
     { "Labs on Kubernetes" = "guides/kubernetes.md" },
     { "Troubleshoot" = "guides/troubleshooting.md" },
     { "Shared labs" = "guides/shared-labs.md" },

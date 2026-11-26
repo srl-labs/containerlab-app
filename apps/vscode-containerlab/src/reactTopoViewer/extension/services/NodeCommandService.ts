@@ -15,8 +15,53 @@ import { runningLabsProvider } from "../../../globals";
 import { connectionOf } from "../../../backend/labBackends";
 import { isClusterConnection } from "../../../backend/connections";
 import type { EndpointResult } from "@containerlab/clab-ui/session";
+import { isNodeShellTerminal, shellTerminalName } from "../../../commands/nodeExec";
+import { remoteTerminalAttached } from "../../../backend/remoteNode";
 
 import { formatErrorMessage, log } from "./logger";
+
+/** How long a shell Attach Shell just opened gets to connect and start its CLI. */
+const NEW_SHELL_SETTLE_MS = 3000;
+/** Between typed lines, so an interactive CLI answers one before the next. */
+const LINE_INTERVAL_MS = 300;
+const SHELL_OPEN_TIMEOUT_MS = 5000;
+/** How long a lab host gets to attach a terminal session before the text goes out anyway. */
+const REMOTE_ATTACH_TIMEOUT_MS = 15000;
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Waits for the promise, but no longer than the timeout. */
+async function settledWithin(promise: Promise<void>, timeoutMs: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, timeoutMs);
+  });
+  await Promise.race([promise, timeout]);
+  clearTimeout(timer);
+}
+
+function openTerminalNamed(name: string): vscode.Terminal | undefined {
+  return vscode.window.terminals.find(
+    (terminal) => terminal.name === name && terminal.exitStatus === undefined
+  );
+}
+
+async function waitForTerminal(name: string): Promise<vscode.Terminal | undefined> {
+  for (let waited = 0; waited < SHELL_OPEN_TIMEOUT_MS; waited += 100) {
+    const terminal = openTerminalNamed(name);
+    if (terminal) return terminal;
+    await wait(100);
+  }
+  return openTerminalNamed(name);
+}
+
+/** The text as lines to type; trailing empty lines go. */
+function inputLines(text: string): string[] {
+  const body = text.replace(/\r\n?/g, "\n").replace(/\n+$/, "");
+  return body === "" ? [] : body.split("\n");
+}
 
 /**
  * Type guard to check if a value is a valid ClabLabTreeNode.
@@ -220,6 +265,82 @@ class NodeCommandService {
       return 1;
     }
     return 2;
+  }
+
+  /** Guide text each node's shell is still being given, so the next block waits its turn. */
+  private readonly terminalInputs = new Map<string, Promise<unknown>>();
+
+  /**
+   * Types a lab guide's terminal block into the node's shell, opening it first
+   * as Attach Shell does. VS Code cannot read what a terminal prints, so a new
+   * shell gets a moment to start and the lines go out at a typing pace.
+   *
+   * Blocks for one node go out one after the other: a second block would
+   * otherwise find the shell the first just opened and type into it before
+   * the first block, while the shell is still starting.
+   */
+  sendTerminalInput(nodeName: string, text: string, yamlFilePath: string): Promise<EndpointResult> {
+    const key = `${yamlFilePath}\n${nodeName}`;
+    const typed = (this.terminalInputs.get(key) ?? Promise.resolve()).then(() =>
+      this.typeIntoShell(nodeName, text, yamlFilePath)
+    );
+    this.terminalInputs.set(key, typed);
+    void typed.then(() => {
+      if (this.terminalInputs.get(key) === typed) this.terminalInputs.delete(key);
+    });
+    return typed;
+  }
+
+  private async typeIntoShell(
+    nodeName: string,
+    text: string,
+    yamlFilePath: string
+  ): Promise<EndpointResult> {
+    try {
+      const node =
+        (await this.getContainerNode(nodeName, yamlFilePath)) ??
+        createDefaultContainerNode(nodeName);
+      const name = shellTerminalName(node);
+      const wasOpen = openTerminalNamed(name) !== undefined;
+      await vscode.commands.executeCommand("containerlab.node.attachShell", node);
+      const terminal = await waitForTerminal(name);
+      if (!terminal) {
+        return { result: null, error: `No shell opened on ${nodeName}.` };
+      }
+      // Only a terminal whose process is the node's shell gets the text: any
+      // other of that name, such as one renamed by hand, has a shell of this
+      // machine behind it, which would run the lines here.
+      if (!isNodeShellTerminal(terminal)) {
+        return {
+          result: null,
+          error: `The terminal "${name}" was not opened by Attach Shell, so nothing was typed into it. Close it and send the block again.`
+        };
+      }
+      // A lab host's session drops input until it is attached.
+      await settledWithin(remoteTerminalAttached(terminal), REMOTE_ATTACH_TIMEOUT_MS);
+      if (!wasOpen) await wait(NEW_SHELL_SETTLE_MS);
+      const lines = inputLines(text);
+      for (const [index, line] of lines.entries()) {
+        if (index > 0) await wait(LINE_INTERVAL_MS);
+        // The shell may have closed while the lines went out.
+        if (terminal.exitStatus !== undefined) {
+          return {
+            result: null,
+            error: `The shell on ${nodeName} closed before the text was typed.`
+          };
+        }
+        terminal.sendText(line, true);
+      }
+      return {
+        result: `Typed ${lines.length} line${lines.length === 1 ? "" : "s"} into the shell of ${nodeName}`,
+        error: null
+      };
+    } catch (error) {
+      return {
+        result: null,
+        error: `Error typing into the shell of ${nodeName}: ${formatErrorMessage(error)}`
+      };
+    }
   }
 
   /**

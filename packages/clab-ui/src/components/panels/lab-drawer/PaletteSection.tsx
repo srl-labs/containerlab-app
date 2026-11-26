@@ -17,6 +17,7 @@ import HubIcon from "@mui/icons-material/HubOutlined";
 import LanIcon from "@mui/icons-material/LanOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import PowerIcon from "@mui/icons-material/PowerOutlined";
+import RefreshIcon from "@mui/icons-material/RefreshOutlined";
 import RemoveIcon from "@mui/icons-material/RemoveOutlined";
 import SaveIcon from "@mui/icons-material/SaveOutlined";
 import SearchIcon from "@mui/icons-material/SearchOutlined";
@@ -73,6 +74,9 @@ import { preloadMonacoCodeEditor } from "../../monaco/preloadMonacoCodeEditor";
 import type { LabFileLinks } from "../../monaco/labFileLinks";
 import type { MonacoEditDetails, MonacoSelection } from "../../monaco/MonacoCodeEditor";
 import { useTopologyFileLinks } from "../../../hooks/editor/useLabFiles";
+import { refreshTopologySnapshot } from "../../../services/topologyHostCommands";
+import { GuideEmptyState } from "../guide/GuideEmptyState";
+import { GuideTab } from "../guide/GuideTab";
 
 interface PaletteSectionProps {
   mode?: "edit" | "view";
@@ -593,6 +597,7 @@ const DraggableAnnotation: React.FC<DraggableAnnotationProps> = ({ label, icon, 
 const PALETTE_TABS: TabDefinition[] = [
   { id: "info", label: "Info" },
   { id: "edit", label: "Edit" },
+  { id: "guide", label: "Guide" },
   { id: "nodes", label: "Nodes" },
   { id: "annotations", label: "Annotations" },
   { id: "yaml", label: "YAML" },
@@ -628,6 +633,9 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
   const annotationsFileName = useTopoViewerStore((state) => state.annotationsFileName);
   const yamlContent = useTopoViewerStore((state) => state.yamlContent);
   const annotationsContent = useTopoViewerStore((state) => state.annotationsContent);
+  const guide = useTopoViewerStore((state) => state.guide);
+  const guideFileName = guide?.fileName;
+  const topologyScope = useTopoViewerStore((state) => state.topologyScope);
   const [filter, setFilter] = useState("");
   const isViewMode = mode === "view";
   const nudgeLock = useTopoViewerStore((state) => state.nudgeLock);
@@ -705,11 +713,28 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
     if (showEditTab) setUserTab("edit");
   }, [editorRequest, showEditTab]);
 
+  // Each topology opens on its guide when it has one; without one, not on the Guide tab.
+  // A file name alone does not tell topologies apart, so the host session counts
+  // too; both come with the guide, in the same snapshot.
+  const openedTopology = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const topology = JSON.stringify([topologyScope, yamlFileName]);
+    if (topology === openedTopology.current) return;
+    openedTopology.current = topology;
+    if (guideFileName !== undefined && disabledTabIds?.includes("guide") !== true) {
+      setUserTab("guide");
+    } else {
+      setUserTab((current) => (current === "guide" ? "nodes" : current));
+    }
+  }, [disabledTabIds, guideFileName, topologyScope, yamlFileName]);
+
   // Fall back to the first visible tab when current tab is no longer visible.
+  // The Guide tab is always there, but only a lab with a guide falls back to it.
   useEffect(() => {
     if (visibleTabs.some((t) => t.id === userTab)) return;
-    setUserTab(visibleTabs[0]?.id ?? "");
-  }, [visibleTabs, userTab]);
+    const fallback = visibleTabs.find((t) => t.id !== "guide" || guideFileName !== undefined);
+    setUserTab(fallback?.id ?? "");
+  }, [guideFileName, visibleTabs, userTab]);
 
   const activeTab = userTab;
 
@@ -752,6 +777,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
 
   const [yamlError, setYamlError] = useState<string | null>(null);
   const [annotationsError, setAnnotationsError] = useState<string | null>(null);
+  const [guideReloadError, setGuideReloadError] = useState<string | null>(null);
   // Drafts live in the edit history store, so undo can put them back from anywhere.
   const yamlDraftState = useEditHistoryStore((state) => state.drafts.yaml);
   const annotationsDraftState = useEditHistoryStore((state) => state.drafts.json);
@@ -771,7 +797,15 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
 
   useEffect(() => {
     setYamlError(null);
+    setGuideReloadError(null);
   }, [yamlFileName]);
+
+  const handleReloadGuide = useCallback(() => {
+    setGuideReloadError(null);
+    void refreshTopologySnapshot({ externalChange: true }, sessionClient).catch((err: unknown) => {
+      setGuideReloadError(err instanceof Error ? err.message : String(err));
+    });
+  }, [sessionClient]);
 
   useEffect(() => {
     setAnnotationsError(null);
@@ -840,6 +874,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
   const drawerTitle = useMemo(() => {
     if (activeTab === "info") return infoTabTitle ?? "Properties";
     if (activeTab === "edit") return editTabTitle ?? "Editor";
+    if (activeTab === "guide") return "Lab Guide";
     if (activeTab === "nodes" || activeTab === "annotations") return "Palette";
     if (activeTab === "yaml") return yamlFileName || "Topology";
     if (activeTab === "json") return annotationsFileName || "Annotations";
@@ -889,6 +924,26 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
           </IconButton>
         )}
         {isSourceTab(activeTab) && isSourceReadOnly && <ReadOnlyLabel />}
+        {activeTab === "guide" && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
+            {topoViewer.openLabFile && guideFileName !== undefined && (
+              <Tooltip title="Edit the guide file">
+                <IconButton
+                  size="small"
+                  onClick={() => topoViewer.openLabFile?.({ path: guideFileName })}
+                  data-testid="guide-open-file"
+                >
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+            <Tooltip title="Reload the guide">
+              <IconButton size="small" onClick={handleReloadGuide} data-testid="guide-reload">
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
         {activeTab === "yaml" && !isSourceReadOnly && (
           <IconButton
             size="small"
@@ -1143,6 +1198,13 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
       {activeTab === "info" && (
         <Box sx={{ flex: 1, overflow: "auto", minHeight: 0 }}>{infoTabContent}</Box>
       )}
+
+      {activeTab === "guide" && guideReloadError !== null && (
+        <Typography variant="caption" color="error" sx={{ px: 2, py: 0.5 }} data-testid="guide-reload-error">
+          Could not reload the guide: {guideReloadError}
+        </Typography>
+      )}
+      {activeTab === "guide" && (guide ? <GuideTab guide={guide} /> : <GuideEmptyState />)}
 
       {activeTab === "edit" && (
         <Box sx={{ flex: 1, overflow: "auto", minHeight: 0 }}>{editTabContent}</Box>

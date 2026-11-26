@@ -10,7 +10,7 @@ const MAX_POLLS = 150;
 // Lets the fit of a newly opened lab finish before centering on the node.
 const SETTLE_POLLS = 3;
 
-/** Selects and centers the requested node once the canvas has drawn it. */
+/** Centers the requested node once the canvas has drawn it, and selects it unless asked not to. */
 export function useFocusNodeRequest(rfInstance: ReactFlowInstance | null): void {
   const request = useCanvasStore((state) => state.focusNodeRequest);
 
@@ -23,7 +23,7 @@ export function useFocusNodeRequest(rfInstance: ReactFlowInstance | null): void 
       if ((rfInstance.getNode(request.nodeId)?.measured?.width ?? 0) > 0) drawnPolls += 1;
       if (drawnPolls >= SETTLE_POLLS) {
         window.clearInterval(timer);
-        useTopoViewerStore.getState().selectNode(request.nodeId);
+        if (request.select) useTopoViewerStore.getState().selectNode(request.nodeId);
         void rfInstance.fitView({ nodes: [{ id: request.nodeId }], padding: 1, maxZoom: 1.25, duration: 200 });
         useCanvasStore.getState().clearFocusNodeRequest(request.requestId);
       } else if (polls >= MAX_POLLS) {

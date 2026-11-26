@@ -749,3 +749,166 @@ test("history steps keep their numbers between undo and redo", async () => {
   const external = await host.onExternalChange();
   assert.deepEqual(historyOf(external), { scope: historyOf(initial).scope, undo: [], redo: [] });
 });
+
+test("the snapshot carries the lab guide beside the topology", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/demo.clab.yml";
+  await fs.writeFile(yamlFilePath, BASE_YAML);
+  await fs.writeFile("/labs/demo.clab.md", "# Demo guide\n");
+  const host = new TopologyHostCore({ fs, yamlFilePath, mode: "edit", deploymentState: "undeployed" });
+
+  const snapshot = await host.getSnapshot();
+  assert.deepEqual(snapshot.guide, { fileName: "demo.clab.md", content: "# Demo guide\n" });
+});
+
+test("a topology without a guide has none in its snapshot", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/plain.clab.yaml";
+  await fs.writeFile(yamlFilePath, BASE_YAML);
+  const host = new TopologyHostCore({ fs, yamlFilePath, mode: "edit", deploymentState: "undeployed" });
+
+  const snapshot = await host.getSnapshot();
+  assert.equal(snapshot.guide, undefined);
+});
+
+test("an edited guide reloads without a new revision or a lost history", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/demo.clab.yml";
+  await fs.writeFile(yamlFilePath, BASE_YAML);
+  await fs.writeFile("/labs/demo.clab.md", "## Step one\n");
+  const host = new TopologyHostCore({ fs, yamlFilePath, mode: "edit", deploymentState: "undeployed" });
+  const initial = await host.getSnapshot();
+  const edited = await apply(host, initial.revision, {
+    command: "setYamlContent",
+    payload: { content: CHANGED_YAML }
+  });
+
+  await fs.writeFile("/labs/demo.clab.md", "## Step one\n\n## Step two\n");
+  const reloaded = await host.onExternalChange();
+  assert.equal(reloaded.guide?.content, "## Step one\n\n## Step two\n");
+  assert.equal(reloaded.revision, edited.snapshot.revision);
+  assert.equal(reloaded.canUndo, true);
+
+  await fs.unlink("/labs/demo.clab.md");
+  const removed = await host.onExternalChange();
+  assert.equal(removed.guide, undefined);
+});
+
+test("createGuide writes the guide beside the topology, outside the undo history", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/demo.clab.yml";
+  await fs.writeFile(yamlFilePath, BASE_YAML);
+  const host = new TopologyHostCore({ fs, yamlFilePath, mode: "view", deploymentState: "deployed" });
+  const initial = await host.getSnapshot();
+
+  const created = await apply(host, initial.revision, {
+    command: "createGuide",
+    payload: { content: "## First step\n" }
+  });
+  assert.equal(await fs.readFile("/labs/demo.clab.md"), "## First step\n");
+  assert.deepEqual(created.snapshot.guide, { fileName: "demo.clab.md", content: "## First step\n" });
+  assert.equal(created.snapshot.canUndo, false);
+  assert.equal(await fs.readFile(yamlFilePath), BASE_YAML);
+});
+
+test("createGuide leaves an undone edit to redo", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/demo.clab.yml";
+  await fs.writeFile(yamlFilePath, BASE_YAML);
+  const host = new TopologyHostCore({ fs, yamlFilePath, mode: "edit", deploymentState: "undeployed" });
+  const initial = await host.getSnapshot();
+  const edited = await apply(host, initial.revision, {
+    command: "setYamlContent",
+    payload: { content: CHANGED_YAML }
+  });
+  const undone = await apply(host, edited.snapshot.revision, { command: "undo" });
+  assert.equal(undone.snapshot.canRedo, true);
+
+  const created = await apply(host, undone.snapshot.revision, {
+    command: "createGuide",
+    payload: { content: "## First step\n" }
+  });
+  assert.equal(created.snapshot.canRedo, true);
+  const redone = await apply(host, created.snapshot.revision, { command: "redo" });
+  assert.equal(await fs.readFile(yamlFilePath), CHANGED_YAML);
+  assert.equal(redone.snapshot.guide?.content, "## First step\n");
+});
+
+test("a reload survives the snapshot being dropped while the guide is read", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/demo.clab.yml";
+  await fs.writeFile(yamlFilePath, BASE_YAML);
+  await fs.writeFile("/labs/demo.clab.md", "## Step one\n");
+  const host = new TopologyHostCore({ fs, yamlFilePath, mode: "edit", deploymentState: "undeployed" });
+  const initial = await host.getSnapshot();
+
+  // The guide read waits, as on a slow lab host, until the test lets it go.
+  const readFile = fs.readFile.bind(fs);
+  let releaseGuide: () => void = () => undefined;
+  let guideRequested: () => void = () => undefined;
+  const requested = new Promise<void>((resolve) => (guideRequested = resolve));
+  const released = new Promise<void>((resolve) => (releaseGuide = resolve));
+  fs.readFile = async (filePath: string) => {
+    if (filePath === "/labs/demo.clab.md") {
+      guideRequested();
+      await released;
+    }
+    return readFile(filePath);
+  };
+  await fs.writeFile("/labs/demo.clab.md", "## Step one\n\n## Step two\n");
+
+  const reload = host.onExternalChange();
+  await requested;
+  // The lab was deployed meanwhile: the host drops its snapshot outside the queue.
+  host.updateContext({ deploymentState: "deployed" });
+  releaseGuide();
+
+  const reloaded = await reload;
+  assert.equal(reloaded.guide?.content, "## Step one\n\n## Step two\n");
+  assert.equal(reloaded.deploymentState, "deployed");
+  assert.equal(reloaded.revision, initial.revision);
+});
+
+test("createGuide never replaces a guide", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/demo.clab.yml";
+  await fs.writeFile(yamlFilePath, BASE_YAML);
+  await fs.writeFile("/labs/demo.clab.md", "mine\n");
+  const host = new TopologyHostCore({ fs, yamlFilePath, mode: "edit", deploymentState: "undeployed" });
+  const initial = await host.getSnapshot();
+
+  const response = await host.applyCommand(
+    { command: "createGuide", payload: { content: "template\n" } },
+    initial.revision
+  );
+  if (response.type !== "topology-host:error") throw new Error("Expected an error");
+  assert.match(response.error, /demo\.clab\.md already exists/);
+  assert.equal(await fs.readFile("/labs/demo.clab.md"), "mine\n");
+});
+
+test("commands keep the guide they read instead of reading it again", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/demo.clab.yml";
+  await fs.writeFile(yamlFilePath, BASE_YAML);
+  await fs.writeFile("/labs/demo.clab.md", "## Step one\n");
+  const readFile = fs.readFile.bind(fs);
+  let guideReads = 0;
+  fs.readFile = async (filePath: string) => {
+    if (filePath === "/labs/demo.clab.md") guideReads += 1;
+    return readFile(filePath);
+  };
+  const host = new TopologyHostCore({ fs, yamlFilePath, mode: "edit", deploymentState: "undeployed" });
+  const initial = await host.getSnapshot();
+  assert.equal(guideReads, 1);
+
+  const edited = await apply(host, initial.revision, {
+    command: "setYamlContent",
+    payload: { content: CHANGED_YAML }
+  });
+  await apply(host, edited.snapshot.revision, { command: "undo" });
+  assert.equal(guideReads, 1);
+  assert.equal(edited.snapshot.guide?.content, "## Step one\n");
+
+  await host.onExternalChange();
+  assert.equal(guideReads, 2);
+});

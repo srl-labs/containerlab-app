@@ -45,9 +45,14 @@ export interface ExecCommandDialogProps {
   onClose: () => void;
 }
 
-const ExecResults: React.FC<{ result: LabExecResult; nodeNames: string[] }> = ({
+/**
+ * Each node's output. `plain` leaves out the exit codes and shows stderr like
+ * stdout: what they mean differs from one node's OS to the next.
+ */
+export const ExecResults: React.FC<{ result: LabExecResult; nodeNames: string[]; plain?: boolean }> = ({
   result,
-  nodeNames
+  nodeNames,
+  plain = false
 }) => {
   if (result.results.length === 0) {
     return (
@@ -67,18 +72,24 @@ const ExecResults: React.FC<{ result: LabExecResult; nodeNames: string[] }> = ({
               <Typography variant="subtitle2" component="h3" sx={{ fontFamily: MONO_FONT_FAMILY }}>
                 {node}
               </Typography>
-              <Chip
-                size="small"
-                variant="outlined"
-                color={failed ? "error" : "success"}
-                label={`exit ${entry.returnCode}`}
-                data-testid={`lab-exec-code-${node}`}
-              />
+              {!plain && (
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  color={failed ? "error" : "success"}
+                  label={`exit ${entry.returnCode}`}
+                  data-testid={`lab-exec-code-${node}`}
+                />
+              )}
             </Box>
             {entry.stdout && <OutputBlock text={entry.stdout} testId={`lab-exec-stdout-${node}`} />}
             {entry.stderr && (
               <Box sx={{ mt: entry.stdout ? 0.75 : 0 }}>
-                <OutputBlock text={entry.stderr} tone="error" testId={`lab-exec-stderr-${node}`} />
+                <OutputBlock
+                  text={entry.stderr}
+                  tone={plain ? "default" : "error"}
+                  testId={`lab-exec-stderr-${node}`}
+                />
               </Box>
             )}
             {!entry.stdout && !entry.stderr && (

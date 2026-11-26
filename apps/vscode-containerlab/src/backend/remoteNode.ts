@@ -67,6 +67,14 @@ class RemoteNodeTerminal implements vscode.Pseudoterminal {
   private size: { cols: number; rows: number } = { cols: DEFAULT_COLUMNS, rows: DEFAULT_ROWS };
   private resumable = false;
   private reconnects = 0;
+  /** Input from before the session takes it: typed while it connects, or attaches again. */
+  private pendingInput: string[] = [];
+  private takesInput = false;
+  private markAttached: () => void = () => undefined;
+  /** Settles once the session has attached for the first time, or has ended without. */
+  readonly attached = new Promise<void>((resolve) => {
+    this.markAttached = resolve;
+  });
 
   constructor(
     private readonly backend: LabBackend,
@@ -122,6 +130,9 @@ class RemoteNodeTerminal implements vscode.Pseudoterminal {
         this.reconnects = 0;
         stream.send({ type: "resize", ...(this.pendingSize ?? this.size) });
         this.pendingSize = undefined;
+        this.takesInput = true;
+        for (const data of this.pendingInput.splice(0)) stream.send({ type: "input", data });
+        this.markAttached();
       } else if (message.type === "output") {
         if (replayPending) {
           replayPending = false;
@@ -137,6 +148,7 @@ class RemoteNodeTerminal implements vscode.Pseudoterminal {
       }
     });
     stream.onClose((reason, { takenOver }) => {
+      this.takesInput = false;
       if (this.closed || ended) return;
       if (takenOver) {
         this.writeEmitter.fire(`\r\n\x1b[2mThis terminal was opened somewhere else.\x1b[0m\r\n`);
@@ -183,12 +195,17 @@ class RemoteNodeTerminal implements vscode.Pseudoterminal {
   private finish(exitCode?: number): void {
     if (this.closed) return;
     this.closed = true;
+    this.pendingInput = [];
+    this.markAttached();
     this.stream?.close();
     this.closeEmitter.fire(exitCode);
   }
 
   handleInput(data: string): void {
-    this.stream?.send({ type: "input", data });
+    if (this.closed) return;
+    // A session that is still connecting drops what is sent at it.
+    if (this.takesInput && this.stream) this.stream.send({ type: "input", data });
+    else this.pendingInput.push(data);
   }
 
   setDimensions(dimensions: vscode.TerminalDimensions): void {
@@ -201,6 +218,8 @@ class RemoteNodeTerminal implements vscode.Pseudoterminal {
   close(): void {
     const wasClosed = this.closed;
     this.closed = true;
+    this.pendingInput = [];
+    this.markAttached();
     if (this.stream) {
       this.stream.send({ type: "close" });
       this.stream.close();
@@ -209,6 +228,17 @@ class RemoteNodeTerminal implements vscode.Pseudoterminal {
       void this.backend.closeTerminal(this.sessionId).catch(() => {});
     }
   }
+}
+
+/**
+ * Settles once a lab host's terminal takes what is typed into it; at once for
+ * any other terminal, which takes input from the start.
+ */
+export function remoteTerminalAttached(
+  terminal: Pick<vscode.Terminal, "creationOptions">
+): Promise<void> {
+  const options: Partial<vscode.ExtensionTerminalOptions> = terminal.creationOptions;
+  return options.pty instanceof RemoteNodeTerminal ? options.pty.attached : Promise.resolve();
 }
 
 /** Opens a node terminal through the lab host, or focuses the one already open. */

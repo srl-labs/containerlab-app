@@ -703,6 +703,9 @@ export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
 const terminalOutputListeners = new Map<string, (text: string) => void>();
 const pendingTerminalOutput = new Map<string, string>();
 const terminalPaneCloseListeners = new Map<string, () => void>();
+// Text to type into a shell pane, kept until its session connects.
+const terminalInputListeners = new Map<string, (text: string) => void>();
+const pendingTerminalInput = new Map<string, string>();
 
 function appendTerminalOutput(paneId: string, text: string): void {
   const listener = terminalOutputListeners.get(paneId);
@@ -714,6 +717,60 @@ function appendTerminalOutput(paneId: string, text: string): void {
   if (findPaneLocation(useRuntimeUiStore.getState().terminals, paneId)) {
     pendingTerminalOutput.set(paneId, (pendingTerminalOutput.get(paneId) ?? "") + text);
   }
+}
+
+/** A pane in one of these states has no session left to type into. */
+const ENDED_PANE_STATES: ReadonlySet<RuntimeTerminalPaneState> = new Set(["exited", "error", "expired"]);
+
+/**
+ * Types text into a shell pane's session, once it has connected. A pane whose
+ * session is over starts a new one for the text, and one whose session moved
+ * to another window takes it back: nothing would read the text otherwise.
+ */
+function sendTerminalInput(paneId: string, text: string): void {
+  const pane = findPaneLocation(useRuntimeUiStore.getState().terminals, paneId)?.pane;
+  if (!pane) return;
+  if (ENDED_PANE_STATES.has(pane.state)) {
+    pendingTerminalInput.set(paneId, text);
+    useRuntimeUiStore.getState().restartTerminal(paneId);
+    return;
+  }
+  const listener = pane.state === "detached" ? undefined : terminalInputListeners.get(paneId);
+  if (listener) {
+    listener(text);
+    return;
+  }
+  const pending = pendingTerminalInput.get(paneId);
+  pendingTerminalInput.set(paneId, pending === undefined ? text : `${pending}\n${text}`);
+  if (pane.state === "detached") useRuntimeUiStore.getState().setTerminalConnecting(paneId);
+}
+
+/**
+ * Keeps the lines a connection dropped before typing them, ahead of any text
+ * sent since, for when the pane attaches to the same session again. A session
+ * that is over, or that another window took, gets none of them.
+ */
+function requeueTerminalInput(paneId: string, terminalSessionId: string, lines: readonly string[]): void {
+  if (lines.length === 0) return;
+  const pane = findPaneLocation(useRuntimeUiStore.getState().terminals, paneId)?.pane;
+  if (!pane || pane.terminalSessionId !== terminalSessionId) return;
+  if (ENDED_PANE_STATES.has(pane.state) || pane.state === "detached") return;
+  const pending = pendingTerminalInput.get(paneId);
+  const unsent = lines.join("\n");
+  pendingTerminalInput.set(paneId, pending === undefined ? unsent : `${unsent}\n${pending}`);
+}
+
+/** Receives the text to type into a pane's session, starting with anything that came early. */
+export function subscribeTerminalInput(paneId: string, listener: (text: string) => void): () => void {
+  terminalInputListeners.set(paneId, listener);
+  const pending = pendingTerminalInput.get(paneId);
+  if (pending !== undefined) {
+    pendingTerminalInput.delete(paneId);
+    listener(pending);
+  }
+  return () => {
+    if (terminalInputListeners.get(paneId) === listener) terminalInputListeners.delete(paneId);
+  };
 }
 
 /** Calls back when an open pane goes away; the returned function stops watching. */
@@ -729,6 +786,7 @@ function handleClosedPanes(before: readonly RuntimeTerminalGroup[], after: reado
   for (const pane of before.flatMap((group) => group.panes)) {
     if (open.has(pane.id)) continue;
     pendingTerminalOutput.delete(pane.id);
+    pendingTerminalInput.delete(pane.id);
     terminalPaneCloseListeners.get(pane.id)?.();
   }
 }
@@ -746,12 +804,25 @@ export function subscribeTerminalOutput(paneId: string, listener: (text: string)
   };
 }
 
+/** Text waiting for a session that then ended is never typed: the next session is another shell. */
+function dropInputOfEndedSessions(before: readonly RuntimeTerminalGroup[], after: readonly RuntimeTerminalGroup[]): void {
+  if (pendingTerminalInput.size === 0) return;
+  const states = new Map(before.flatMap((group) => group.panes.map((pane) => [pane.id, pane.state] as const)));
+  for (const pane of after.flatMap((group) => group.panes)) {
+    if (ENDED_PANE_STATES.has(pane.state) && states.get(pane.id) !== pane.state) pendingTerminalInput.delete(pane.id);
+  }
+}
+
 useRuntimeUiStore.subscribe((state, previous) => {
-  if (state.terminals !== previous.terminals) handleClosedPanes(previous.terminals, state.terminals);
+  if (state.terminals === previous.terminals) return;
+  handleClosedPanes(previous.terminals, state.terminals);
+  dropInputOfEndedSessions(previous.terminals, state.terminals);
 });
 
 export const runtimeUiActions = {
   appendTerminalOutput,
+  sendTerminalInput,
+  requeueTerminalInput,
   onTerminalPaneClosed,
   activateTerminalGroup: (groupId: string) => useRuntimeUiStore.getState().activateTerminalGroup(groupId),
   activateTerminalPane: (paneId: string) => useRuntimeUiStore.getState().activateTerminalPane(paneId),

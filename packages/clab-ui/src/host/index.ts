@@ -34,6 +34,7 @@ import { parseTailscaleStatus, type TailscaleStatus } from "./tailscaleStatus";
 import { isRecord } from "../core/utilities/typeHelpers";
 import {
   MSG_LAB_OPERATION,
+  MSG_NODE_TERMINAL_INPUT,
   MSG_OPEN_LAB_FILE,
   MSG_PLAN_APPLY_LAB,
   MSG_TAILSCALE_STATUS,
@@ -617,6 +618,9 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
       },
       runNodesAction(action: TopoViewerNodesAction, nodeNames: string[]): void {
         postNodesAction(postMessage, action, nodeNames);
+      },
+      sendNodeTerminalInput(nodeName: string, text: string): void {
+        postMessage({ command: MSG_NODE_TERMINAL_INPUT, nodeName, text });
       },
       labOperations,
       labHost: () => labOperations.hostInfo(),

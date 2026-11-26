@@ -3,7 +3,13 @@ import test from "node:test";
 
 import type { TopologyRef } from "../../session";
 
-import { resumableTerminalState, useRuntimeUiStore, type RuntimeTerminalPane } from "./runtimeUiStore";
+import {
+  resumableTerminalState,
+  runtimeUiActions,
+  subscribeTerminalInput,
+  useRuntimeUiStore,
+  type RuntimeTerminalPane
+} from "./runtimeUiStore";
 
 function makeTopologyRef(path: string, labName: string, endpointId: string): TopologyRef {
   return {
@@ -18,6 +24,13 @@ function makeTopologyRef(path: string, labName: string, endpointId: string): Top
 test.beforeEach(() => {
   useRuntimeUiStore.setState({ activeTerminalGroupId: undefined, terminals: [] });
 });
+
+function paneOf(paneId: string): RuntimeTerminalPane | undefined {
+  return useRuntimeUiStore
+    .getState()
+    .terminals.flatMap((group) => group.panes)
+    .find((pane) => pane.id === paneId);
+}
 
 function openSshTerminal(nodeName = "srl1"): string {
   return useRuntimeUiStore.getState().openTerminal({
@@ -166,4 +179,126 @@ test("only open, resumable terminal panes come back after a reload", () => {
     [{ id: "group-1", activePaneId: "live", panes: [["live", "connecting", undefined]] }]
   );
   assert.equal(restored?.activeTerminalGroupId, "group-1");
+});
+
+test("text for a pane waits until its session connects, in order", () => {
+  const paneId = openSshTerminal();
+  runtimeUiActions.sendTerminalInput(paneId, "enter candidate");
+  runtimeUiActions.sendTerminalInput(paneId, "commit now");
+
+  const typed: string[] = [];
+  const unsubscribe = subscribeTerminalInput(paneId, (text) => typed.push(text));
+  runtimeUiActions.sendTerminalInput(paneId, "show version");
+  unsubscribe();
+  runtimeUiActions.sendTerminalInput(paneId, "later");
+
+  assert.deepEqual(typed, ["enter candidate\ncommit now", "show version"]);
+});
+
+test("text for a pane whose session is over starts a new one for it", () => {
+  const paneId = openSshTerminal();
+  const store = useRuntimeUiStore.getState();
+  store.setTerminalSession(paneId, "session-1");
+  store.setTerminalReady(paneId);
+  store.setTerminalExited(paneId, 0);
+
+  // Nothing happens, so the reader sends the block again.
+  runtimeUiActions.sendTerminalInput(paneId, "enter candidate");
+  runtimeUiActions.sendTerminalInput(paneId, "enter candidate");
+  const restarted = paneOf(paneId);
+  assert.equal(restarted?.state, "creating");
+  assert.equal(restarted?.terminalSessionId, undefined);
+
+  const typed: string[] = [];
+  subscribeTerminalInput(paneId, (text) => typed.push(text))();
+  assert.deepEqual(typed, ["enter candidate\nenter candidate"]);
+});
+
+test("a listener left on an ended session gets no text", () => {
+  const paneId = openSshTerminal();
+  const store = useRuntimeUiStore.getState();
+  store.setTerminalSession(paneId, "session-1");
+  const old: string[] = [];
+  subscribeTerminalInput(paneId, (text) => old.push(text));
+  store.setTerminalError(paneId, "Connection failed.");
+
+  runtimeUiActions.sendTerminalInput(paneId, "uptime");
+  assert.deepEqual(old, []);
+  assert.equal(paneOf(paneId)?.state, "creating");
+});
+
+test("text waiting for a session that ends before it connects is dropped", () => {
+  for (const end of ["exited", "error", "expired"] as const) {
+    const paneId = openSshTerminal(`node-${end}`);
+    runtimeUiActions.sendTerminalInput(paneId, "reboot");
+    const store = useRuntimeUiStore.getState();
+    if (end === "exited") store.setTerminalExited(paneId, 1);
+    if (end === "error") store.setTerminalError(paneId, "No such container.");
+    if (end === "expired") store.setTerminalExpired(paneId);
+
+    // "Start new session" on the pane: a new shell, not the old text.
+    store.restartTerminal(paneId);
+    const typed: string[] = [];
+    subscribeTerminalInput(paneId, (text) => typed.push(text))();
+    assert.deepEqual(typed, [], end);
+  }
+});
+
+test("text for a session that moved to another window takes it back", () => {
+  const paneId = openSshTerminal();
+  const store = useRuntimeUiStore.getState();
+  store.setTerminalSession(paneId, "session-1");
+  store.setTerminalDetached(paneId);
+
+  runtimeUiActions.sendTerminalInput(paneId, "show version");
+  assert.equal(paneOf(paneId)?.state, "connecting");
+  const typed: string[] = [];
+  subscribeTerminalInput(paneId, (text) => typed.push(text))();
+  assert.deepEqual(typed, ["show version"]);
+});
+
+test("lines a dropped connection had not typed go first when the pane is back", () => {
+  const paneId = openSshTerminal();
+  const store = useRuntimeUiStore.getState();
+  store.setTerminalSession(paneId, "session-1");
+  store.setTerminalReady(paneId);
+
+  store.setTerminalReconnecting(paneId, "Connection lost.");
+  runtimeUiActions.sendTerminalInput(paneId, "show version");
+  runtimeUiActions.requeueTerminalInput(paneId, "session-1", ["set / interface ethernet-1/1", "commit now"]);
+  // Lines of another session, or of none, are not this session's to type.
+  runtimeUiActions.requeueTerminalInput(paneId, "session-0", ["reboot"]);
+  runtimeUiActions.requeueTerminalInput(paneId, "session-1", []);
+
+  const typed: string[] = [];
+  subscribeTerminalInput(paneId, (text) => typed.push(text))();
+  assert.deepEqual(typed, ["set / interface ethernet-1/1\ncommit now\nshow version"]);
+});
+
+test("lines of a session that is over or taken are not kept", () => {
+  for (const end of ["exited", "detached"] as const) {
+    const paneId = openSshTerminal(`node-${end}`);
+    const store = useRuntimeUiStore.getState();
+    store.setTerminalSession(paneId, "session-1");
+    if (end === "exited") store.setTerminalExited(paneId, 0);
+    else store.setTerminalDetached(paneId);
+    runtimeUiActions.requeueTerminalInput(paneId, "session-1", ["commit now"]);
+
+    store.setTerminalConnecting(paneId);
+    const typed: string[] = [];
+    subscribeTerminalInput(paneId, (text) => typed.push(text))();
+    assert.deepEqual(typed, [], end);
+  }
+});
+
+test("text for a closed pane is dropped", () => {
+  const paneId = openSshTerminal();
+  runtimeUiActions.sendTerminalInput(paneId, "uptime");
+  useRuntimeUiStore.getState().closeTerminal(paneId);
+
+  const typed: string[] = [];
+  subscribeTerminalInput(paneId, (text) => typed.push(text))();
+  runtimeUiActions.sendTerminalInput("no-such-pane", "uptime");
+  subscribeTerminalInput("no-such-pane", (text) => typed.push(text))();
+  assert.deepEqual(typed, []);
 });

@@ -1,6 +1,36 @@
+/** A terminal as the stub's `createTerminal` makes it: it records what it is sent. */
+export interface StubTerminal {
+  name: string;
+  creationOptions: Record<string, unknown>;
+  exitStatus?: unknown;
+  typed: string[];
+  sendText(text: string, addNewLine?: boolean): void;
+  show(): void;
+  dispose(): void;
+}
+
 export const window = {
   lastErrorMessage: "",
   lastInfoMessage: "",
+  terminals: [] as StubTerminal[],
+  createTerminal(options: { name: string } & Record<string, unknown>): StubTerminal {
+    const terminals = this.terminals;
+    const terminal: StubTerminal = {
+      name: options.name,
+      creationOptions: options,
+      typed: [],
+      sendText(text: string) {
+        this.typed.push(text);
+      },
+      show() {},
+      dispose() {
+        const index = terminals.indexOf(this);
+        if (index >= 0) terminals.splice(index, 1);
+      }
+    };
+    terminals.push(terminal);
+    return terminal;
+  },
   createOutputChannel(_name: string, options?: { log: boolean } | string) {
     const isLogChannel = typeof options === "object" && options.log;
     return {
