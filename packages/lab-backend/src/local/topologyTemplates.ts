@@ -4,8 +4,10 @@ import path from "node:path";
 
 import {
   expandLabNameGitTokens,
+  hasEnvReferences,
   hasLabNameGitTokens,
   literalTopologyName,
+  resolveEnvReferences,
   type GitInfo,
   type TopologyVariables
 } from "@containerlab/clab-ui/host";
@@ -48,13 +50,38 @@ export async function topologyGitInfo(directory: string, env?: NodeJS.ProcessEnv
 }
 
 /** The lab name containerlab gives a topology whose `name` uses Git tokens. */
-export async function expandTopologyLabName(
+async function expandTopologyLabName(
   labName: string,
   topologyFile: string,
   env?: NodeJS.ProcessEnv
 ): Promise<string> {
   if (!hasLabNameGitTokens(labName)) return labName;
   return expandLabNameGitTokens(labName, await topologyGitInfo(path.dirname(topologyFile), env));
+}
+
+function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+  const defined: Record<string, string> = {};
+  for (const [name, value] of Object.entries(env)) {
+    if (value !== undefined) defined[name] = value;
+  }
+  return defined;
+}
+
+/**
+ * The lab name containerlab runs a topology under: it substitutes
+ * environment variables in the file first, so `name: lab-${USER}` runs as
+ * `lab-alice`, then expands Git tokens in the name. Without `env` only
+ * defaults such as `${VAR:=x}` resolve, and other variables stay as written.
+ */
+export async function topologyRunName(
+  declared: string,
+  topologyFile: string,
+  env?: NodeJS.ProcessEnv
+): Promise<string> {
+  const substituted = hasEnvReferences(declared)
+    ? resolveEnvReferences(declared, env ? definedEnv(env) : undefined).text
+    : declared;
+  return expandTopologyLabName(substituted, topologyFile, env);
 }
 
 /**
@@ -146,8 +173,13 @@ export async function localTopologyVariables(
     const value = options.env[name];
     if (value !== undefined) env[name] = value;
   }
+  let labName = await topologyRunName(request.labName, topologyFile, options.sudo ? undefined : options.env);
+  if (options.sudo && hasEnvReferences(labName)) {
+    // containerlab runs with root's environment behind sudo; only it knows the name.
+    labName = (await renderTopologyFile(options, topologyFile).catch(() => undefined))?.labName ?? labName;
+  }
   return {
-    labName: await expandTopologyLabName(request.labName, topologyFile, options.env),
+    labName,
     topologyDir: path.dirname(topologyFile),
     ...(options.sudo ? {} : { env })
   };

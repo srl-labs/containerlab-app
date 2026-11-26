@@ -96,6 +96,31 @@ test("Git tokens in lab names expand like containerlab expands them", async (t) 
   assert.equal(variables.topologyDir, repository);
 });
 
+test("environment variables in lab names expand like containerlab expands them", async (t) => {
+  const root = await temporaryDirectory(t);
+  await fs.mkdir(path.join(root, "labs"));
+  await fs.writeFile(path.join(root, "labs", "user.clab.yml"), "name: jmac-test-${CLAB_TEST_USER}\n");
+  await fs.writeFile(path.join(root, "labs", "default.clab.yml"), "name: dc-${CLAB_TEST_MISSING:=lab}\n");
+  await fs.writeFile(path.join(root, "labs", "unset.clab.yml"), "name: x-${CLAB_TEST_MISSING}\n");
+  const env: NodeJS.ProcessEnv = { ...process.env, CLAB_TEST_USER: "alice" };
+  delete env.CLAB_TEST_MISSING;
+
+  const backend = new LocalLabBackend({ workspaceRoot: root, binaryPath: "/nonexistent/containerlab", env });
+  const names = (await backend.listTopologies()).map((entry) => [entry.labName, entry.yamlFileName]);
+  assert.deepEqual(names, [
+    ["dc-lab", "labs/default.clab.yml"],
+    ["jmac-test-alice", "labs/user.clab.yml"],
+    // A variable without a value leaves no valid lab name; the file name stands in.
+    ["unset", "labs/unset.clab.yml"]
+  ]);
+
+  const variables = await backend.topologyVariables(
+    { labName: "", path: "labs/user.clab.yml" },
+    { labName: "jmac-test-${CLAB_TEST_USER}", envNames: ["CLAB_TEST_USER"] }
+  );
+  assert.equal(variables.labName, "jmac-test-alice");
+});
+
 test("variables come from the environment containerlab runs with", async (t) => {
   const root = await temporaryDirectory(t);
   await fs.writeFile(path.join(root, "lab.clab.yml"), "name: lab\n");

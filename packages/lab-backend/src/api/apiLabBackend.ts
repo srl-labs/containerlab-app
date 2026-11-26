@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import WebSocket, { type RawData } from "ws";
 import {
+  hasEnvReferences,
   hasLabNameGitTokens,
   isC9sExposeType,
   KUBERNETES_IMAGE_MANAGEMENT_MESSAGE,
@@ -1075,7 +1076,8 @@ export class ApiLabBackend implements LabBackend {
 
   /**
    * The server's environment is not visible here, so only defaults resolve.
-   * Git tokens in the lab name expand through the server's render endpoint.
+   * Environment variables and Git tokens in the lab name expand through the
+   * server's render endpoint.
    */
   async topologyVariables(
     lab: LabTarget,
@@ -1085,7 +1087,7 @@ export class ApiLabBackend implements LabBackend {
       ? (await this.listTopologies().catch(() => [])).find((topology) => topology.yamlFileName === lab.path)
       : undefined;
     let labName = request.labName;
-    if (lab.path && hasLabNameGitTokens(labName)) {
+    if (lab.path && (hasLabNameGitTokens(labName) || hasEnvReferences(labName))) {
       const rendered = await this.renderTopology(lab).catch(() => undefined);
       labName = rendered?.labName ?? entry?.labName ?? labName;
     }

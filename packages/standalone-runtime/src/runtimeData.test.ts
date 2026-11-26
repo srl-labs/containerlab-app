@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { runtimeContainersEqual, runtimeContainersTopologyEqual } from "@containerlab/clab-ui/host";
-import { getRuntimeContainersForLab, getRuntimeContainersForTopology } from "./runtimeData";
+import { getRuntimeContainersForLab, getRuntimeContainersForTopology, runtimeLabName } from "./runtimeData";
 import { buildStandaloneTopologyRefFromPath } from "./standaloneHostShared";
 import type { ContainerState, LabState } from "./stores/labStore";
 
@@ -126,4 +126,28 @@ test("getRuntimeContainersForTopology prefers exact topology path over lab name"
 
   assert.equal(runtimeContainers.length, 1);
   assert.equal(runtimeContainers[0]?.name, "clab-demo-srl1");
+});
+
+test("runtime data of a topology matches by the name its lab runs under", () => {
+  const container = { ...buildContainer("1000"), labName: "demo-alice", labPath: "/tmp/demo.clab.yml" };
+  const labs = new Map<string, LabState>([
+    [
+      `${ENDPOINT_ID}:demo-alice`,
+      {
+        endpointId: ENDPOINT_ID,
+        name: "demo-alice",
+        owner: "alice",
+        topologyPath: "/tmp/demo.clab.yml",
+        containers: new Map([[container.name, container]])
+      }
+    ]
+  ]);
+  // The file declares `name: demo-${USER}`; its listing names it after the file.
+  const containers = getRuntimeContainersForTopology(
+    { labName: "demo", yamlPath: "demo.clab.yml", absoluteYamlPath: "/tmp/demo.clab.yml" },
+    labs
+  );
+  assert.equal(containers.length, 1);
+  assert.equal(runtimeLabName(containers, "demo"), "demo-alice");
+  assert.equal(runtimeLabName([], "demo"), "demo");
 });

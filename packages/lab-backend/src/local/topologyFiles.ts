@@ -13,7 +13,7 @@ import type { TopologyFileSystem, TopologyFilesOptions } from "../contract/backe
 import type { TopologyEntry } from "../contract/dto.ts";
 import { LabBackendError } from "../contract/errors.ts";
 import { createAsyncQueue } from "../asyncQueue.ts";
-import { expandTopologyLabName } from "./topologyTemplates.ts";
+import { topologyRunName } from "./topologyTemplates.ts";
 import type { WorkspacePaths } from "./workspace.ts";
 
 const LAB_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -132,9 +132,9 @@ export async function discoverTopologies(
     }
     if (!labName || !isValidLabName(labName)) {
       const declared = await readTopologyName(paths.absolute(yamlFileName));
-      // Git tokens in the name expand to the name containerlab runs the lab under.
+      // Environment variables and Git tokens expand to the name containerlab runs the lab under.
       const runName = declared
-        ? await expandTopologyLabName(declared, paths.absolute(yamlFileName), env)
+        ? await topologyRunName(declared, paths.absolute(yamlFileName), env)
         : undefined;
       labName = runName && isValidLabName(runName) ? runName : sanitizeLabName(stem);
     }

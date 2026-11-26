@@ -17,7 +17,7 @@ import {
 } from "@containerlab/clab-ui/session";
 
 import { fetchUiIcons } from "./runtimeApi";
-import { getRuntimeContainersForTopology } from "./runtimeData";
+import { getRuntimeContainersForTopology, runtimeLabName } from "./runtimeData";
 import { refreshTopologyDirtyState, resetTopologyDirtyState } from "./standaloneDirtyState";
 import { readLabSettings } from "./standaloneLabSettings";
 import type { EndpointConfig } from "./stores/endpointStore";
@@ -194,7 +194,7 @@ export function createStandaloneTopologyManager(
 
     syncHostContext({ deploymentState: "deployed" });
     applyRuntimeEdgeStatsToGraph(containers, {
-      currentLabName: currentTopologyRef.labName
+      currentLabName: runtimeLabName(containers, currentTopologyRef.labName)
     });
   }
 

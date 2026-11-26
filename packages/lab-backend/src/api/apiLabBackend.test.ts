@@ -689,3 +689,28 @@ test("the engine's API is not asked for what the Fabric view does not offer", as
   );
   assert.equal(requests.some((request) => request.url.pathname.includes("/fcling")), false);
 });
+
+test("a lab name with environment variables comes from the server's render", async (t) => {
+  const requests: string[] = [];
+  t.mock.method(undici, "fetch", (input: unknown) => {
+    const url = new URL(String(input));
+    requests.push(url.pathname);
+    if (url.pathname === "/api/v1/labs/topology/files") {
+      return Promise.resolve(Response.json([{ labName: "jmac-test", yamlFileName: "jmac-test.clab.yml", absolutePath: "/home/jmac/jmac-test.clab.yml" }]));
+    }
+    if (url.pathname.endsWith("/topology/rendered")) {
+      return Promise.resolve(Response.json({ path: "jmac-test.clab.yml", content: "name: jmac-test-jmac\n", labName: "jmac-test-jmac", varsFiles: [] }));
+    }
+    return Promise.resolve(new Response("404 page not found", { status: 404 }));
+  });
+  const backend = new ApiLabBackend({ baseUrl: "https://api.test", token: "token" });
+  const lab = { labName: "jmac-test", path: "jmac-test.clab.yml" };
+
+  const variables = await backend.topologyVariables(lab, { labName: "jmac-test-${USER}", envNames: ["USER"] });
+  assert.deepEqual(variables, { labName: "jmac-test-jmac", topologyDir: "/home/jmac" });
+  assert.ok(requests.some((pathname) => pathname.endsWith("/topology/rendered")));
+
+  requests.length = 0;
+  assert.equal((await backend.topologyVariables(lab, { labName: "plain", envNames: [] })).labName, "plain");
+  assert.ok(!requests.some((pathname) => pathname.endsWith("/topology/rendered")));
+});
