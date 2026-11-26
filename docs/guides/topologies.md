@@ -77,12 +77,17 @@ A lab `name` with `__gitBranch__` or `__gitHash__` runs under the branch and sho
 
 A `*.clab.gotmpl` file is a [topology template](https://containerlab.dev/manual/topo-def-file/): Go template syntax that containerlab renders with the variables in `<name>.clab_vars.yml` and the snippets in `clab_templates/`. The explorer lists templates with the other topologies, and deploy, redeploy, and destroy work on them like on any topology.
 
-Only containerlab can turn a template into a topology, so the canvas does not edit it:
+Only containerlab can turn a template into a topology, so the canvas shows what containerlab renders from it and does not edit it:
 
-- In the desktop and web apps, opening a template shows its text next to a read-only **Rendered topology**. Enter another variables file to try it; the preview renders again after you save.
-- In VS Code, the template opens as text. **Open TopoViewer** on a template shows the rendered topology in a read-only tab instead.
+- Opening a template draws the rendered topology, with the nodes and links its loops and variables produce. A deployed template lab shows its running nodes, link states, and node actions like any other lab.
+- Nodes and links are read-only. Unlock the lab to move nodes and to add groups, text, and shapes: they are saved to the annotations file next to the template.
+- The **Template** chip in the toolbar names the variables files containerlab used. Click it to edit the template as text. The **YAML** tab shows the rendered topology.
+- The template renders with the **Template variables file** of the lab's [deploy settings](labs.md#deploy-settings), or with the file containerlab finds on its own.
+- The canvas renders again when you save the template, and after a deploy or destroy. After changing only a variables file, reopen the lab.
 
-Rendering runs `containerlab deploy --dry-run --export-rendered` on your machine, which needs containerlab 0.78 or later and deploys nothing. Lab hosts need a clab-api-server with template support; older servers do not list templates and the preview says the server cannot render them. In the desktop and web apps, a template whose `name` is not literal is listed and deployed under its file name.
+In the desktop and web apps, a template opened from the file tree shows its text next to a read-only **Rendered topology**. Enter another variables file to try it; the preview renders again after you save.
+
+Rendering runs `containerlab deploy --dry-run --export-rendered` on your machine, which needs containerlab 0.78 or later and deploys nothing. Lab hosts need a clab-api-server with template support; older servers do not list templates. When a template does not render, the **Template** chip says why. A template that never rendered is drawn as it is written when it is valid YAML, with variables only inside values; any other opens empty. A template that stops rendering keeps its last rendering on the canvas. In the desktop and web apps, a template whose `name` is not literal is listed and deployed under its file name.
 
 ## Share settings between nodes
 

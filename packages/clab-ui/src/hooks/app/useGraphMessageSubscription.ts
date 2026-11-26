@@ -163,7 +163,7 @@ function applyEdgeStatsToEdge(
 
 /**
  * Whether the host reports a file change that left the topology as the view
- * has it: only the lab guide beside it changed.
+ * has it: only the lab guide beside it changed, or whether a template renders.
  */
 function isGuideOnlyChange(
   snapshot: TopologySnapshot,
@@ -183,7 +183,10 @@ function handleSnapshotMessage(
   if (isGuideOnlyChange(msg.snapshot, msg.reason, sessionClient)) {
     // Saving the guide must not redraw the canvas: that drops the selection
     // and a drag under way, each time an editor with auto-save writes the file.
-    useTopoViewerStore.setState({ guide: msg.snapshot.guide ?? null });
+    useTopoViewerStore.setState({
+      guide: msg.snapshot.guide ?? null,
+      topologyTemplate: msg.snapshot.template ?? null
+    });
     return;
   }
   applySnapshotToStores(msg.snapshot, {}, sessionClient);

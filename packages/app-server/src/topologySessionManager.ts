@@ -1,3 +1,4 @@
+import { isTopologyTemplateFileName } from "@containerlab/clab-ui/host";
 import {
   TopologySessionCore,
   type createRuntimeContainerDataProvider,
@@ -43,6 +44,8 @@ interface CreateSessionOptions {
   mode: "edit" | "view";
   sourcePreference?: TopologySourcePreference;
   topologyRef: TopologyRef;
+  /** The variables file a template is rendered with (`--vars`); containerlab finds its own without. */
+  varsFile?: string;
 }
 
 const SESSION_TTL_MS = 5 * 60 * 1000;
@@ -190,6 +193,8 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
         annotationsPath: options.topologyRef.annotationsPath
       });
       const internalUpdateTracker = createInternalUpdateTracker();
+      const lab = { labName: options.topologyRef.labName, path: options.topologyRef.yamlPath };
+      const { varsFile } = options;
 
       const host = new TopologySessionCore({
         fs,
@@ -199,11 +204,11 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
         deploymentState: options.deploymentState,
         containerDataProvider: options.containerDataProvider,
         // The lab name containerlab runs the lab under and the environment it deploys with.
-        resolveVariables: (request) =>
-          options.backend.topologyVariables(
-            { labName: options.topologyRef.labName, path: options.topologyRef.yamlPath },
-            request
-          ),
+        resolveVariables: (request) => options.backend.topologyVariables(lab, request),
+        // Only containerlab can turn a template into a topology: the session shows what it renders.
+        ...(isTopologyTemplateFileName(options.topologyRef.yamlPath)
+          ? { renderTopology: () => options.backend.renderTopology(lab, varsFile ? { varsFile } : {}) }
+          : {}),
         setInternalUpdate: internalUpdateTracker.set,
         logger: {
           debug: () => {},

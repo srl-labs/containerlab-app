@@ -682,6 +682,8 @@ function buildInitialTopoViewerData(
     ...(snapshot.dirty !== undefined ? { isDirty: snapshot.dirty } : {}),
     labSettings: snapshot.labSettings,
     topologyVariables: snapshot.variables,
+    // Per topology: the next one opened is no template unless it says so.
+    topologyTemplate: snapshot.template ?? null,
     yamlFileName: snapshot.yamlFileName,
     annotationsFileName: snapshot.annotationsFileName,
     yamlContent: snapshot.yamlContent,

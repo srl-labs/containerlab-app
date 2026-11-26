@@ -27,6 +27,7 @@ import {
   runtimeInterfaceListsEqual
 } from "@containerlab/clab-ui/session";
 import {
+  isValidVarsFile,
   normalizeRuntimeContainer,
   type HostRuntimeContainer,
   type RuntimeContainerInput
@@ -245,6 +246,8 @@ interface SnapshotRequest {
   mode?: "edit" | "view";
   deploymentState?: DeploymentState;
   sourcePreference?: "api-file" | "running-lab-doc";
+  /** The variables file of the lab's deploy settings, to render a template with. */
+  varsFile?: string;
   runtimeContainers?: RuntimeContainerInput[];
   externalChange?: boolean;
 }
@@ -443,6 +446,8 @@ export function registerTopologyProxy(
       const containerDataProvider = createRuntimeContainerDataProvider(
         toRuntimeContainers(request.body.runtimeContainers ?? [])
       );
+      const varsFile =
+        typeof request.body.varsFile === "string" ? request.body.varsFile.trim() : "";
 
       const session = sessions.createSession({
         backend,
@@ -451,7 +456,8 @@ export function registerTopologyProxy(
         mode,
         deploymentState,
         sourcePreference,
-        containerDataProvider
+        containerDataProvider,
+        ...(isValidVarsFile(varsFile) ? { varsFile } : {})
       });
 
       return reply.send({

@@ -212,11 +212,16 @@ function isSourceTab(tabId: string): boolean {
 function sourceTabTitle(
   tabId: string,
   yamlFileName: string,
-  annotationsFileName: string
+  annotationsFileName: string,
+  isTemplate: boolean
 ): string | undefined {
   const [kind, fileName] =
     tabId === "yaml" ? ["Topology", yamlFileName] : ["Annotations", annotationsFileName];
   if (!isSourceTab(tabId)) return undefined;
+  // The YAML tab of a template shows its rendering, not the file.
+  if (tabId === "yaml" && isTemplate) {
+    return fileName ? `Rendered from ${fileName}` : "Rendered topology";
+  }
   return fileName ? `${kind} file: ${fileName}` : `${kind} file`;
 }
 
@@ -633,22 +638,25 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
   const annotationsFileName = useTopoViewerStore((state) => state.annotationsFileName);
   const yamlContent = useTopoViewerStore((state) => state.yamlContent);
   const annotationsContent = useTopoViewerStore((state) => state.annotationsContent);
+  // Of a template the YAML tab shows what containerlab renders: it is edited as text.
+  const isTemplate = useTopoViewerStore((state) => state.topologyTemplate !== null);
   const guide = useTopoViewerStore((state) => state.guide);
   const guideFileName = guide?.fileName;
   const topologyScope = useTopoViewerStore((state) => state.topologyScope);
   const [filter, setFilter] = useState("");
   const isViewMode = mode === "view";
   const nudgeLock = useTopoViewerStore((state) => state.nudgeLock);
-  // The lock wins: unlocking is the one thing that helps. Deployed labs (view
-  // mode) take annotations but not new nodes or networks.
+  // The lock wins: unlocking is the one thing that helps. A read-only topology
+  // (view mode) takes annotations but not new nodes or networks.
   const lockBlock = useMemo<PaletteBlock | null>(
     () => (isLocked ? { reason: "Unlock lab to edit", onAttempt: nudgeLock } : null),
     [isLocked, nudgeLock]
   );
   const nodesBlock = useMemo<PaletteBlock | null>(() => {
     if (lockBlock) return lockBlock;
+    if (isTemplate) return { reason: "Nodes are added in the template's text" };
     return isViewMode ? { reason: "Nodes can't be added while the lab is deployed" } : null;
-  }, [lockBlock, isViewMode]);
+  }, [lockBlock, isViewMode, isTemplate]);
 
   const visibleTabs = useMemo(
     () => {
@@ -661,7 +669,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
         id: t.id,
         label: paletteTabLabels?.[t.id] ?? t.label,
         // The source tabs name the file they edit.
-        title: sourceTabTitle(t.id, yamlFileName, annotationsFileName)
+        title: sourceTabTitle(t.id, yamlFileName, annotationsFileName, isTemplate)
       }));
       const custom = (customPaletteTabs ?? [])
         .map((t) => ({ id: t.id, label: t.label }))
@@ -675,7 +683,8 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
       disabledTabIds,
       paletteTabLabels,
       yamlFileName,
-      annotationsFileName
+      annotationsFileName,
+      isTemplate
     ]
   );
 
@@ -791,7 +800,8 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
   // Edits back to the saved text are no edits, and saving them would add an empty undo step.
   const yamlDirty = yamlDraftBase !== null && yamlDraft !== yamlContent;
   const annotationsDirty = annotationsDraftBase !== null && annotationsDraft !== annotationsContent;
-  const isSourceReadOnly = isLocked;
+  const isYamlReadOnly = isLocked || isTemplate;
+  const isSourceReadOnly = activeTab === "yaml" ? isYamlReadOnly : isLocked;
   const fileLinks = useTopologyFileLinks();
   const sourceHistory = useUndoRedoControls();
 
@@ -923,7 +933,22 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
             <DeleteOutlinedIcon fontSize="small" />
           </IconButton>
         )}
-        {isSourceTab(activeTab) && isSourceReadOnly && <ReadOnlyLabel />}
+        {isSourceTab(activeTab) && isSourceReadOnly && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
+            <ReadOnlyLabel />
+            {activeTab === "yaml" && isTemplate && topoViewer.openLabFile && yamlFileName && (
+              <Tooltip title="Edit the template">
+                <IconButton
+                  size="small"
+                  onClick={() => topoViewer.openLabFile?.({ path: yamlFileName })}
+                  data-testid="template-open-file"
+                >
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+        )}
         {activeTab === "guide" && (
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
             {topoViewer.openLabFile && guideFileName !== undefined && (
@@ -1161,7 +1186,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
 
       {activeTab === "yaml" && (
         <SourceEditorTab
-          readOnly={isSourceReadOnly}
+          readOnly={isYamlReadOnly}
           onReadOnlyEditAttempt={lockBlock?.onAttempt}
           error={yamlError}
           language="yaml"
@@ -1179,7 +1204,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
 
       {activeTab === "json" && (
         <SourceEditorTab
-          readOnly={isSourceReadOnly}
+          readOnly={isLocked}
           onReadOnlyEditAttempt={lockBlock?.onAttempt}
           error={annotationsError}
           language="json"

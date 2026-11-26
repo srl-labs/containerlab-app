@@ -6,7 +6,7 @@ import type { CustomNodeTemplate, CustomTemplateEditorData } from "../core/types
 import type { EdgeAnnotation } from "../core/types/topology";
 import type { CustomIconInfo } from "../core/types/icons";
 import type { LabSettings } from "../core/types/labSettings";
-import type { TopologyGuideFile } from "../core/types/messages";
+import type { TopologyGuideFile, TopologyTemplateState } from "../core/types/messages";
 import type { TopologyVariables } from "../host/topologyVariables";
 import { upsertEdgeAnnotation } from "../annotations/edgeAnnotations";
 import {
@@ -67,6 +67,8 @@ export interface TopoViewerState {
   labSettings?: LabSettings;
   /** Host view of the variables containerlab expands; see `TopologySnapshot.variables`. */
   topologyVariables?: TopologyVariables;
+  /** Set while the open topology is a template: see `TopologySnapshot.template`. */
+  topologyTemplate: TopologyTemplateState | null;
   yamlFileName: string;
   annotationsFileName: string;
   /** Raw YAML content from host snapshot (used by Monaco source editors). */
@@ -226,6 +228,7 @@ const initialState: TopoViewerState = {
   isDirty: undefined,
   cleanYamlContent: undefined,
   labSettings: undefined,
+  topologyTemplate: null,
   yamlFileName: "topology.clab.yml",
   annotationsFileName: "topology.clab.yml.annotations.json",
   yamlContent: "",

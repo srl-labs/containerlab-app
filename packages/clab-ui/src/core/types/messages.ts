@@ -112,6 +112,25 @@ export interface TopologyGuideFile {
   content: string;
 }
 
+/**
+ * A topology template (`mylab.clab.gotmpl`) on the canvas. Only containerlab
+ * can turn it into a topology, so the canvas shows what it renders and never
+ * writes the template.
+ */
+export interface TopologyTemplateState {
+  /**
+   * Where the topology shown comes from: `rendered` is what containerlab
+   * renders now, `last-rendered` an earlier rendering kept because the
+   * template no longer renders, and `text` the template as it is written,
+   * shown because it never rendered.
+   */
+  source: "rendered" | "last-rendered" | "text";
+  /** Variables files containerlab rendered the template with. */
+  varsFiles?: string[];
+  /** Why the template does not render, or why containerlab rejects what it rendered. */
+  error?: string;
+}
+
 export interface TopologySnapshot {
   revision: number;
   documentRevision?: string;
@@ -122,8 +141,10 @@ export interface TopologySnapshot {
   yamlFileName: string;
   /** Source file name for the annotations JSON (e.g. mylab.clab.yml.annotations.json). */
   annotationsFileName: string;
-  /** Raw YAML content as read from disk. */
+  /** Raw YAML content as read from disk; of a template, the topology shown. */
   yamlContent: string;
+  /** Set when the topology file is a template: the topology is then read-only. */
+  template?: TopologyTemplateState;
   /** Raw annotations JSON content as read from disk (or a generated default if missing). */
   annotationsContent: string;
   /** The lab guide beside the topology (`mylab.clab.md`); absent when there is none. */

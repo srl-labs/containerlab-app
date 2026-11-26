@@ -33,6 +33,7 @@ import { isFileNotFoundError, type FileSystemAdapter, type IOLogger } from "../i
 import { AnnotationsIO } from "../io/AnnotationsIO";
 import { TopologyIO, migrateGeneratedNetworkNodeAnnotations } from "../io/TopologyIO";
 import { TransactionalFileSystemAdapter } from "../io/TransactionalFileSystemAdapter";
+import { RenderedTopologyFileSystem, type TopologyRenderer } from "../io/RenderedTopologyFileSystem";
 import { applyLabSettingsUpdate, extractLabSettings } from "./labSettingsYaml";
 import { applyInheritanceSectionUpdate } from "./inheritanceSectionYaml";
 import { createEmptyAnnotations, createNewLabAnnotations } from "../annotations/types";
@@ -71,6 +72,12 @@ interface TopologyHostCoreOptions {
   logger?: IOLogger;
   maxHistory?: number;
   resolveVariables?: TopologyVariablesResolver;
+  /**
+   * Renders the topology file with containerlab. Set for a topology template:
+   * the core then shows what the template renders to, read-only (`view` mode),
+   * and writes its annotations but never the template.
+   */
+  renderTopology?: TopologyRenderer;
 }
 
 interface DocumentState {
@@ -131,6 +138,8 @@ export class TopologyHostCore implements TopologyHost {
   private parserLogger: ParserLogger;
 
   private baseFs: FileSystemAdapter;
+  /** The topology file as its rendering, when it is a template. */
+  private readonly template: RenderedTopologyFileSystem | undefined;
   private transactionalFs: TransactionalFileSystemAdapter;
   private annotationsIO: AnnotationsIO;
   private topologyIO: TopologyIO;
@@ -151,10 +160,13 @@ export class TopologyHostCore implements TopologyHost {
   public currentClabTopology: ClabTopology | undefined;
 
   constructor(options: TopologyHostCoreOptions) {
-    this.baseFs = options.fs;
+    this.template = options.renderTopology
+      ? new RenderedTopologyFileSystem(options.fs, options.yamlFilePath, options.renderTopology)
+      : undefined;
+    this.baseFs = this.template ?? options.fs;
     this.yamlFilePath = options.yamlFilePath;
     this.documentKey = options.documentKey ?? options.yamlFilePath;
-    this.mode = options.mode;
+    this.mode = this.template ? "view" : options.mode;
     this.deploymentState = options.deploymentState;
     this.dirty = options.dirty;
     this.containerDataProvider = options.containerDataProvider;
@@ -185,15 +197,19 @@ export class TopologyHostCore implements TopologyHost {
       Pick<TopologyHostCoreOptions, "mode" | "deploymentState" | "dirty" | "containerDataProvider">
     >
   ): void {
-    const modeChanged = context.mode !== undefined && context.mode !== this.mode;
+    // A template is read-only whatever the host asks for.
+    const mode = this.template ? undefined : context.mode;
+    const modeChanged = mode !== undefined && mode !== this.mode;
     const deploymentChanged =
       context.deploymentState !== undefined && context.deploymentState !== this.deploymentState;
     // `dirty` is tri-state: only a key present in the context object updates it,
     // and an explicit `undefined` resets the sync state to "unknown".
     const dirtyChanged = "dirty" in context && context.dirty !== this.dirty;
 
-    if (context.mode) this.mode = context.mode;
+    if (mode) this.mode = mode;
     if (context.deploymentState) this.deploymentState = context.deploymentState;
+    // A deploy or a destroy may have used other variables than the last rendering.
+    if (deploymentChanged) this.template?.refresh();
     if (dirtyChanged) this.dirty = context.dirty;
     if (context.containerDataProvider !== undefined) {
       this.containerDataProvider = context.containerDataProvider;
@@ -215,6 +231,7 @@ export class TopologyHostCore implements TopologyHost {
    */
   invalidateSnapshot(): void {
     this.snapshot = null;
+    this.template?.refresh();
   }
 
   getSnapshot(): Promise<TopologySnapshot> {
@@ -264,6 +281,14 @@ export class TopologyHostCore implements TopologyHost {
     baseRevision: number
   ): Promise<TopologyHostResponseMessage> {
     const commandName = (command as { command?: string }).command ?? "unknown";
+    if (this.template && changesTopologyFile(command)) {
+      return {
+        type: "topology-host:error",
+        protocolVersion: TOPOLOGY_HOST_PROTOCOL_VERSION,
+        requestId: "",
+        error: `${this.baseFs.basename(this.yamlFilePath)} is a topology template: edit it as text.`
+      };
+    }
     if (baseRevision !== this.revision) {
       this.logger.warn(
         `[TopologyHost] Rejecting ${commandName}: stale baseRevision ${baseRevision} (current ${this.revision})`
@@ -390,7 +415,14 @@ export class TopologyHostCore implements TopologyHost {
         // `updateContext` drops the snapshot outside this queue, and may have
         // while the files were read: build it again, for the same documents.
         const snapshot = this.cachedSnapshot() ?? (await this.buildSnapshot());
-        this.snapshot = guide?.content === snapshot.guide?.content ? snapshot : { ...snapshot, guide };
+        // So does a template that stopped or started rendering to the same topology.
+        const template = this.template?.templateState();
+        const unchanged =
+          guide?.content === snapshot.guide?.content &&
+          JSON.stringify(template) === JSON.stringify(snapshot.template);
+        this.snapshot = unchanged
+          ? snapshot
+          : { ...snapshot, guide, ...(template ? { template } : {}) };
         return this.snapshot;
       }
     }
@@ -812,13 +844,18 @@ export class TopologyHostCore implements TopologyHost {
     let annotationsContent = initialAnnotationsContent;
 
     let annotations = loadedAnnotations;
+    // A template shown as written lacks the nodes its rendering has: their
+    // annotations are neither orphans nor network endpoints.
+    const template = this.template?.templateState();
+    const nodesAreKnown = template?.source !== "text";
     const topologyNodeIds = new Set(Object.keys(parsed.topology?.nodes ?? {}));
-    if (migrateGeneratedNetworkNodeAnnotations(annotations, topologyNodeIds)) {
+    if (nodesAreKnown && migrateGeneratedNetworkNodeAnnotations(annotations, topologyNodeIds)) {
       await this.annotationsIO.saveAnnotations(this.yamlFilePath, annotations);
       annotationsContent = await this.readAnnotationsContent();
       this.logger.info("[TopologyHost] Migrated generated network node annotations");
     }
-    const annotationsUpdated = await this.reconcileAnnotationsForRenamedNodes(parsed);
+    const annotationsUpdated =
+      nodesAreKnown && (await this.reconcileAnnotationsForRenamedNodes(parsed));
     if (annotationsUpdated) {
       annotations = await this.annotationsIO.loadAnnotations(this.yamlFilePath, true);
       annotationsContent = await this.readAnnotationsContent();
@@ -868,6 +905,7 @@ export class TopologyHostCore implements TopologyHost {
       yamlFileName,
       annotationsFileName,
       yamlContent,
+      ...(template ? { template } : {}),
       annotationsContent: annotationsContent ?? JSON.stringify(createNewLabAnnotations(), null, 2),
       guide,
       labName: labName ?? "",
@@ -1083,7 +1121,10 @@ export class TopologyHostCore implements TopologyHost {
 
   private async restoreHistoryEntry(entry: DocumentState): Promise<void> {
     this.transactionalFs.beginTransaction();
-    await this.transactionalFs.writeFile(this.yamlFilePath, entry.yamlContent);
+    // A template's history holds annotation edits only: its text is not the canvas's to write.
+    if (!this.template) {
+      await this.transactionalFs.writeFile(this.yamlFilePath, entry.yamlContent);
+    }
 
     const annotationsPath = this.annotationsIO.getAnnotationsFilePath(this.yamlFilePath);
     if (entry.annotationsContent === null) {
@@ -1179,6 +1220,18 @@ function isMembershipHostCommand(
 > {
   return (
     command.command === "setNodeGroupMembership" || command.command === "setNodeGroupMemberships"
+  );
+}
+
+/** Whether a command edits the topology file, not only its annotations or guide. */
+function changesTopologyFile(command: TopologyHostCommand): boolean {
+  if (command.command === "batch") return command.payload.commands.some(changesTopologyFile);
+  return (
+    isNodeHostCommand(command) ||
+    isLinkHostCommand(command) ||
+    command.command === "setYamlContent" ||
+    command.command === "setLabSettings" ||
+    command.command === "setInheritanceSection"
   );
 }
 

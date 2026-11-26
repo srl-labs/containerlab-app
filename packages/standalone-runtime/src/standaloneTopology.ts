@@ -2,6 +2,7 @@ import { getStandaloneBackend, runtimeFetch } from "./backend";
 import { useTopoViewerStore } from "@containerlab/clab-ui";
 import {
   createTopologySyncController,
+  isTopologyTemplateFileName,
   runtimeContainersEqual,
   runtimeContainersTopologyEqual,
   type HostRuntimeContainer
@@ -18,6 +19,7 @@ import {
 import { fetchUiIcons } from "./runtimeApi";
 import { getRuntimeContainersForTopology } from "./runtimeData";
 import { refreshTopologyDirtyState, resetTopologyDirtyState } from "./standaloneDirtyState";
+import { readLabSettings } from "./standaloneLabSettings";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type { LabState } from "./stores/labStore";
 import { eventChannel } from "./eventChannel";
@@ -95,11 +97,16 @@ const RUNTIME_STATS_GRAPH_UPDATE_INTERVAL_MS = 1000;
 
 /**
  * The topology is editable whenever it is backed by a writable API file; only
- * running-lab documents (e.g. labs owned by other users) open read-only.
- * Deployment state no longer decides editability.
+ * running-lab documents (e.g. labs owned by other users) and templates, which
+ * containerlab alone turns into a topology, open read-only. Deployment state
+ * no longer decides editability.
  */
-function modeForSourcePreference(sourcePreference: TopologySourcePreference): "edit" | "view" {
-  return sourcePreference === "running-lab-doc" ? "view" : "edit";
+function modeForTopology(
+  sourcePreference: TopologySourcePreference,
+  topologyRef: Pick<TopologyRef, "yamlPath"> | null | undefined
+): "edit" | "view" {
+  if (sourcePreference === "running-lab-doc") return "view";
+  return isTopologyTemplateFileName(topologyRef?.yamlPath ?? "") ? "view" : "edit";
 }
 
 export function createStandaloneTopologyManager(
@@ -449,7 +456,8 @@ export function createStandaloneTopologyManager(
     useTopoViewerStore.getState().setInitialData({
       labName: "",
       mode: "edit",
-      deploymentState: "unknown"
+      deploymentState: "unknown",
+      topologyTemplate: null
     });
   }
 
@@ -467,8 +475,12 @@ export function createStandaloneTopologyManager(
       hostOptions.deploymentState ??
       (isTopologyRunning(topologyRef, options.getLabs()) ? "deployed" : "undeployed");
     const mode =
-      hostOptions.mode ?? modeForSourcePreference(hostOptions.sourcePreference ?? "api-file");
+      hostOptions.mode ?? modeForTopology(hostOptions.sourcePreference ?? "api-file", topologyRef);
     const runtimeContainers = getRuntimeContainersForTopology(topologyRef, options.getLabs());
+    // A template renders with the variables file of the lab's deploy settings.
+    const varsFile = isTopologyTemplateFileName(topologyRef.yamlPath)
+      ? readLabSettings({ endpointId, topologyRef })?.varsFile
+      : undefined;
 
     const response = await runtimeFetch(
       "/api/topology/sessions",
@@ -481,6 +493,7 @@ export function createStandaloneTopologyManager(
           mode,
           deploymentState,
           sourcePreference: hostOptions.sourcePreference ?? "api-file",
+          ...(varsFile ? { varsFile } : {}),
           runtimeContainers
         })
       })
@@ -605,7 +618,7 @@ export function createStandaloneTopologyManager(
     const topologyRef = currentTopologyRef;
     const isDeployed = isTopologyRunning(topologyRef ?? undefined, labs);
     const deploymentState = hostOptions.deploymentState ?? (isDeployed ? "deployed" : "undeployed");
-    const mode = hostOptions.mode ?? modeForSourcePreference(currentSourcePreference);
+    const mode = hostOptions.mode ?? modeForTopology(currentSourcePreference, topologyRef);
     const runtimeContainers = getRuntimeContainersForTopology(topologyRef ?? undefined, labs);
     currentDeploymentState = deploymentState;
 
@@ -709,7 +722,7 @@ export function createStandaloneTopologyManager(
     const initialDeploymentState = isTopologyRunning(canonicalTopologyRef, options.getLabs())
       ? "deployed"
       : (loadOptions.deploymentState ?? "undeployed");
-    const initialMode = modeForSourcePreference(sourcePreference);
+    const initialMode = modeForTopology(sourcePreference, canonicalTopologyRef);
     await ensureTopologySession(canonicalTopologyRef, {
       deploymentState: initialDeploymentState,
       mode: initialMode,
@@ -728,7 +741,7 @@ export function createStandaloneTopologyManager(
       snapshot.deploymentState,
       loadOptions.deploymentState
     );
-    const resolvedMode = modeForSourcePreference(sourcePreference);
+    const resolvedMode = modeForTopology(sourcePreference, canonicalTopologyRef);
 
     if (snapshot.deploymentState !== resolvedState || snapshot.mode !== resolvedMode) {
       useTopoViewerStore.getState().setInitialData({
